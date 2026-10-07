@@ -19,11 +19,15 @@ class LauncherApp : Application() {
         icons = IconCache(this)
         apps = AppRepository(this, store)
         live = LiveSources(this)
+        apps.onPackageGone = { icons.forgetPackage(it) }
     }
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level >= TRIM_MEMORY_BACKGROUND) icons.trim()
+        // 1.0 trimmed at TRIM_MEMORY_BACKGROUND, i.e. every time an app was opened → icons reloaded on the way home.
+        // Keep them unless the system is really short of memory (the disk cache makes a reload cheap anyway).
+        @Suppress("DEPRECATION")
+        if (level >= TRIM_MEMORY_COMPLETE || level == TRIM_MEMORY_RUNNING_CRITICAL) icons.trim()
     }
 
     companion object {

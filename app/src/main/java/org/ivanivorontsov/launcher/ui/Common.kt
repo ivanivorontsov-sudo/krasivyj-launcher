@@ -78,6 +78,31 @@ interface LauncherActions {
 }
 
 val LocalActions = staticCompositionLocalOf<LauncherActions> { error("no actions") }
+/** Launcher UI state (null in the settings previews → no drag and drop there). */
+val LocalUi = staticCompositionLocalOf<UiState?> { null }
+val LocalAppsByKey = androidx.compose.runtime.compositionLocalOf<Map<String, AppInfo>> { emptyMap() }
+
+/** Registers an icon's on-screen bounds under [id] (drop animation, return animation, gesture contract). */
+@Composable
+fun RegisterIcon(ui: UiState?, id: String, ref: BoundsRef, enabled: Boolean = true) {
+    if (ui == null || !enabled) return
+    androidx.compose.runtime.DisposableEffect(id, ref) {
+        ui.iconBounds[id] = ref
+        onDispose { if (ui.iconBounds[id] === ref) ui.iconBounds.remove(id) }
+    }
+}
+
+/** Hidden while dragged (its slot is the placeholder) and while the return animation lands on it. */
+fun Modifier.launcherItemVisibility(ui: UiState?, id: String): Modifier =
+    if (ui == null) this else this.graphicsLayer {
+        alpha = when {
+            ui.drag.hides(id) -> 0f
+            ui.returning?.key == id && ui.returnProgress.value < 0.97f -> 0f
+            else -> 1f
+        }
+        val p = if (ui.popKey == id) ui.pop.value else 0f
+        if (p != 0f) { val s = 1f + 0.12f * p; scaleX = s; scaleY = s }
+    }
 
 /** Remembers an element's position so app-open animations can start from the exact icon. */
 @Stable
@@ -88,7 +113,7 @@ fun Modifier.trackBounds(ref: BoundsRef) = this.onPlaced { ref.coords = it }
 @Composable
 fun rememberIcon(app: AppInfo, sizePx: Int, shape: IconShape, mono: Boolean = false): ImageBitmap? {
     val cache: IconCache = LauncherApp.instance.icons
-    val req = remember(app.key, sizePx, shape, mono) { IconCache.Req(app, shape, sizePx, mono) }
+    val req = remember(app.key, app.stamp, sizePx, shape, mono) { IconCache.Req(app, shape, sizePx, mono) }
     val img by produceState(initialValue = cache.peek(req), req, cache.iconPack) { if (value == null) value = cache.load(req) }
     return img
 }
@@ -127,20 +152,35 @@ fun labelStyle(color: Color, size: TextUnit = LocalSpec.current.labelSizeSp.sp):
         letterSpacing = if (spec.letterSpacing != 0f) (spec.letterSpacing * 10).sp * 0.1f else TextUnit.Unspecified)
 }
 
-/** Grid cell: shaped icon + label, with per-theme press feedback (darken / scale / tilt / pixel step). */
+/** Grid cell: shaped icon + label, press feedback, long-press menu, long-press + move = drag. */
 @Composable
-fun AppCell(app: AppInfo, iconSize: Dp, showLabel: Boolean, modifier: Modifier = Modifier, labelColor: Color = LocalColors.current.onWallpaper) {
+fun AppCell(
+    app: AppInfo, iconSize: Dp, showLabel: Boolean, modifier: Modifier = Modifier, labelColor: Color = LocalColors.current.onWallpaper,
+    source: DragSource = DragSource.DRAWER,
+) {
     val spec = LocalSpec.current
     val actions = LocalActions.current
+    val ui = LocalUi.current
     val ref = remember { BoundsRef() }
+    val iconRef = remember { BoundsRef() }
     val badge = badgeCount(app.pkg)
+    val iconPx = with(LocalDensity.current) { iconSize.toPx() }
+    RegisterIcon(ui, app.key, iconRef, enabled = source == DragSource.HOME || source == DragSource.DOCK)
     Column(
         modifier
             .trackBounds(ref)
-            .pressFeedback(onClick = { actions.launch(app, ref.bounds()) }, onLongClick = { actions.showMenu(app, null, ref.bounds() ?: Rect.Zero) }),
+            .launcherItem(
+                ui, ref,
+                onClick = { actions.launch(app, iconRef.bounds() ?: ref.bounds()) },
+                onLongPress = { actions.showMenu(app, null, ref.bounds() ?: Rect.Zero) },
+                dragItem = { local ->
+                    DragItem(app.key, app, source, size = androidx.compose.ui.geometry.Size(iconPx, iconPx),
+                        grab = iconGrab(local, ref.bounds()?.width ?: iconPx, iconPx), startBounds = iconRef.bounds())
+                },
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box {
+        Box(Modifier.trackBounds(iconRef)) {
             AppIcon(app, iconSize, pixelated = spec.motion == Motion.PIXEL_STEP)
             if (badge > 0) Badge(badge, Modifier.align(Alignment.TopEnd).padding(0.dp))
         }

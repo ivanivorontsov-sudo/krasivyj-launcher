@@ -46,6 +46,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -74,6 +75,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import org.ivanivorontsov.launcher.LauncherApp
 import org.ivanivorontsov.launcher.core.GestureAction
 import org.ivanivorontsov.launcher.core.LauncherConfig
+import org.ivanivorontsov.launcher.core.DropSpot
+import org.ivanivorontsov.launcher.core.ScreenLayout
 import org.ivanivorontsov.launcher.core.TileFill
 import org.ivanivorontsov.launcher.core.TileItem
 import org.ivanivorontsov.launcher.core.TileKind
@@ -89,12 +92,17 @@ private data class Tick(val index: Int, val nonce: Int)
 
 /** Start screen of tiles + (swipe left) the alphabetical app list, like the classic tiles phone. */
 @Composable
-fun TilesHome(ui: UiState, config: LauncherConfig, byKey: Map<String, AppInfo>, apps: List<AppInfo>, wall: WallImages?) {
+fun TilesHome(ui: UiState, config: LauncherConfig, layout: ScreenLayout, byKey: Map<String, AppInfo>, apps: List<AppInfo>, wall: WallImages?) {
     val pager = rememberPagerState { 2 }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     LaunchedEffect(ui.homePresses) { if (ui.homePresses > 0 && pager.currentPage != 0) pager.animateScrollToPage(0) }
-    HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-        if (page == 0) TileStart(ui, config, byKey, wall, isCurrent = { pager.currentPage == 0 }, toList = { scope.launch { pager.animateScrollToPage(1) } })
+    androidx.compose.runtime.DisposableEffect(pager) {
+        val f: () -> Unit = { scope.launch { pager.animateScrollToPage(0) } }
+        ui.showStartPage = f
+        onDispose { if (ui.showStartPage === f) ui.showStartPage = null }
+    }
+    HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = ui.drag.item == null) { page ->
+        if (page == 0) TileStart(ui, config, layout, byKey, wall, isCurrent = { pager.currentPage == 0 }, toList = { scope.launch { pager.animateScrollToPage(1) } })
         else Column(Modifier.fillMaxSize().statusBarsPadding().graphicsLayer {
             // the list swings in from the right edge as the page arrives
             val f = (pager.currentPage - 1 + pager.currentPageOffsetFraction).coerceIn(-1f, 0f)
@@ -107,19 +115,63 @@ fun TilesHome(ui: UiState, config: LauncherConfig, byKey: Map<String, AppInfo>, 
             val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             if (q.isBlank()) TilesListBody(apps, bottom)
             else androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize()) {
-                items(results.size, key = { results[it].key }) { i -> AppRow(results[i]) }
+                items(results.size, key = { results[it].key }) { i -> AppRow(results[i], source = DragSource.LIST) }
             }
         }
     }
 }
 
+/** Finger → insertion index among the (preview-)packed tiles; vertical auto-scroll near the edges. */
+private class TilesHost(val ui: UiState) : DropHost {
+    var preview = ScreenLayout()
+    var placed: List<TilePacker.Placed> = emptyList()
+    var unit = 1f; var gap = 0f; var margin = 0f; var topPad = 0f
+    val content = BoundsRef(); val viewport = BoundsRef()
+    lateinit var scroll: androidx.compose.foundation.ScrollState
+    var current: () -> Boolean = { true }
+    var edgePx = 200f
+    private var lastFrame = 0L
+
+    override fun resolve(p: Offset, item: DragItem): DropSpot? {
+        if (!current()) return null
+        val c = content.bounds() ?: return null
+        val v = viewport.bounds() ?: return null
+        if (!v.contains(p)) return null
+        val cx = p.x - c.left; val cy = p.y - c.top
+        val tiles = preview.tiles
+        val k = tiles.indexOfFirst { ui.drag.hides(it.id) }
+        for (pl in placed) {
+            val t = tiles.getOrNull(pl.index) ?: continue
+            if (ui.drag.hides(t.id)) continue
+            val x = margin + pl.col * (unit + gap); val y = topPad + pl.row * (unit + gap)
+            if (cx >= x && cx <= x + pl.w * unit + (pl.w - 1) * gap && cy >= y && cy <= y + pl.h * unit + (pl.h - 1) * gap) return DropSpot.Tile(pl.index)
+        }
+        val bottom = topPad + TilePacker.rows(placed) * (unit + gap)
+        if (cy > bottom) return DropSpot.Tile(tiles.size - (if (k >= 0) 1 else 0))
+        return null
+    }
+
+    override fun onFrame(p: Offset, nanos: Long) {
+        val dt = if (lastFrame == 0L) 0f else ((nanos - lastFrame) / 1_000_000f).coerceAtMost(40f)
+        lastFrame = nanos
+        val v = viewport.bounds() ?: return
+        val speed = 1.1f * dt // px per ms → same speed at any refresh rate
+        when {
+            p.y > v.bottom - edgePx -> scroll.dispatchRawDelta(speed * ((p.y - (v.bottom - edgePx)) / edgePx).coerceIn(0.2f, 1.5f))
+            p.y < v.top + edgePx * 0.6f -> scroll.dispatchRawDelta(-speed * (((v.top + edgePx * 0.6f) - p.y) / (edgePx * 0.6f)).coerceIn(0.2f, 1.5f))
+        }
+    }
+}
+
 @Composable
-private fun TileStart(ui: UiState, config: LauncherConfig, byKey: Map<String, AppInfo>, wall: WallImages?, isCurrent: () -> Boolean, toList: () -> Unit) {
+private fun TileStart(ui: UiState, config: LauncherConfig, layout: ScreenLayout, byKey: Map<String, AppInfo>, wall: WallImages?, isCurrent: () -> Boolean, toList: () -> Unit) {
     val spec = LocalSpec.current; val colors = LocalColors.current
     val anim = LocalAnimations.current
     val density = LocalDensity.current
     val scroll = rememberScrollState()
-    val tiles = config.tiles
+    val host = remember { TilesHost(ui) }
+    val preview = ui.drag.preview(layout)
+    val tiles = preview.tiles
     val powerSave by LauncherApp.instance.live.powerSave.collectAsStateCompat()
     val counts by NotificationCounter.counts.collectAsStateCompat()
     val tick = remember { mutableStateOf(Tick(-1, 0)) }
@@ -136,7 +188,8 @@ private fun TileStart(ui: UiState, config: LauncherConfig, byKey: Map<String, Ap
             override suspend fun onPostFling(consumed: androidx.compose.ui.unit.Velocity, available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity { pullAcc[0] = 0f; return androidx.compose.ui.unit.Velocity.Zero }
         }
     }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    androidx.compose.runtime.DisposableEffect(host) { ui.drag.host = host; onDispose { if (ui.drag.host === host) ui.drag.host = null } }
+    BoxWithConstraints(Modifier.fillMaxSize().trackBounds(host.viewport)) {
         val wPx = constraints.maxWidth.toFloat(); val viewportH = constraints.maxHeight.toFloat()
         val margin = wPx * 0.05f
         val gap = with(density) { spec.tileGapDp.dp.toPx() } * 2f
@@ -146,6 +199,8 @@ private fun TileStart(ui: UiState, config: LauncherConfig, byKey: Map<String, Ap
         val rows = TilePacker.rows(placed)
         val topPad = with(density) { 44.dp.toPx() }
         val contentH = topPad + rows * (unit + gap)
+        host.preview = preview; host.placed = placed; host.unit = unit; host.gap = gap; host.margin = margin; host.topPad = topPad
+        host.scroll = scroll; host.current = isCurrent; host.edgePx = with(density) { 90.dp.toPx() }
 
         // Live tiles: one shared, randomly-timed ticker flips a visible candidate. Paused when the page is
         // hidden, the app is not resumed, battery saver is on, or animations are disabled.
@@ -155,7 +210,7 @@ private fun TileStart(ui: UiState, config: LauncherConfig, byKey: Map<String, Ap
             var nonce = 0
             while (true) {
                 delay(2200L + rnd.nextLong(2600L))
-                if (!isCurrent() || ui.tileEdit != null) continue
+                if (!isCurrent() || ui.tileEdit != null || ui.drag.item != null) continue
                 val s = scroll.value
                 val candidates = placed.filter { p ->
                     val t = tiles.getOrNull(p.index) ?: return@filter false
@@ -171,10 +226,9 @@ private fun TileStart(ui: UiState, config: LauncherConfig, byKey: Map<String, Ap
                 if (candidates.isNotEmpty()) tick.value = Tick(candidates[rnd.nextInt(candidates.size)].index, ++nonce)
             }
         }
-        // Returning from an app: tiles swing back in (turnstile), staggered by row.
         Box(Modifier.fillMaxSize().nestedScroll(pullConn).verticalScroll(scroll)
             .pointerInput(ui.tileEdit) { if (ui.tileEdit != null) detectTapGestures { ui.tileEdit = null } }) {
-            Box(Modifier.fillMaxWidth().height(with(density) { (contentH + unit).toDp() } + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
+            Box(Modifier.fillMaxWidth().trackBounds(host.content).height(with(density) { (contentH + unit).toDp() } + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
                 placed.forEach { p ->
                     val t = tiles[p.index]
                     key(t.id) {
@@ -183,7 +237,7 @@ private fun TileStart(ui: UiState, config: LauncherConfig, byKey: Map<String, Ap
                             x = margin + p.col * (unit + gap), y = topPad + p.row * (unit + gap),
                             w = p.w * unit + (p.w - 1) * gap, h = p.h * unit + (p.h - 1) * gap,
                             row = p.row, scrollValue = { scroll.value }, viewportH = viewportH, wall = wall,
-                            tick = tick, badge = counts[byKey[t.appKey]?.pkg] ?: 0, placed = placed, unit = unit, gap = gap, margin = margin, topPad = topPad,
+                            tick = tick, badge = counts[byKey[t.appKey]?.pkg] ?: 0, unit = unit, gap = gap, margin = margin, contentRef = host.content,
                         )
                     }
                 }
@@ -204,14 +258,14 @@ private fun TileStart(ui: UiState, config: LauncherConfig, byKey: Map<String, Ap
 private fun TileView(
     ui: UiState, tile: TileItem, index: Int, app: AppInfo?, x: Float, y: Float, w: Float, h: Float, row: Int,
     scrollValue: () -> Int, viewportH: Float, wall: WallImages?, tick: androidx.compose.runtime.State<Tick>, badge: Int,
-    placed: List<TilePacker.Placed>, unit: Float, gap: Float, margin: Float, topPad: Float,
+    unit: Float, gap: Float, margin: Float, contentRef: BoundsRef,
 ) {
-    val spec = LocalSpec.current; val colors = LocalColors.current; val fonts = LocalFonts.current
-    val anim = LocalAnimations.current
+    val spec = LocalSpec.current; val colors = LocalColors.current
     val actions = LocalActions.current
     val ctx = LocalContext.current
     val density = LocalDensity.current
     val ref = remember { BoundsRef() }
+    RegisterIcon(ui, tile.id, ref)
     val flip = remember { Animatable(0f) }
     val myTick by remember { derivedStateOf { val t = tick.value; if (t.index == index) t.nonce else -1 } }
     LaunchedEffect(myTick) {
@@ -220,8 +274,22 @@ private fun TileView(
     val back by remember { derivedStateOf { flip.value >= 0.5f } }
     val editing = ui.tileEdit
     val selected = editing == tile.id
-    val drag = remember { mutableStateOf(Offset.Zero) }
-    val visible by remember { derivedStateOf { val top = y - scrollValue(); top + h > 0 && top < viewportH } }
+    val d = ui.drag
+    val dragged = d.item?.let { it.source == DragSource.TILE && it.id == tile.id } == true
+    val ghost = !dragged && d.hides(tile.id)
+
+    // Position and size glide when tiles reflow (drag preview, resize, unpin); the dragged tile follows the finger.
+    val ax = remember { Animatable(x) }; val ay = remember { Animatable(y) }
+    val aw = remember { Animatable(w) }; val ah = remember { Animatable(h) }
+    val last = remember { floatArrayOf(x, y) }
+    val wasDragged = remember { booleanArrayOf(false) }
+    LaunchedEffect(x, y, w, h, dragged) {
+        if (dragged) { wasDragged[0] = true; return@LaunchedEffect }
+        if (wasDragged[0]) { wasDragged[0] = false; ax.snapTo(last[0]); ay.snapTo(last[1]) }
+        val sp = if (ui.animations) androidx.compose.animation.core.spring<Float>(dampingRatio = 0.8f, stiffness = 420f) else androidx.compose.animation.core.snap()
+        launch { ax.animateTo(x, sp) }; launch { ay.animateTo(y, sp) }; launch { aw.animateTo(w, sp) }; launch { ah.animateTo(h, sp) }
+    }
+    val visible by remember { derivedStateOf { val top = ay.value - scrollValue(); top + ah.value > 0 && top < viewportH } }
 
     val iconColor = app?.let { LauncherApp.instance.icons.color(it.key) }
     val fill = when (spec.tileFill) {
@@ -229,40 +297,37 @@ private fun TileView(
         TileFill.ICON_COLOR -> iconColor?.let { Color(it) } ?: colors.accent
         TileFill.TRANSPARENT -> Color.Transparent
     }
-    val wDp = with(density) { w.toDp() }; val hDp = with(density) { h.toDp() }
+    val wDp = with(density) { aw.value.toDp() }; val hDp = with(density) { ah.value.toDp() }
     Box(
         Modifier
-            .offset { IntOffset((x + drag.value.x).roundToInt(), (y + drag.value.y).roundToInt()) }
+            .zIndex(if (dragged) 2f else 0f)
+            .offset {
+                if (dragged) {
+                    val c = contentRef.bounds()
+                    val px = d.pointer.x - (c?.left ?: 0f) - d.item!!.grab.x; val py = d.pointer.y - (c?.top ?: 0f) - d.item!!.grab.y
+                    last[0] = px; last[1] = py
+                    IntOffset(px.roundToInt(), py.roundToInt())
+                } else IntOffset(ax.value.roundToInt(), ay.value.roundToInt())
+            }
             .size(wDp, hDp)
             .graphicsLayer {
                 // turnstile: tiles swing around the left screen edge, staggered top → bottom
                 val t = ui.turnstile.value
                 val local = ((t * 1.8f) - row * 0.07f).coerceIn(0f, 1f)
                 rotationY = local * -85f
-                transformOrigin = TransformOrigin(-x / w, 0.5f)
+                transformOrigin = TransformOrigin(-ax.value / aw.value.coerceAtLeast(1f), 0.5f)
                 cameraDistance = 18f * density.density
-                alpha = (1f - local * local) * when { editing == null -> 1f; selected -> 1f; else -> 0.6f }
-                val s = when { editing == null -> 1f; selected -> 1.04f; else -> 0.94f }
+                val returning = ui.returning?.let { it.key == tile.appKey && ui.returnProgress.value < 0.97f } == true
+                alpha = (1f - local * local) * when { returning -> 0f; ghost -> 0.35f; dragged -> 0.92f; editing == null -> 1f; selected -> 1f; else -> 0.6f }
+                val lift = if (dragged) 1f + 0.05f * d.lift.value else 1f
+                val s = lift * when { editing == null || dragged -> 1f; selected -> 1.04f; else -> 0.94f }
                 scaleX = s; scaleY = s
                 rotationX = flip.value * 180f
+                shadowElevation = if (dragged) 16.dp.toPx() else 0f
             }
             .trackBounds(ref)
-            .then(if (selected) Modifier.pointerInput(tile.id) {
-                detectDragGestures(
-                    onDrag = { ch, d -> ch.consume(); drag.value += d },
-                    onDragEnd = {
-                        val cx = x + drag.value.x + w / 2; val cy = y + drag.value.y + h / 2
-                        val target = placed.firstOrNull { p ->
-                            val px = margin + p.col * (unit + gap); val py = topPad + p.row * (unit + gap)
-                            cx in px..(px + p.w * unit + (p.w - 1) * gap) && cy in py..(py + p.h * unit + (p.h - 1) * gap)
-                        }?.index
-                        drag.value = Offset.Zero
-                        if (target != null && target != index) LauncherApp.instance.store.update { it.moveTile(index, target) }
-                    },
-                    onDragCancel = { drag.value = Offset.Zero },
-                )
-            } else Modifier)
-            .pressFeedback(
+            .launcherItem(
+                ui, ref,
                 onClick = {
                     when {
                         editing != null -> ui.tileEdit = if (selected) null else tile.id
@@ -274,22 +339,26 @@ private fun TileView(
                         }
                     }
                 },
-                onLongClick = { ui.tileEdit = tile.id },
+                onLongPress = { ui.tileEdit = tile.id },
+                dragItem = { local -> DragItem(tile.id, app, DragSource.TILE, tile, size = androidx.compose.ui.geometry.Size(w, h), grab = local, startBounds = ref.bounds()) },
                 tiltOverride = true,
             )
             .clipToBounds()
             .drawBehind {
+                if (ghost) { drawRect(colors.onSurface.copy(alpha = 0.5f), style = Stroke(2.dp.toPx())); return@drawBehind }
                 if (spec.tileFill == TileFill.TRANSPARENT && wall != null) {
                     // Wallpaper visible only inside tiles, scrolling with parallax (gaps stay dark).
                     val scale = wall.full.width / (margin * 2 + spec.tileColumns * unit + (spec.tileColumns - 1) * gap)
-                    val imgY = (y - scrollValue() * 0.7f).coerceIn(0f, (wall.full.height / scale - h).coerceAtLeast(0f))
-                    drawImage(wall.full, srcOffset = IntOffset((x * scale).roundToInt(), (imgY * scale).roundToInt()),
-                        srcSize = IntSize((w * scale).roundToInt().coerceAtLeast(1), (h * scale).roundToInt().coerceAtLeast(1)),
+                    val tx = ax.value; val ty = ay.value; val tw = aw.value; val th = ah.value
+                    val imgY = (ty - scrollValue() * 0.7f).coerceIn(0f, (wall.full.height / scale - th).coerceAtLeast(0f))
+                    drawImage(wall.full, srcOffset = IntOffset((tx * scale).roundToInt().coerceAtLeast(0), (imgY * scale).roundToInt()),
+                        srcSize = IntSize((tw * scale).roundToInt().coerceAtLeast(1), (th * scale).roundToInt().coerceAtLeast(1)),
                         dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()))
                     drawRect(Color.Black.copy(alpha = 0.12f))
                 } else drawRect(fill)
             },
     ) {
+        if (ghost) return@Box
         val content: @Composable (Boolean) -> Unit = { isBack ->
             when (tile.kind) {
                 TileKind.APP -> if (app != null) AppTileContent(app, tile.size, badge, isBack) else Text("?", color = Color.White)
@@ -299,16 +368,18 @@ private fun TileView(
             }
         }
         if (!back) content(false) else Box(Modifier.fillMaxSize().graphicsLayer { rotationX = 180f }) { content(true) }
-        if (selected) {
+        if (selected && !dragged) {
             // edit affordances: unpin (top-right), resize (bottom-right), more (bottom-left)
-            EditKnob("✕", Modifier.align(Alignment.TopEnd)) { LauncherApp.instance.store.update { it.unpinTile(tile.id) }; ui.tileEdit = null }
-            EditKnob(when (tile.size) { TileSize.SMALL -> "⤢"; TileSize.MEDIUM -> "⟷"; TileSize.WIDE -> "⤡" }, Modifier.align(Alignment.BottomEnd)) { LauncherApp.instance.store.update { it.resizeTile(tile.id) } }
+            val theme = ui.themeId
+            EditKnob("✕", Modifier.align(Alignment.TopEnd)) { LauncherApp.instance.store.update { c -> c.editLayout(theme) { it.unpinTile(tile.id) } }; ui.tileEdit = null }
+            EditKnob(when (tile.size) { TileSize.SMALL -> "⤢"; TileSize.MEDIUM -> "⟷"; TileSize.WIDE -> "⤡" }, Modifier.align(Alignment.BottomEnd)) {
+                LauncherApp.instance.store.update { c -> c.editLayout(theme) { it.resizeTile(tile.id) } }
+            }
             if (app != null) EditKnob("⋯", Modifier.align(Alignment.BottomStart)) {
                 ui.menu = buildAppMenu(ui, app, tile, spec, LauncherApp.instance.store.config.value, actions, ref.bounds() ?: Rect.Zero); ui.tileEdit = null
             }
         }
     }
-    @Suppress("UNUSED_EXPRESSION") fonts
 }
 
 @Composable

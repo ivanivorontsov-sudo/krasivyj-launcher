@@ -61,8 +61,35 @@ class UiState(val scope: CoroutineScope) {
     var tileEdit by mutableStateOf<String?>(null)
     /** 0 = tiles in place, 1 = swung away (turnstile). */
     val turnstile = Animatable(0f)
-    /** 1 = home at rest, <1 = zoomed out (return-from-app animation). */
-    val enter = Animatable(1f)
     var launchedApp = false
     var actions: LauncherActions? = null
+    /** System "animator duration scale" > 0; refreshed on resume, read by the whole tree. */
+    var animations by mutableStateOf(true)
+    /** Id of the theme whose arrangement is on screen (layouts are stored per theme). */
+    var themeId: String = ""
+
+    // ---- drag and drop ----
+    val drag = DragState()
+    /** Icon (not cell) bounds of everything on the home screen, by app key / folder id / tile id. */
+    val iconBounds = HashMap<String, BoundsRef>()
+    var openFolder by mutableStateOf<String?>(null)
+    var renameFolder by mutableStateOf<String?>(null)
+    /** Set by the tiles home: bring the start screen forward when a drag starts in the app list. */
+    var showStartPage: (() -> Unit)? = null
+
+    // ---- return-into-icon animation ----
+    var lastLaunch: LaunchRecord? = null
+    var returning by mutableStateOf<ReturnAnim?>(null)
+    val returnProgress = Animatable(1f)
+    /** Icon that gets a small "landing" pop (after the system flew the window into it). */
+    var popKey by mutableStateOf<String?>(null)
+    val pop = Animatable(0f)
+    var hint by mutableStateOf<String?>(null)
+    /** Haptic tick when a folder target lights up (set by the root). */
+    var onFolderHover: (() -> Unit)? = null
 }
+
+/** What was launched and from where, for the return animation and the gesture-nav contract. */
+class LaunchRecord(val key: String, val bounds: Rect?, val time: Long)
+
+class ReturnAnim(val key: String, val color: Int?, val fallback: Rect?)

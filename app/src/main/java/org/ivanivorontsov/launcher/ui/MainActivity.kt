@@ -59,8 +59,18 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         // Animations need a MonotonicFrameClock: AndroidUiDispatcher.Main carries the Choreographer-backed one.
         ui = UiState(kotlinx.coroutines.CoroutineScope(lifecycleScope.coroutineContext + androidx.compose.ui.platform.AndroidUiDispatcher.Main))
         ui.actions = this
+        ui.animations = Device.animationsEnabled()
         setContent {
             CompositionLocalProvider(LocalActions provides this) { LauncherRoot(ui) }
+        }
+        handleGestureContract(intent)
+        lifecycleScope.launch {
+            app.apps.autoAdded.collect { keys ->
+                if (keys.isEmpty()) return@collect
+                val names = keys.mapNotNull { k -> app.apps.find(k)?.label }
+                if (names.isNotEmpty()) Toast.makeText(this@MainActivity, (if (names.size == 1) "«${names[0]}» добавлено" else "Добавлено: " + names.joinToString(", ") { "«$it»" }) + " на главный экран", Toast.LENGTH_SHORT).show()
+                app.apps.autoAddedShown()
+            }
         }
         lifecycleScope.launch {
             app.store.theme.collect { t ->
@@ -72,7 +82,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
             }
         }
-        lifecycleScope.launch { app.store.config.collect { app.icons.iconPack = it.iconPack; Device.applyRefreshRate(window, it.highRefreshRate) } }
+        lifecycleScope.launch { app.store.config.collect { app.icons.iconPack = it.iconPack; applyRefreshRate(it.highRefreshRate) } }
         // Cross-window blur behind the drawer when the phone wallpaper is visible (Android 12+, if the device supports it).
         if (Build.VERSION.SDK_INT >= 31) lifecycleScope.launch {
             combine(snapshotFlow { ui.drawer.progress > 0.5f }, app.store.theme) { open, t -> open && t.blur && t.wallpaper == org.ivanivorontsov.launcher.core.WallpaperStyle.SYSTEM }
@@ -95,29 +105,118 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     override fun onStart() { super.onStart(); try { WidgetHostHolder.host(this).startListening() } catch (_: Exception) {} }
     override fun onStop() { super.onStop(); try { WidgetHostHolder.host(this).stopListening() } catch (_: Exception) {} }
 
+    private var refreshApplied: Boolean? = null
+    private fun applyRefreshRate(high: Boolean) {
+        if (refreshApplied == high) return
+        refreshApplied = high
+        Device.applyRefreshRate(window, high)
+    }
+
+    /** Key of the app whose window the system is flying into our icon (gesture-nav contract answered). */
+    private var contractKey: String? = null
+    private var enterDone: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+
     override fun onResume() {
         super.onResume()
         wasResumed = true
         ui.resumed = true
-        app.live.refreshNow()
-        Device.applyRefreshRate(window, app.store.config.value.highRefreshRate)
         val anim = Device.animationsEnabled()
-        if (ui.launchedApp) {
-            ui.launchedApp = false
-            ui.scope.launch {
-                if (ui.turnstile.value > 0f) ui.turnstile.animateTo(0f, if (anim) tween(420, easing = MotionSpecs.turnstileEase) else tween(0))
-                else if (anim) { ui.enter.snapTo(0f); ui.enter.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 260f)) }
-            }
-        } else ui.scope.launch { ui.turnstile.snapTo(0f); ui.enter.snapTo(1f) }
+        if (ui.animations != anim) ui.animations = anim
+        // Nothing heavy here: home must be on screen in the very next frame.
+        val rec = ui.lastLaunch
+        val returning = ui.launchedApp
+        ui.launchedApp = false
+        ui.scope.launch { if (ui.turnstile.value != 0f) ui.turnstile.snapTo(0f) }
+        val cfg = app.store.config.value
+        if (returning && rec != null && anim && cfg.returnAnimation) {
+            if (contractKey == rec.key) playPop(rec.key) else playReturn(rec)
+        }
+        contractKey = null
+        window.decorView.post { app.live.refreshNow() }
     }
 
-    override fun onPause() { super.onPause(); wasResumed = false; ui.resumed = false; ui.menu = null }
+    private fun playReturn(rec: LaunchRecord) {
+        val done = kotlinx.coroutines.CompletableDeferred<Unit>().also { enterDone = it }
+        ui.returning = ReturnAnim(rec.key, app.icons.color(rec.key), rec.bounds)
+        ui.scope.launch {
+            ui.returnProgress.snapTo(0f)
+            // Start right after our window's (fast) enter transition, or after 90 ms at most.
+            kotlinx.coroutines.withTimeoutOrNull(90) { done.await() }
+            ui.returnProgress.animateTo(1f, tween(380, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+            ui.returning = null
+        }
+    }
+
+    private fun playPop(key: String) {
+        ui.popKey = key
+        ui.scope.launch {
+            ui.pop.snapTo(0f)
+            ui.pop.animateTo(1f, tween(110))
+            ui.pop.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 500f))
+            ui.popKey = null
+        }
+    }
+
+    override fun onEnterAnimationComplete() {
+        super.onEnterAnimationComplete()
+        enterDone?.complete(Unit)
+    }
+
+    override fun onPause() {
+        super.onPause(); wasResumed = false; ui.resumed = false; ui.menu = null
+        if (ui.drag.item != null) ui.cancelDrag()
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
-            if (wasResumed) ui.homePresses++ else { ui.drawer.close(animated = false); ui.menu = null }
+            if (wasResumed) ui.homePresses++
+            else {
+                // Coming home from an app: show the home page as it was, instantly, with nothing left open.
+                ui.drawer.close(animated = false); ui.menu = null; ui.openFolder = null; ui.tileEdit = null; ui.cancelDrag()
+            }
+            handleGestureContract(intent)
         }
+    }
+
+    /**
+     * GestureNavContract (Android 11+, no permission): with gesture navigation the system's recents
+     * component puts a callback into the HOME intent and asks the launcher where the closing app's icon is,
+     * then animates the app window into that rectangle (Launcher3/Lawnchair do the same). Not every OEM
+     * build sends it (ColorOS/realme UI often do not); then only our in-window return animation plays.
+     */
+    private fun handleGestureContract(intent: Intent?) {
+        val extras = intent?.getBundleExtra(EXTRA_GESTURE_CONTRACT) ?: return
+        intent.removeExtra(EXTRA_GESTURE_CONTRACT)
+        if (!app.store.config.value.gestureContract) return
+        @Suppress("DEPRECATION") val cn = extras.getParcelable<android.content.ComponentName>(Intent.EXTRA_COMPONENT_NAME) ?: return
+        @Suppress("DEPRECATION") val user = extras.getParcelable<android.os.UserHandle>(Intent.EXTRA_USER) ?: return
+        @Suppress("DEPRECATION") val cb = extras.getParcelable<android.os.Message>(EXTRA_REMOTE_CALLBACK) ?: return
+        val replyTo = cb.replyTo ?: return
+        val key = app.apps.keyFor(cn, user)
+        val layout = app.store.config.value.layoutFor(app.store.theme.value.id)
+        val ids = listOfNotNull(key, layout.folderOf(key), "t_$key")
+        if (ids.none { ui.iconBounds.containsKey(it) }) return
+        contractKey = key
+        ui.scope.launch {
+            // Let the home page settle (drawer/folder just closed) so the rectangle is the final one.
+            kotlinx.coroutines.withTimeoutOrNull(64) { androidx.compose.runtime.withFrameNanos { } }
+            val r = ids.firstNotNullOfOrNull { ui.iconBounds[it]?.bounds() } ?: return@launch
+            val data = Bundle()
+            data.putParcelable(EXTRA_ICON_POSITION, android.graphics.RectF(r.left, r.top, r.right, r.bottom))
+            data.putParcelable(EXTRA_ICON_SURFACE, null)
+            val msg = android.os.Message.obtain()
+            msg.copyFrom(cb)
+            msg.data = data
+            try { replyTo.send(msg) } catch (_: Exception) { contractKey = null }
+        }
+    }
+
+    private companion object {
+        const val EXTRA_GESTURE_CONTRACT = "gesture_nav_contract_v1"
+        const val EXTRA_ICON_POSITION = "gesture_nav_contract_icon_position"
+        const val EXTRA_ICON_SURFACE = "gesture_nav_contract_surface_control"
+        const val EXTRA_REMOTE_CALLBACK = "android.intent.extra.REMOTE_CALLBACK"
     }
 
     // ---------------- LauncherActions ----------------
@@ -135,11 +234,12 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             try {
                 this.app.apps.launcher.startMainActivity(app.component, app.user, bounds?.let { android.graphics.Rect(it.left.toInt(), it.top.toInt(), it.right.toInt(), it.bottom.toInt()) }, opts(bounds)?.toBundle())
                 ui.launchedApp = true
+                ui.lastLaunch = LaunchRecord(app.key, bounds, System.currentTimeMillis())
                 this.app.store.update { it.bumpUsage(app.key) }
             } catch (e: Exception) { Toast.makeText(this, "Не удалось открыть «${app.label}»", Toast.LENGTH_SHORT).show() }
         }
         if (spec.layout == HomeLayout.TILES && Device.animationsEnabled() && ui.drawer.progress == 0f) {
-            ui.scope.launch { ui.turnstile.animateTo(1f, tween(260, easing = MotionSpecs.turnstileEase)); doLaunch() }
+            ui.scope.launch { ui.turnstile.animateTo(1f, tween(200, easing = MotionSpecs.turnstileEase)); doLaunch() }
         } else doLaunch()
     }
 
@@ -199,7 +299,8 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     override fun pinSpecialTile(kind: TileKind) {
         val size = if (kind == TileKind.CLOCK) TileSize.WIDE else TileSize.MEDIUM
-        app.store.update { it.pinTile(TileItem(kind.name.lowercase(), kind, size = size)) }
+        val theme = app.store.theme.value.id
+        app.store.update { c -> c.editLayout(theme) { it.pinTile(TileItem(kind.name.lowercase(), kind, size = size)) } }
         // Permission is requested only when the live tile that needs it is pinned.
         if (kind == TileKind.PHOTOS && !app.live.hasPhotoAccess()) requestPhotos()
         if (kind == TileKind.CALENDAR && !app.live.hasCalendarAccess()) requestCalendar()

@@ -199,14 +199,17 @@ private fun SearchResults(results: List<AppInfo>, query: String, bottom: Dp) {
 }
 
 @Composable
-fun AppRow(a: AppInfo, highlight: Boolean = false, textOnly: Boolean = false, iconSize: Dp = 40.dp) {
+fun AppRow(a: AppInfo, highlight: Boolean = false, textOnly: Boolean = false, iconSize: Dp = 40.dp, source: DragSource = DragSource.DRAWER) {
     val spec = LocalSpec.current; val colors = LocalColors.current; val fonts = LocalFonts.current
     val actions = LocalActions.current
+    val ui = LocalUi.current
     val ref = remember(a.key) { BoundsRef() }
+    val px = with(androidx.compose.ui.platform.LocalDensity.current) { (if (textOnly) 48.dp else iconSize).toPx() }
     Row(
         Modifier.fillMaxWidth().trackBounds(ref)
             .background(if (highlight) colors.accent.copy(alpha = 0.14f) else Color.Transparent)
-            .pressFeedback(onClick = { actions.launch(a, ref.bounds()) }, onLongClick = { actions.showMenu(a, null, ref.bounds() ?: Rect.Zero) })
+            .launcherItem(ui, ref, onClick = { actions.launch(a, ref.bounds()) }, onLongPress = { actions.showMenu(a, null, ref.bounds() ?: Rect.Zero) },
+                dragItem = { local -> rowDragItem(a, source, ref, px, textOnly, local) })
             .padding(horizontal = 22.dp, vertical = if (textOnly) 10.dp else 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -374,7 +377,9 @@ private fun LibraryDrawer(apps: List<AppInfo>, config: LauncherConfig, bottom: D
 private fun AppCellIconOnly(a: AppInfo) {
     val actions = LocalActions.current
     val ref = remember(a.key) { BoundsRef() }
-    BoxWithConstraints(Modifier.fillMaxSize().trackBounds(ref).pressFeedback({ actions.launch(a, ref.bounds()) }, { actions.showMenu(a, null, ref.bounds() ?: Rect.Zero) }), contentAlignment = Alignment.Center) {
+    val ui = LocalUi.current
+    BoxWithConstraints(Modifier.fillMaxSize().trackBounds(ref).launcherItem(ui, ref, { actions.launch(a, ref.bounds()) }, { actions.showMenu(a, null, ref.bounds() ?: Rect.Zero) },
+        dragItem = { local -> val w = ref.bounds()?.width ?: 1f; DragItem(a.key, a, DragSource.DRAWER, size = androidx.compose.ui.geometry.Size(w, w), grab = local, startBounds = ref.bounds()) }), contentAlignment = Alignment.Center) {
         AppIcon(a, maxWidth)
     }
 }
@@ -425,7 +430,10 @@ private fun TileListRow(a: AppInfo) {
     val spec = LocalSpec.current; val colors = LocalColors.current; val fonts = LocalFonts.current
     val actions = LocalActions.current
     val ref = remember(a.key) { BoundsRef() }
-    Row(Modifier.fillMaxWidth().trackBounds(ref).pressFeedback({ actions.launch(a, ref.bounds()) }, { actions.showMenu(a, null, ref.bounds() ?: Rect.Zero) }, tiltOverride = true)
+    val ui = LocalUi.current
+    val px = with(androidx.compose.ui.platform.LocalDensity.current) { 52.dp.toPx() }
+    Row(Modifier.fillMaxWidth().trackBounds(ref).launcherItem(ui, ref, { actions.launch(a, ref.bounds()) }, { actions.showMenu(a, null, ref.bounds() ?: Rect.Zero) },
+        dragItem = { local -> rowDragItem(a, DragSource.LIST, ref, px, false, local) }, tiltOverride = true)
         .padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(52.dp).background(if (spec.tileFill == org.ivanivorontsov.launcher.core.TileFill.ICON_COLOR) (org.ivanivorontsov.launcher.LauncherApp.instance.icons.color(a.key)?.let { Color(it) } ?: colors.accent) else colors.accent), contentAlignment = Alignment.Center) {
             AppIcon(a, 34.dp, shape = org.ivanivorontsov.launcher.core.IconShape.ORIGINAL, mono = true)
@@ -457,3 +465,9 @@ private fun JumpGrid(present: Set<String>, appear: Float, onPick: (String) -> Un
         }
     }
 }
+
+
+/** Drag item for a list row: the floating copy is the app icon (or its label in text-only themes) under the finger. */
+fun rowDragItem(a: AppInfo, source: DragSource, ref: BoundsRef, px: Float, asLabel: Boolean, local: androidx.compose.ui.geometry.Offset): DragItem =
+    if (asLabel) DragItem(a.key, a, source, size = androidx.compose.ui.geometry.Size(px * 3, px), grab = androidx.compose.ui.geometry.Offset(px * 0.6f, px * 0.4f), asLabel = true, startBounds = ref.bounds())
+    else DragItem(a.key, a, source, size = androidx.compose.ui.geometry.Size(px, px), grab = androidx.compose.ui.geometry.Offset(px / 2, px / 2), startBounds = ref.bounds())

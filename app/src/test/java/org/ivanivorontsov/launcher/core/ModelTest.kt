@@ -1,48 +1,42 @@
 package org.ivanivorontsov.launcher.core
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ModelTest {
     @Test fun configRoundTrip() {
-        val c = LauncherConfig(home = listOf("a", "b"), dock = listOf("c"), tiles = listOf(TileItem("t1", TileKind.CLOCK, size = TileSize.WIDE)),
-            hidden = setOf("x"), renamed = mapOf("a" to "Альфа"), usage = mapOf("a" to 3), doubleTap = GestureAction.NONE, widgets = listOf(WidgetItem(7, 200)))
+        val c = LauncherConfig(base = ScreenLayout(home = listOf("a", "b"), dock = listOf("c"), tiles = listOf(TileItem("t1", TileKind.CLOCK, size = TileSize.WIDE))),
+            layouts = mapOf("letter" to ScreenLayout(home = listOf("folder:1"), folders = mapOf("folder:1" to Folder("folder:1", "Игры", listOf("a", "b"))))),
+            hidden = setOf("x"), renamed = mapOf("a" to "Альфа"), usage = mapOf("a" to 3), doubleTap = GestureAction.NONE, widgets = listOf(WidgetItem(7, 200)),
+            knownApps = setOf("p#0"), autoAddNew = false)
         assertEquals(c, ConfigCodec.decode(ConfigCodec.encode(c)))
-        assertEquals(LauncherConfig(), ConfigCodec.decode("garbage"))
+        assertEquals(LauncherConfig().migrated(), ConfigCodec.decode("garbage"))
     }
 
-    @Test fun placementOps() {
-        var c = LauncherConfig().addToHome("a").addToHome("b").addToHome("a")
-        assertEquals(listOf("a", "b"), c.home)
-        c = c.addToDock("c", 5)
-        assertTrue(c.isPlaced("c"))
-        c = c.move("b", -1)
-        assertEquals(listOf("b", "a"), c.home)
-        c = c.removeEverywhere("a")
-        assertFalse(c.isPlaced("a"))
+    @Test fun legacyConfigMigrates() {
+        val old = """{"home":["a","b"],"dock":["c"],"minimalFavorites":["b"],"tiles":[{"id":"clock","kind":"CLOCK"}],"seeded":true}"""
+        val c = ConfigCodec.decode(old)
+        assertEquals(ScreenLayout(home = listOf("a", "b"), dock = listOf("c"), tiles = listOf(TileItem("clock", TileKind.CLOCK)), favorites = listOf("b")), c.base)
+        assertTrue(c.home.isEmpty()); assertTrue(c.seeded)
+        assertEquals(c.base, c.layoutFor("letter"))
     }
 
-    @Test fun tilesOps() {
-        var c = LauncherConfig().pinTile(TileItem("t", TileKind.APP, "a", TileSize.SMALL))
-        c = c.resizeTile("t"); assertEquals(TileSize.MEDIUM, c.tiles[0].size)
-        c = c.resizeTile("t"); assertEquals(TileSize.WIDE, c.tiles[0].size)
-        c = c.resizeTile("t"); assertEquals(TileSize.SMALL, c.tiles[0].size)
-        c = c.unpinTile("t"); assertTrue(c.tiles.isEmpty())
-    }
-
-    @Test fun pruneRemovesUninstalled() {
-        val c = LauncherConfig(home = listOf("a", "gone"), dock = listOf("gone"), hidden = setOf("gone"), tiles = listOf(TileItem("t", TileKind.APP, "gone"), TileItem("clock", TileKind.CLOCK)))
+    @Test fun pruneRemovesUninstalledEverywhere() {
+        val c = LauncherConfig(base = ScreenLayout(home = listOf("a", "gone"), dock = listOf("gone"), tiles = listOf(TileItem("t", TileKind.APP, "gone"), TileItem("clock", TileKind.CLOCK))),
+            layouts = mapOf("x" to ScreenLayout(home = listOf("folder:1"), folders = mapOf("folder:1" to Folder("folder:1", "F", listOf("a", "gone"))))), hidden = setOf("gone"))
             .prune(setOf("a"))
-        assertEquals(listOf("a"), c.home); assertTrue(c.dock.isEmpty())
-        assertEquals(listOf("clock"), c.tiles.map { it.id })
+        assertEquals(listOf("a"), c.baseLayout().home); assertTrue(c.baseLayout().dock.isEmpty())
+        assertEquals(listOf("clock"), c.baseLayout().tiles.map { it.id })
+        // The folder lost one of its two apps and dissolved into the remaining one.
+        assertEquals(listOf("a"), c.layouts.getValue("x").home); assertTrue(c.layouts.getValue("x").folders.isEmpty())
     }
 
     @Test fun pagesSplit() {
-        val c = LauncherConfig(home = (1..30).map { "k$it" })
-        val p = c.pagesFor(16, 24)
+        val l = ScreenLayout(home = (1..30).map { "k$it" })
+        val p = l.pages(16, 24)
         assertEquals(16, p[0].size); assertEquals(14, p[1].size)
+        assertEquals(16, l.pageStart(1, 16, 24)); assertEquals(40, l.pageStart(2, 16, 24))
     }
 
     @Test fun tilePackerNoOverlap() {

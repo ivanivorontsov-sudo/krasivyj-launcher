@@ -32,6 +32,10 @@ import org.ivanivorontsov.launcher.core.SearchKey
 import org.ivanivorontsov.launcher.core.TileItem
 import org.ivanivorontsov.launcher.core.TileKind
 import org.ivanivorontsov.launcher.core.TileSize
+import org.ivanivorontsov.launcher.core.ScreenLayout
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 import java.text.Collator
 import java.util.Locale
 
@@ -47,6 +51,10 @@ class AppInfo(
     val category: AppCategory,
     val letter: String,
     val search: SearchKey,
+    /** Changes whenever the package is updated (APK path + mtime) — invalidates the on-disk icon cache. */
+    val stamp: Long = 0L,
+    /** Preinstalled/system app: never auto-added to the home screen. */
+    val system: Boolean = false,
 ) {
     val component: ComponentName get() = ComponentName(pkg, cls)
     override fun equals(other: Any?) = other is AppInfo && other.key == key && other.label == label
@@ -65,8 +73,8 @@ class AppRepository(private val context: Context, private val store: Store) {
     private val collator = Collator.getInstance(Locale("ru")).apply { strength = Collator.PRIMARY }
 
     private val callback = object : LauncherApps.Callback() {
-        override fun onPackageRemoved(packageName: String?, user: UserHandle?) = scheduleReload()
-        override fun onPackageAdded(packageName: String?, user: UserHandle?) = scheduleReload()
+        override fun onPackageRemoved(packageName: String?, user: UserHandle?) { packageName?.let { onPackageGone?.invoke(it) }; scheduleReload() }
+        override fun onPackageAdded(packageName: String?, user: UserHandle?) = scheduleReload(120)
         override fun onPackageChanged(packageName: String?, user: UserHandle?) = scheduleReload()
         override fun onPackagesAvailable(packageNames: Array<out String>?, user: UserHandle?, replacing: Boolean) = scheduleReload()
         override fun onPackagesUnavailable(packageNames: Array<out String>?, user: UserHandle?, replacing: Boolean) = scheduleReload()
@@ -74,7 +82,16 @@ class AppRepository(private val context: Context, private val store: Store) {
         override fun onPackagesUnsuspended(packageNames: Array<out String>?, user: UserHandle?) = scheduleReload()
     }
 
+    /** Called with a package name when it is uninstalled (icon disk cache cleanup). */
+    var onPackageGone: ((String) -> Unit)? = null
+    /** Apps that were just auto-placed on the home screen (UI shows a short hint). */
+    private val _autoAdded = MutableStateFlow<List<String>>(emptyList())
+    val autoAdded: StateFlow<List<String>> = _autoAdded
+    private val snapshotFile = File(context.filesDir, "apps.json")
+
     init {
+        // Instant home on a cold start: show last known app list right away, refresh in the background.
+        try { readSnapshot()?.let { _apps.value = it } } catch (_: Exception) {}
         launcherApps.registerCallback(callback, Handler(Looper.getMainLooper()))
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_MANAGED_PROFILE_AVAILABLE); addAction(Intent.ACTION_MANAGED_PROFILE_UNAVAILABLE)
@@ -114,18 +131,63 @@ class AppRepository(private val context: Context, private val store: Store) {
                 val key = keyFor(a.componentName, user)
                 val orig = a.label?.toString()?.trim().orEmpty().ifEmpty { a.componentName.packageName }
                 val label = renamed[key] ?: orig
-                val cat = Categorizer.categorize(a.componentName.packageName, orig, if (Build.VERSION.SDK_INT >= 26) a.applicationInfo.category else -1)
+                val ai = a.applicationInfo
+                val cat = Categorizer.categorize(a.componentName.packageName, orig, ai.category)
+                val stamp = try { (ai.sourceDir?.hashCode()?.toLong() ?: 0L) * 31 + File(ai.sourceDir ?: "").lastModified() } catch (_: Exception) { 0L }
+                val system = (ai.flags and (android.content.pm.ApplicationInfo.FLAG_SYSTEM or android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
                 list += AppInfo(key, label, orig, a.componentName.packageName, a.componentName.className, user, user != me, cat,
-                    AlphabetIndex.letterOf(label), SearchKey(label, if (label != orig) orig + " " + a.componentName.packageName else a.componentName.packageName))
+                    AlphabetIndex.letterOf(label), SearchKey(label, if (label != orig) orig + " " + a.componentName.packageName else a.componentName.packageName), stamp, system)
             }
         }
         list.sortWith(compareBy<AppInfo> { AlphabetIndex.order(it.letter) }.thenComparator { a, b -> collator.compare(a.label, b.label) })
         _apps.value = list
         _loaded.value = true
         val keys = list.mapTo(HashSet()) { it.key }
-        if (list.isNotEmpty()) store.update { it.prune(keys) }
         seedIfNeeded(list)
+        if (list.isNotEmpty()) {
+            // Fresh installs → first free slot (skips updates, system apps, work-profile twins of personal apps).
+            val personalPkgs = list.filter { !it.isWork }.mapTo(HashSet()) { it.pkg }
+            val installed = LinkedHashMap<String, String>()
+            for (a in list) installed.putIfAbsent(a.pkg + "#" + a.key.substringAfterLast('#'), a.key)
+            val byKey = list.associateBy { it.key }
+            var added: List<String> = emptyList()
+            store.update { c ->
+                val (next, fresh) = c.prune(keys).registerInstalled(installed) { k ->
+                    val a = byKey[k]
+                    a != null && !a.system && !(a.isWork && a.pkg in personalPkgs)
+                }
+                added = fresh; next
+            }
+            if (added.isNotEmpty()) _autoAdded.value = added
+        }
+        writeSnapshot(list)
     }
+
+    private fun writeSnapshot(list: List<AppInfo>) {
+        try {
+            val arr = JSONArray()
+            for (a in list) arr.put(JSONObject().put("k", a.key).put("l", a.label).put("o", a.originalLabel).put("p", a.pkg).put("c", a.cls)
+                .put("u", userManager.getSerialNumberForUser(a.user)).put("w", a.isWork).put("g", a.category.name).put("s", a.stamp).put("y", a.system))
+            val tmp = File(snapshotFile.path + ".tmp"); tmp.writeText(arr.toString()); tmp.renameTo(snapshotFile)
+        } catch (_: Exception) {}
+    }
+
+    private fun readSnapshot(): List<AppInfo>? {
+        if (!snapshotFile.exists()) return null
+        val arr = JSONArray(snapshotFile.readText())
+        val out = ArrayList<AppInfo>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            val user = userManager.getUserForSerialNumber(o.getLong("u")) ?: continue
+            val label = o.getString("l"); val orig = o.getString("o"); val pkg = o.getString("p")
+            out += AppInfo(o.getString("k"), label, orig, pkg, o.getString("c"), user, o.getBoolean("w"),
+                runCatching { AppCategory.valueOf(o.getString("g")) }.getOrDefault(AppCategory.OTHER), AlphabetIndex.letterOf(label),
+                SearchKey(label, if (label != orig) "$orig $pkg" else pkg), o.optLong("s"), o.optBoolean("y"))
+        }
+        return out
+    }
+
+    fun autoAddedShown() { _autoAdded.value = emptyList() }
 
     fun find(key: String): AppInfo? = _apps.value.firstOrNull { it.key == key }
 
@@ -156,8 +218,8 @@ class AppRepository(private val context: Context, private val store: Store) {
         tiles += TileItem("calendar", TileKind.CALENDAR, size = TileSize.MEDIUM)
         home.take(6).forEachIndexed { i, a -> tiles += TileItem("t_" + a.key, TileKind.APP, a.key, if (i == 2) TileSize.WIDE else TileSize.MEDIUM) }
         store.update { c ->
-            c.copy(seeded = true, dock = dock.map { it.key }, home = home.map { it.key },
-                minimalFavorites = (dock + home).distinctBy { it.key }.take(7).map { it.key }, tiles = tiles.distinctBy { it.id })
+            c.copy(seeded = true, base = ScreenLayout(home = home.map { it.key }, dock = dock.map { it.key }, tiles = tiles.distinctBy { it.id },
+                favorites = (dock + home).distinctBy { it.key }.take(7).map { it.key }).normalized())
         }
     }
 

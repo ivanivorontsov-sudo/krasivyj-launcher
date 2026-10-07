@@ -25,6 +25,7 @@ data class WidgetItem(val widgetId: Int, val heightDp: Int = 180)
 /** Everything the user arranged, persisted as JSON. Pure model so it is unit-testable. */
 @Serializable
 data class LauncherConfig(
+    // Legacy 1.0 fields: only read once to build [base], then left empty.
     val home: List<String> = emptyList(),
     val dock: List<String> = emptyList(),
     val minimalFavorites: List<String> = emptyList(),
@@ -42,75 +43,70 @@ data class LauncherConfig(
     val autoKeyboard: Boolean = false,
     val highRefreshRate: Boolean = true,
     val seeded: Boolean = false,
+    /** Shared arrangement used by every theme that has not been rearranged yet. */
+    val base: ScreenLayout? = null,
+    /** Per-theme arrangements, created the first time the user rearranges something in that theme. */
+    val layouts: Map<String, ScreenLayout> = emptyMap(),
+    val lastEdited: String? = null,
+    /** Put newly installed apps on the home screen. */
+    val autoAddNew: Boolean = true,
+    /** "pkg#userSerial" of every launchable app seen so far; used to detect fresh installs. */
+    val knownApps: Set<String> = emptySet(),
+    /** Answer the system's "gesture navigation contract" so swipe-home flies into our icon. */
+    val gestureContract: Boolean = true,
+    /** Play the in-launcher "return into icon" animation when coming back home. */
+    val returnAnimation: Boolean = true,
 ) {
-    fun isPlaced(key: String): Boolean = key in home || key in dock
+    fun baseLayout(): ScreenLayout = base ?: ScreenLayout(home = home, dock = dock, tiles = tiles, favorites = minimalFavorites)
 
-    fun addToHome(key: String): LauncherConfig = if (isPlaced(key)) this else copy(home = home + key)
+    /** Moves legacy 1.0 fields into [base]. */
+    fun migrated(): LauncherConfig =
+        if (base != null) this
+        else copy(base = baseLayout().normalized(), home = emptyList(), dock = emptyList(), tiles = emptyList(), minimalFavorites = emptyList())
 
-    fun addToDock(key: String, max: Int): LauncherConfig =
-        if (key in dock || dock.size >= max) this else copy(dock = dock + key, home = home - key)
+    /** The arrangement shown for [themeId]: its own, else the most recently edited one, else the shared base. */
+    fun layoutFor(themeId: String): ScreenLayout = layouts[themeId] ?: lastEdited?.let { layouts[it] } ?: baseLayout()
 
-    fun pinTile(item: TileItem): LauncherConfig =
-        if (item.kind == TileKind.APP && tiles.any { it.appKey == item.appKey }) this
-        else if (item.kind != TileKind.APP && tiles.any { it.kind == item.kind }) this
-        else copy(tiles = tiles + item)
-
-    fun resizeTile(id: String): LauncherConfig = copy(tiles = tiles.map { if (it.id == id) it.copy(size = it.size.next()) else it })
-
-    fun unpinTile(id: String): LauncherConfig = copy(tiles = tiles.filter { it.id != id })
-
-    /** Splits the flat home list into pages; the first page may hold fewer items (clock/widget area). */
-    fun pagesFor(firstPageCapacity: Int, pageCapacity: Int): List<List<String>> {
-        val out = ArrayList<List<String>>()
-        val first = home.take(firstPageCapacity.coerceAtLeast(0))
-        out += first
-        var rest = home.drop(first.size)
-        val cap = pageCapacity.coerceAtLeast(1)
-        while (rest.isNotEmpty()) { out += rest.take(cap); rest = rest.drop(cap) }
-        return out
+    /** Edits (and forks) the arrangement of [themeId]. A null result from [f] means "not allowed" and keeps everything. */
+    fun editLayout(themeId: String, f: (ScreenLayout) -> ScreenLayout?): LauncherConfig {
+        val cur = layoutFor(themeId)
+        val next = f(cur)?.normalized() ?: return this
+        if (next == cur && themeId in layouts) return this
+        return copy(layouts = layouts + (themeId to next), lastEdited = themeId)
     }
 
-    fun removeEverywhere(key: String): LauncherConfig = copy(
-        home = home - key,
-        dock = dock - key,
-        minimalFavorites = minimalFavorites - key,
-        tiles = tiles.filter { it.appKey != key },
-    )
+    fun hasOwnLayout(themeId: String): Boolean = themeId in layouts
 
-    fun move(key: String, delta: Int): LauncherConfig {
-        val i = home.indexOf(key)
-        if (i < 0) {
-            val d = dock.indexOf(key); if (d < 0) return this
-            val j = (d + delta).coerceIn(0, dock.size - 1); if (j == d) return this
-            val l = dock.toMutableList(); l.removeAt(d); l.add(j, key); return copy(dock = l)
-        }
-        val j = (i + delta).coerceIn(0, home.size - 1)
-        if (i == j) return this
-        val l = home.toMutableList(); l.removeAt(i); l.add(j, key)
-        return copy(home = l)
-    }
+    fun resetLayout(themeId: String): LauncherConfig =
+        copy(layouts = layouts - themeId, lastEdited = if (lastEdited == themeId) null else lastEdited)
 
-    fun moveTile(from: Int, to: Int): LauncherConfig {
-        if (from !in tiles.indices || to !in tiles.indices || from == to) return this
-        val l = tiles.toMutableList(); val t = l.removeAt(from); l.add(to, t)
-        return copy(tiles = l)
-    }
+    /** Applies [f] to the shared base and every per-theme arrangement. */
+    fun editAllLayouts(f: (ScreenLayout) -> ScreenLayout): LauncherConfig =
+        copy(base = f(baseLayout()).normalized(), layouts = layouts.mapValues { f(it.value).normalized() })
 
     fun bumpUsage(key: String): LauncherConfig = copy(usage = usage + (key to ((usage[key] ?: 0) + 1).coerceAtMost(9999)))
 
     /** Drops keys of apps that no longer exist (package removed). */
-    fun prune(existing: Set<String>): LauncherConfig = copy(
-        home = home.filter { it in existing },
-        dock = dock.filter { it in existing },
-        minimalFavorites = minimalFavorites.filter { it in existing },
-        tiles = tiles.filter { it.kind != TileKind.APP || it.appKey in existing },
-    )
+    fun prune(existing: Set<String>): LauncherConfig = editAllLayouts { it.normalized(existing) }
+
+    /**
+     * Records the currently installed apps ([installed] = "pkg#serial" ids → app key) and, when enabled,
+     * places the ones that were not known before. The first call only remembers (no flood on upgrade).
+     */
+    fun registerInstalled(installed: Map<String, String>, eligible: (String) -> Boolean): Pair<LauncherConfig, List<String>> {
+        val ids = installed.keys
+        if (knownApps.isEmpty()) return copy(knownApps = ids) to emptyList()
+        val fresh = installed.filterKeys { it !in knownApps }.values.filter(eligible).filter { it !in hidden }
+        var c = copy(knownApps = ids)
+        if (autoAddNew && fresh.isNotEmpty()) c = c.editAllLayouts { l -> fresh.fold(l) { acc, k -> acc.withNewApp(k) } }
+        return c to (if (autoAddNew) fresh else emptyList())
+    }
 }
 
 object ConfigCodec {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false; coerceInputValues = true }
     fun encode(c: LauncherConfig): String = json.encodeToString(c)
-    fun decode(s: String?): LauncherConfig = try { s?.let { json.decodeFromString<LauncherConfig>(it) } ?: LauncherConfig() } catch (_: Exception) { LauncherConfig() }
+    fun decode(s: String?): LauncherConfig = try { (s?.let { json.decodeFromString<LauncherConfig>(it) } ?: LauncherConfig()).migrated() } catch (_: Exception) { LauncherConfig().migrated() }
 }
 
 /** Places tiles in a grid of [columns] units, first-fit, top-to-bottom like the classic tile start screen. */

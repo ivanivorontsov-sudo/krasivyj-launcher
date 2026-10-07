@@ -46,6 +46,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -85,6 +88,9 @@ import org.ivanivorontsov.launcher.core.DockStyle
 import org.ivanivorontsov.launcher.core.GestureAction
 import org.ivanivorontsov.launcher.core.HomeLayout
 import org.ivanivorontsov.launcher.core.LauncherConfig
+import org.ivanivorontsov.launcher.core.DropSpot
+import org.ivanivorontsov.launcher.core.ScreenLayout
+import org.ivanivorontsov.launcher.core.isFolderId
 import org.ivanivorontsov.launcher.core.Motion
 import org.ivanivorontsov.launcher.core.Overlay
 import org.ivanivorontsov.launcher.core.PageIndicator
@@ -100,17 +106,33 @@ import kotlin.math.roundToInt
 class WallImages(val full: ImageBitmap, val frosted: ImageBitmap, val tall: Boolean, val raw: Bitmap)
 
 /** Renders (off the main thread) the theme's code-drawn wallpaper or the user's tile photo. */
+/** Process-wide cache: the rendered wallpaper survives activity recreation; a JPEG copy survives process death. */
+private object WallCache {
+    @Volatile var key: String? = null
+    @Volatile var images: WallImages? = null
+}
+
 @Composable
 fun rememberWallpaper(spec: ThemeSpec, wPx: Int, hPx: Int, tilePhoto: String?): WallImages? {
     val ctx = LocalContext.current
     val tall = spec.layout == HomeLayout.TILES && spec.tileFill == TileFill.TRANSPARENT
     val needs = Wallpapers.hasGenerated(spec) || tall
-    val img by produceState<WallImages?>(null, spec.wallpaper, spec.wallpaperColors, spec.wallpaperDim, spec.id, wPx, hPx, tall, tilePhoto) {
+    val key = "${spec.wallpaper}|${spec.wallpaperColors}|${spec.wallpaperDim}|${spec.id}|$wPx|$hPx|$tall|$tilePhoto|v2"
+    val cached = if (WallCache.key == key) WallCache.images else null
+    val img by produceState(cached, key, needs) {
         if (!needs || wPx <= 0 || hPx <= 0) { value = null; return@produceState }
+        if (value != null) return@produceState
         value = withContext(Dispatchers.Default) {
             val h = if (tall) (hPx * 1.45f).toInt() else hPx
-            val bmp: Bitmap = (if (tall && tilePhoto != null) loadPhoto(ctx, Uri.parse(tilePhoto), wPx, h) else null) ?: Wallpapers.render(spec, wPx, h)
-            WallImages(bmp.asImageBitmap(), Wallpapers.frosted(bmp).asImageBitmap(), tall, bmp)
+            val file = java.io.File(ctx.cacheDir, "wall_" + Integer.toHexString(key.hashCode()) + ".jpg")
+            val fromDisk = try { if (file.exists()) BitmapFactory.decodeFile(file.path)?.takeIf { it.width == wPx && it.height == h } else null } catch (_: Throwable) { null }
+            val bmp: Bitmap = fromDisk ?: ((if (tall && tilePhoto != null) loadPhoto(ctx, Uri.parse(tilePhoto), wPx, h) else null) ?: Wallpapers.render(spec, wPx, h)).also { b ->
+                try {
+                    ctx.cacheDir.listFiles { _, n -> n.startsWith("wall_") }?.forEach { it.delete() }
+                    file.outputStream().use { b.compress(Bitmap.CompressFormat.JPEG, 94, it) }
+                } catch (_: Throwable) {}
+            }
+            WallImages(bmp.asImageBitmap(), Wallpapers.frosted(bmp).asImageBitmap(), tall, bmp).also { WallCache.key = key; WallCache.images = it }
         }
     }
     return img
@@ -135,14 +157,19 @@ fun LauncherRoot(ui: UiState) {
     val spec by app.store.theme.collectAsStateCompat()
     val config by app.store.config.collectAsStateCompat()
     val apps by app.apps.apps.collectAsStateCompat()
-    val animations = remember(ui.resumed) { org.ivanivorontsov.launcher.data.Device.animationsEnabled() }
+    val animations = ui.animations
     ui.drawer.animationsEnabled = animations
+    ui.themeId = spec.id
     val byKey = remember(apps) { apps.associateBy { it.key } }
     val visibleApps = remember(apps, config.hidden) { apps.filter { it.key !in config.hidden } }
+    val layout = remember(config, spec.id) { config.layoutFor(spec.id) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    ui.onFolderHover = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
 
     LauncherTheme(spec, animations) {
+      CompositionLocalProvider(LocalUi provides ui, LocalAppsByKey provides byKey) {
         val density = LocalDensity.current
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize().dragTracker(ui)) {
             val wPx = with(density) { maxWidth.roundToPx() }; val hPx = with(density) { maxHeight.roundToPx() }
             val wall = rememberWallpaper(spec, wPx, hPx, config.tileBackgroundUri)
             val colors = LocalColors.current
@@ -151,52 +178,64 @@ fun LauncherRoot(ui: UiState) {
             if (wall != null && !wall.tall) Image(wall.full, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             else if (wall?.tall == true || spec.layout == HomeLayout.TILES) Box(Modifier.fillMaxSize().background(colors.background))
 
+            // Icons of placed apps first (from the disk cache → instant), then everything else for the drawer.
             LaunchedEffect(apps, spec.iconShape, spec.iconSizeDp) {
-                if (apps.isNotEmpty()) app.icons.prefetch(apps, spec.iconShape, with(density) { spec.iconSizeDp.dp.roundToPx() })
+                if (apps.isNotEmpty()) {
+                    val placed = layout.placedApps().toHashSet()
+                    app.icons.prefetch(apps.sortedBy { if (it.key in placed) 0 else 1 }, spec.iconShape, with(density) { spec.iconSizeDp.dp.roundToPx() })
+                }
             }
 
             val clockRows = if (spec.clockStyle == ClockStyle.NONE) 0 else 2
+            val dragging = ui.drag.item != null
             val pageCount = if (spec.layout == HomeLayout.MINIMAL) 2
-                else 1 + config.pagesFor(spec.columns * (spec.rows - clockRows), spec.columns * spec.rows).size
+                else 1 + layout.pages(spec.columns * (spec.rows - clockRows), spec.columns * spec.rows).size + (if (dragging) 1 else 0)
             val countState = androidx.compose.runtime.rememberUpdatedState(pageCount)
             val homePager = rememberPagerState(initialPage = 1) { countState.value }
             val homeModifier = Modifier.fillMaxSize().graphicsLayer {
                 val p = ui.drawer.progress
-                val e = ui.enter.value
-                val s = (1f - 0.06f * p) * (0.92f + 0.08f * e)
+                val s = 1f - 0.06f * p
                 scaleX = s; scaleY = s
-                alpha = (1f - p) * (0.35f + 0.65f * e)
+                alpha = 1f - p
             }
             Box(homeModifier.homeGestures(ui, config, hPx.toFloat(), spec.layout != HomeLayout.TILES)) {
                 when (spec.layout) {
-                    HomeLayout.GRID -> GridHome(ui, config, byKey, wall, homePager)
-                    HomeLayout.MINIMAL -> MinimalHome(ui, config, byKey, homePager)
-                    HomeLayout.TILES -> TilesHome(ui, config, byKey, visibleApps, wall)
+                    HomeLayout.GRID -> GridHome(ui, layout, byKey, wall, homePager)
+                    HomeLayout.MINIMAL -> MinimalHome(ui, layout, byKey, homePager)
+                    HomeLayout.TILES -> TilesHome(ui, config, layout, byKey, visibleApps, wall)
                 }
             }
             if (spec.layout != HomeLayout.TILES) DrawerLayer(ui, visibleApps, config, wall)
 
             OverlayEffect(spec.overlay)
+            FolderOverlay(ui, layout)
+            ReturnOverlay(ui, layout)
             MenuOverlay(ui)
+            DragLayer(ui)
             RenameDialog(ui)
+            FolderRenameDialog(ui, layout)
             if (ui.widgetPicker) WidgetPicker(onDismiss = { ui.widgetPicker = false })
 
             // HOME pressed while already home → close everything, go to the main page.
             LaunchedEffect(ui.homePresses) {
                 if (ui.homePresses == 0) return@LaunchedEffect
-                ui.menu = null; ui.tileEdit = null; ui.widgetEdit = false
-                if (ui.drawer.progress > 0f) ui.drawer.close()
+                ui.menu = null; ui.tileEdit = null; ui.widgetEdit = false; ui.cancelDrag()
+                if (ui.openFolder != null) ui.openFolder = null
+                else if (ui.drawer.progress > 0f) ui.drawer.close()
                 else if (homePager.currentPage != 1 && spec.layout != HomeLayout.TILES) homePager.animateScrollToPage(1)
             }
-            BackHandler(enabled = ui.menu != null || ui.drawer.progress > 0f || ui.tileEdit != null || ui.widgetEdit) {
+            BackHandler(enabled = ui.menu != null || ui.drawer.progress > 0f || ui.tileEdit != null || ui.widgetEdit || ui.openFolder != null || ui.drag.item != null) {
                 when {
+                    ui.drag.item != null -> ui.cancelDrag()
                     ui.menu != null -> ui.menu = null
+                    ui.openFolder != null -> ui.openFolder = null
                     ui.tileEdit != null -> ui.tileEdit = null
                     ui.widgetEdit -> ui.widgetEdit = false
                     else -> ui.drawer.close()
                 }
             }
         }
+      }
     }
 }
 
@@ -236,48 +275,129 @@ private fun Modifier.composedDrag(ui: UiState, configNow: LauncherConfig, height
     )
 }
 
-// ---------------------------------------------------------------- GRID (Купертино-style and generic)
+// ---------------------------------------------------------------- GRID (Купертино-style, «Письмо» and generic)
 
-@Composable
-fun GridHome(ui: UiState, config: LauncherConfig, byKey: Map<String, AppInfo>, wall: WallImages?, pager: PagerState) {
-    val spec = LocalSpec.current
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val inset = maxWidth * 0.068f
-        val clockRows = if (spec.clockStyle == ClockStyle.NONE) 0 else 2
-        val firstCap = spec.columns * (spec.rows - clockRows)
-        val pages = remember(config.home, firstCap, spec.columns, spec.rows) { config.pagesFor(firstCap, spec.columns * spec.rows) }
-        Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-            HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, key = { it }) { page ->
-                when {
-                    page == 0 -> WidgetsPage(ui)
-                    page - 1 < pages.size -> AppPage(pages[page - 1], byKey, first = page == 1, clockRows = clockRows, inset = inset)
-                    else -> Box(Modifier.fillMaxSize())
+/** Maps the finger to a reorder slot / dock slot / folder target on the icon grid; edge auto-scroll. */
+private class GridHost(val ui: UiState) : DropHost {
+    var layout = ScreenLayout(); var preview = ScreenLayout()
+    lateinit var pager: PagerState
+    lateinit var scope: kotlinx.coroutines.CoroutineScope
+    var cols = 4; var rows = 6; var clockRows = 2; var firstCap = 16; var cap = 24; var dockMax = 4; var dockEnabled = true
+    var screenW = 1f
+    val pageGrid = HashMap<Int, BoundsRef>()
+    val dockRef = BoundsRef()
+    private var edgeDir = 0; private var edgeSince = 0L
+    override val maxDock: Int get() = dockMax
+
+    override fun resolve(p: Offset, item: DragItem): DropSpot? {
+        if (ui.drawer.progress > 0.3f || ui.openFolder != null) return null
+        val folderable = item.app != null && !isFolderId(item.id)
+        if (dockEnabled) dockRef.bounds()?.let { r ->
+            if (p.y >= r.top - 12f && p.y <= r.bottom + 12f) {
+                val shown = preview.dock
+                if (shown.isNotEmpty() && folderable) {
+                    val slot = r.width / shown.size
+                    val i = ((p.x - r.left) / slot).toInt().coerceIn(0, shown.size - 1)
+                    val cx = r.left + (i + 0.5f) * slot
+                    if (abs(p.x - cx) < slot * 0.22f && shown[i] != item.id) return DropSpot.Into(shown[i])
                 }
+                val n = layout.detach(item.id).dock.size
+                return DropSpot.Dock(((p.x - r.left) / r.width * (n + 1)).toInt().coerceIn(0, n))
             }
-            PageDots(pager, minOf(pager.pageCount, pages.size + 1))
-            Dock(config.dock.mapNotNull { byKey[it] }, wall)
-            Spacer(Modifier.navigationBarsPadding())
+        }
+        val page = pager.currentPage - 1
+        if (page < 0) return null
+        val g = pageGrid[page]?.bounds() ?: return null
+        if (!g.contains(p)) return null
+        val r = if (page == 0) rows - clockRows else rows
+        val cw = g.width / cols; val ch = g.height / r
+        val col = ((p.x - g.left) / cw).toInt().coerceIn(0, cols - 1)
+        val row = ((p.y - g.top) / ch).toInt().coerceIn(0, r - 1)
+        val idx = layout.pageStart(page, firstCap, cap) + row * cols + col
+        val shown = preview.home.getOrNull(idx)
+        val cx = g.left + (col + 0.5f) * cw; val cy = g.top + (row + 0.5f) * ch
+        if (folderable && shown != null && shown != item.id && abs(p.x - cx) < cw * 0.26f && abs(p.y - cy) < ch * 0.26f) return DropSpot.Into(shown)
+        return DropSpot.Home(idx.coerceAtMost(layout.detach(item.id).home.size))
+    }
+
+    override fun onFrame(p: Offset, nanos: Long) {
+        if (ui.drawer.progress > 0.3f) return
+        val edge = screenW * 0.07f
+        val dir = when { p.x < edge -> -1; p.x > screenW - edge -> 1; else -> 0 }
+        if (dir != edgeDir) { edgeDir = dir; edgeSince = nanos }
+        if (dir != 0 && nanos - edgeSince > 450_000_000L && !pager.isScrollInProgress) {
+            val target = pager.currentPage + dir
+            if (target >= 1 && target < pager.pageCount) scope.launch { pager.animateScrollToPage(target) }
+            edgeSince = nanos + 350_000_000L
         }
     }
 }
 
 @Composable
-private fun AppPage(keys: List<String>, byKey: Map<String, AppInfo>, first: Boolean, clockRows: Int, inset: androidx.compose.ui.unit.Dp) {
+fun GridHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, wall: WallImages?, pager: PagerState) {
+    val spec = LocalSpec.current
+    val scope = rememberCoroutineScope()
+    val host = remember { GridHost(ui) }
+    val preview = ui.drag.preview(layout)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val inset = maxWidth * 0.068f
+        val clockRows = if (spec.clockStyle == ClockStyle.NONE) 0 else 2
+        val firstCap = spec.columns * (spec.rows - clockRows)
+        val cap = spec.columns * spec.rows
+        val pages = remember(preview.home, firstCap, cap) { preview.pages(firstCap, cap) }
+        host.layout = layout; host.preview = preview; host.pager = pager; host.scope = scope
+        host.cols = spec.columns; host.rows = spec.rows; host.clockRows = clockRows; host.firstCap = firstCap; host.cap = cap
+        host.dockMax = spec.columns; host.dockEnabled = spec.dockStyle != DockStyle.NONE
+        host.screenW = constraints.maxWidth.toFloat()
+        Column(Modifier.fillMaxSize()) {
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, key = { it }) { page ->
+                if (page == 0) WidgetsPage(ui)
+                else {
+                    val ref = remember(page) { BoundsRef() }
+                    androidx.compose.runtime.DisposableEffect(page, ref) { host.pageGrid[page - 1] = ref; onDispose { if (host.pageGrid[page - 1] === ref) host.pageGrid.remove(page - 1) } }
+                    AppPage(ui, pages.getOrNull(page - 1).orEmpty(), preview, byKey, first = page == 1, clockRows = clockRows, inset = inset, gridRef = ref)
+                }
+            }
+            PageDots(pager, minOf(pager.pageCount, pages.size + 1 + if (ui.drag.item != null) 1 else 0))
+            Dock(ui, preview, byKey, wall, host.dockRef)
+            Spacer(Modifier.navigationBarsPadding())
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(host) { ui.drag.host = host; onDispose { if (ui.drag.host === host) ui.drag.host = null } }
+}
+
+/** One home item (app or folder) with drag visibility, folder-target highlight and animated reflow. */
+@Composable
+private fun HomeItem(ui: UiState, id: String, layout: ScreenLayout, byKey: Map<String, AppInfo>, source: DragSource, showLabel: Boolean, modifier: Modifier = Modifier) {
+    val spec = LocalSpec.current
+    Box(modifier.animatePlacement(ui.animations).launcherItemVisibility(ui, id), contentAlignment = Alignment.Center) {
+        Box(Modifier.folderTarget(ui, id)) {
+            if (isFolderId(id)) layout.folders[id]?.let { FolderCell(it, spec.iconSizeDp.dp, showLabel, source) }
+            else byKey[id]?.let { AppCell(it, spec.iconSizeDp.dp, showLabel, source = source) }
+        }
+    }
+}
+
+@Composable
+private fun AppPage(ui: UiState, keys: List<String>, layout: ScreenLayout, byKey: Map<String, AppInfo>, first: Boolean, clockRows: Int, inset: androidx.compose.ui.unit.Dp, gridRef: BoundsRef) {
     val spec = LocalSpec.current
     Column(Modifier.fillMaxSize().padding(horizontal = inset)) {
         val rows = if (first) spec.rows - clockRows else spec.rows
         if (first && clockRows > 0) {
             Box(Modifier.fillMaxWidth().weight(clockRows.toFloat()), contentAlignment = Alignment.Center) { ClockHeader() }
         }
-        val items = keys.mapNotNull { byKey[it] }
-        for (r in 0 until rows) {
-            Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                for (c in 0 until spec.columns) {
-                    val a = items.getOrNull(r * spec.columns + c)
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        if (a != null) AppCell(a, spec.iconSizeDp.dp, spec.showLabels)
-                    }
+        val cols = spec.columns
+        Layout(
+            content = { keys.forEach { id -> androidx.compose.runtime.key(id) { HomeItem(ui, id, layout, byKey, DragSource.HOME, spec.showLabels) } } },
+            modifier = Modifier.fillMaxWidth().weight(rows.toFloat().coerceAtLeast(1f)).trackBounds(gridRef),
+        ) { measurables, c ->
+            val cw = c.maxWidth / cols; val ch = c.maxHeight / rows.coerceAtLeast(1)
+            val placeables = measurables.map { it.measure(Constraints(maxWidth = cw, maxHeight = ch)) }
+            layout(c.maxWidth, c.maxHeight) {
+                placeables.forEachIndexed { i, p ->
+                    val col = i % cols; val row = i / cols
+                    p.place(col * cw + (cw - p.width) / 2, row * ch + (ch - p.height) / 2)
                 }
             }
         }
@@ -307,9 +427,9 @@ fun PageDots(pager: PagerState, count: Int) {
 }
 
 @Composable
-fun Dock(apps: List<AppInfo>, wall: WallImages?) {
+fun Dock(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, wall: WallImages?, rowRef: BoundsRef) {
     val spec = LocalSpec.current; val colors = LocalColors.current
-    if (spec.dockStyle == DockStyle.NONE || apps.isEmpty()) return
+    if (spec.dockStyle == DockStyle.NONE || (layout.dock.isEmpty() && ui.drag.item == null)) return
     val radius = spec.cornerDp.dp
     val posRef = remember { BoundsRef() }
     val bg: Modifier = when (spec.dockStyle) {
@@ -329,8 +449,10 @@ fun Dock(apps: List<AppInfo>, wall: WallImages?) {
     }
     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp)
         .trackBounds(posRef).then(bg).padding(vertical = 14.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            apps.take(spec.columns).forEach { AppCell(it, spec.iconSizeDp.dp, showLabel = false) }
+        Row(Modifier.fillMaxWidth().height(spec.iconSizeDp.dp).trackBounds(rowRef), verticalAlignment = Alignment.CenterVertically) {
+            layout.dock.take(spec.columns).forEach { id ->
+                androidx.compose.runtime.key(id) { HomeItem(ui, id, layout, byKey, DragSource.DOCK, showLabel = false, modifier = Modifier.weight(1f)) }
+            }
         }
     }
 }
@@ -338,26 +460,63 @@ fun Dock(apps: List<AppInfo>, wall: WallImages?) {
 
 // ---------------------------------------------------------------- MINIMAL (text-only)
 
+private class MinimalHost(val ui: UiState) : DropHost {
+    var shown: List<String> = emptyList()
+    var defaults: List<String> = emptyList()
+    val rows = HashMap<String, BoundsRef>()
+    val area = BoundsRef()
+    var pagerPage = 1
+    override fun prepare(l: ScreenLayout): ScreenLayout = if (l.favorites.isEmpty()) l.copy(favorites = defaults) else l
+    override fun resolve(p: Offset, item: DragItem): DropSpot? {
+        if (ui.drawer.progress > 0.3f || pagerPage != 1 || item.app == null) return null
+        val a = area.bounds() ?: return null
+        if (p.y < a.top - 160f || p.y > a.bottom + 160f) return null
+        var idx = 0
+        for (k in shown) {
+            if (k == item.id) continue
+            val r = rows[k]?.bounds() ?: continue
+            if (r.center.y < p.y) idx++
+        }
+        return DropSpot.Fav(idx)
+    }
+}
+
 @Composable
-fun MinimalHome(ui: UiState, config: LauncherConfig, byKey: Map<String, AppInfo>, pager: PagerState) {
+fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, pager: PagerState) {
     val spec = LocalSpec.current; val colors = LocalColors.current; val fonts = LocalFonts.current
     val actions = LocalActions.current
+    val host = remember { MinimalHost(ui) }
+    val defaults = remember(layout) { (layout.dock + layout.home).filter { !isFolderId(it) }.take(8) }
+    host.defaults = defaults
+    host.pagerPage = pager.currentPage
+    val preview = ui.drag.preview(layout)
+    val favKeys = preview.favorites.ifEmpty { defaults }.filter { it in byKey }.take(8)
+    host.shown = favKeys
+    androidx.compose.runtime.DisposableEffect(host) { ui.drag.host = host; onDispose { if (ui.drag.host === host) ui.drag.host = null } }
     HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
         if (page == 0) WidgetsPage(ui)
         else if (page == 1) Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 30.dp)) {
             Spacer(Modifier.height(36.dp))
             ClockHeader(Modifier.fillMaxWidth())
             Spacer(Modifier.weight(1f))
-            val favs = (config.minimalFavorites.ifEmpty { config.dock + config.home }).mapNotNull { byKey[it] }.take(8)
-            favs.forEach { a ->
-                val ref = remember(a.key) { BoundsRef() }
-                Text(
-                    spec.labelPrefix + spec.withCase(a.label),
-                    style = labelStyle(colors.onWallpaper, spec.labelSizeSp.sp).copy(fontFamily = fonts.heading),
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(vertical = 9.dp).trackBounds(ref)
-                        .pressFeedback(onClick = { actions.launch(a, ref.bounds()) }, onLongClick = { actions.showMenu(a, null, ref.bounds() ?: Rect.Zero) }),
-                )
+            Column(Modifier.fillMaxWidth().trackBounds(host.area)) {
+                favKeys.forEach { k ->
+                    val a = byKey[k] ?: return@forEach
+                    androidx.compose.runtime.key(k) {
+                        val ref = remember { BoundsRef() }
+                        androidx.compose.runtime.DisposableEffect(k, ref) { host.rows[k] = ref; ui.iconBounds[k] = ref; onDispose { if (host.rows[k] === ref) host.rows.remove(k); if (ui.iconBounds[k] === ref) ui.iconBounds.remove(k) } }
+                        Text(
+                            spec.labelPrefix + spec.withCase(a.label),
+                            style = labelStyle(colors.onWallpaper, spec.labelSizeSp.sp).copy(fontFamily = fonts.heading),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.animatePlacement(ui.animations).launcherItemVisibility(ui, k).padding(vertical = 9.dp).trackBounds(ref)
+                                .launcherItem(ui, ref,
+                                    onClick = { actions.launch(a, ref.bounds()) },
+                                    onLongPress = { actions.showMenu(a, null, ref.bounds() ?: Rect.Zero) },
+                                    dragItem = { local -> DragItem(k, a, DragSource.FAV, size = androidx.compose.ui.geometry.Size(ref.bounds()?.width ?: 1f, ref.bounds()?.height ?: 1f), grab = local, asLabel = true, startBounds = ref.bounds()) }),
+                        )
+                    }
+                }
             }
             Spacer(Modifier.weight(0.6f))
             Text(if (spec.labelPrefix.isNotEmpty()) "$ ls /apps  ↑" else "↑  все приложения", style = labelStyle(colors.onWallpaper.copy(alpha = 0.45f), 13.sp),
@@ -468,36 +627,37 @@ fun RenameDialog(ui: UiState) {
     )
 }
 
-/** Builds the long-press menu for an app or a tile. */
+/** Builds the long-press menu for an app or a tile (moving things is done by dragging). */
 fun buildAppMenu(ui: UiState, app: AppInfo?, tile: TileItem?, spec: ThemeSpec, config: LauncherConfig, actions: LauncherActions, anchor: Rect): MenuState {
     val store = LauncherApp.instance.store
+    val theme = spec.id
+    val layout = config.layoutFor(theme)
+    fun edit(f: (ScreenLayout) -> ScreenLayout?) = store.update { it.editLayout(theme, f) }
     val e = ArrayList<MenuEntry>()
     if (tile != null) {
-        e += MenuEntry("Размер: " + tile.size.next().title) { store.update { it.resizeTile(tile.id) } }
-        e += MenuEntry("Открепить от начального экрана") { store.update { it.unpinTile(tile.id) } }
+        e += MenuEntry("Размер: " + tile.size.next().title) { edit { it.resizeTile(tile.id) } }
+        e += MenuEntry("Открепить от начального экрана") { edit { it.unpinTile(tile.id) } }
     }
     if (app != null) {
         if (spec.layout == HomeLayout.TILES) {
-            if (config.tiles.none { it.appKey == app.key }) e += MenuEntry("Закрепить на начальном экране") { store.update { it.pinTile(TileItem("t_" + app.key, TileKind.APP, app.key)) } }
+            if (!layout.hasTileFor(app.key)) e += MenuEntry("Закрепить на начальном экране") { edit { it.pinTile(TileItem("t_" + app.key, TileKind.APP, app.key)) } }
         } else if (spec.layout == HomeLayout.MINIMAL) {
-            if (app.key in config.minimalFavorites) e += MenuEntry("Убрать из избранного") { store.update { it.copy(minimalFavorites = it.minimalFavorites - app.key) } }
-            else e += MenuEntry("В избранное на главном") { store.update { it.copy(minimalFavorites = (it.minimalFavorites + app.key).take(8)) } }
+            val defaults = (layout.dock + layout.home).filter { !isFolderId(it) }.take(8)
+            val favs = layout.favorites.ifEmpty { defaults }
+            if (app.key in favs) e += MenuEntry("Убрать из избранного") { edit { l -> l.copy(favorites = favs - app.key) } }
+            else if (favs.size < 8) e += MenuEntry("В избранное на главном") { edit { l -> l.copy(favorites = favs + app.key) } }
         } else {
-            val onHome = app.key in config.home; val inDock = app.key in config.dock
-            if (!onHome && !inDock) e += MenuEntry("На главный экран") { store.update { it.addToHome(app.key) } }
-            if (!inDock && config.dock.size < spec.columns) e += MenuEntry("В док") { store.update { it.addToDock(app.key, spec.columns) } }
-            if (onHome || inDock) {
-                e += MenuEntry("Сдвинуть назад ←") { store.update { it.move(app.key, -1) } }
-                e += MenuEntry("Сдвинуть вперёд →") { store.update { it.move(app.key, 1) } }
-                e += MenuEntry(if (inDock) "Убрать из дока" else "Убрать с экрана") { store.update { it.removeEverywhere(app.key).let { c -> if (inDock) c.copy(home = c.home) else c } } }
-            }
+            val placed = layout.isPlaced(app.key); val inDock = app.key in layout.dock
+            if (!placed) e += MenuEntry("На главный экран") { edit { it.appendHome(app.key) } }
+            if (!inDock && layout.dock.size < spec.columns) e += MenuEntry("В док") { edit { it.addToDock(app.key, spec.columns) } }
+            if (placed) e += MenuEntry(if (inDock) "Убрать из дока" else if (layout.folderOf(app.key) != null) "Убрать из папки" else "Убрать с экрана") { edit { it.detach(app.key) } }
         }
         e += MenuEntry("Переименовать") { ui.renameTarget = app }
         e += MenuEntry(if (app.key in config.hidden) "Показывать в меню" else "Скрыть из меню") {
             store.update { c -> c.copy(hidden = if (app.key in c.hidden) c.hidden - app.key else c.hidden + app.key) }
         }
         e += MenuEntry("О приложении") { actions.appInfo(app, anchor) }
-        e += MenuEntry("Удалить", danger = true) { actions.uninstall(app) }
+        e += MenuEntry("Удалить приложение", danger = true) { actions.uninstall(app) }
     }
     return MenuState(anchor, app, tile, title = app?.label ?: tile?.kind?.name?.lowercase(), entries = e)
 }

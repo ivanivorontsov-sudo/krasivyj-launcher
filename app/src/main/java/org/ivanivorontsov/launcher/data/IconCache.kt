@@ -16,6 +16,7 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.ivanivorontsov.launcher.core.IconShape
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -50,18 +52,53 @@ class IconCache(private val context: Context) {
     fun keyOf(r: Req) = "${r.app.key}|${r.shape}|${r.px}|${r.mono}|$iconPack"
     fun peek(r: Req): ImageBitmap? = cache.get(keyOf(r))
     fun color(appKey: String): Int? = colors[appKey]
-    fun trim() = cache.trimToSize(maxBytes / 3)
+    /** Called only under real memory pressure: icons are cheap to bring back from the disk cache. */
+    fun trim() = cache.trimToSize(maxBytes / 2)
+
+    // ---- disk layer: shaped icons survive process death, so a cold home screen is instant ----
+    private val dir = File(context.cacheDir, "icons").apply { mkdirs() }
+    private fun safe(s: String) = s.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
+    private fun diskPrefix(r: Req) = safe(r.app.pkg) + "__" + Integer.toHexString(keyOf(r).hashCode()) + "__"
+    private fun diskFile(r: Req) = File(dir, diskPrefix(r) + java.lang.Long.toHexString(r.app.stamp) + ".png")
+
+    private fun fromDisk(r: Req): ImageBitmap? = try {
+        val f = diskFile(r)
+        if (!f.exists()) null else android.graphics.BitmapFactory.decodeFile(f.path)?.let { b ->
+            if (!colors.containsKey(r.app.key) && !r.mono) colors.putIfAbsent(r.app.key, dominant(b))
+            b.asImageBitmap()
+        }
+    } catch (_: Throwable) { null }
+
+    private fun toDisk(r: Req, img: ImageBitmap) {
+        try {
+            val prefix = diskPrefix(r)
+            dir.listFiles { _, n -> n.startsWith(prefix) }?.forEach { it.delete() }
+            val f = diskFile(r); val tmp = File(f.path + ".tmp")
+            tmp.outputStream().use { img.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+            tmp.renameTo(f)
+        } catch (_: Throwable) {}
+    }
+
+    /** Removes cached files of an uninstalled package. */
+    fun forgetPackage(pkg: String) {
+        scope.launch { val p = safe(pkg) + "__"; dir.listFiles { _, n -> n.startsWith(p) }?.forEach { it.delete() } }
+    }
+
+    private fun obtain(r: Req): ImageBitmap? {
+        val k = keyOf(r)
+        cache.get(k)?.let { return it }
+        fromDisk(r)?.let { cache.put(k, it); return it }
+        return render(r)?.also { cache.put(k, it); toDisk(r, it) }
+    }
 
     suspend fun load(r: Req): ImageBitmap? {
         cache.get(keyOf(r))?.let { return it }
-        return withContext(dispatcher) {
-            cache.get(keyOf(r)) ?: render(r)?.also { cache.put(keyOf(r), it) }
-        }
+        return withContext(dispatcher) { obtain(r) }
     }
 
-    /** Warm the cache in the background so the drawer never waits for icons. */
+    /** Warm the cache in the background so the drawer never waits for icons (placed apps first). */
     fun prefetch(apps: List<AppInfo>, shape: IconShape, px: Int) {
-        scope.launch { for (a in apps) { val r = Req(a, shape, px); if (cache.get(keyOf(r)) == null) render(r)?.let { cache.put(keyOf(r), it) } } }
+        scope.launch { for (a in apps) obtain(Req(a, shape, px)) }
     }
 
     private fun density(): Int = context.resources.displayMetrics.densityDpi.coerceAtLeast(320).let { if (it < 480) 480 else it }

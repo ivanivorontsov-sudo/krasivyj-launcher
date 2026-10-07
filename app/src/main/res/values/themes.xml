@@ -10,7 +10,7 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
         <item name="android:colorBackgroundCacheHint">@null</item>
-        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowAnimationStyle">@style/Animation.Launcher.Home</item>
     </style>
     <style name="Theme.Launcher.Settings" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/settings_bg</item>
@@ -20,4 +20,17 @@
     <color name="settings_bg">#FF101114</color>
     <color name="icon_bg_top">#FF2B2F6B</color>
     <color name="icon_bg_bottom">#FFE07A5F</color>
+    <!-- Fast fade for every way home can appear (task to front, closing app over the wallpaper, back). -->
+    <style name="Animation.Launcher.Home" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/uyut_home_enter</item>
+        <item name="android:activityCloseEnterAnimation">@anim/uyut_home_enter</item>
+        <item name="android:taskOpenEnterAnimation">@anim/uyut_home_enter</item>
+        <item name="android:taskCloseEnterAnimation">@anim/uyut_home_enter</item>
+        <item name="android:taskToFrontEnterAnimation">@anim/uyut_home_enter</item>
+        <item name="android:taskToBackEnterAnimation">@anim/uyut_home_enter</item>
+        <item name="android:wallpaperOpenEnterAnimation">@anim/uyut_home_enter</item>
+        <item name="android:wallpaperCloseEnterAnimation">@anim/uyut_home_enter</item>
+        <item name="android:wallpaperIntraOpenEnterAnimation">@anim/uyut_home_enter</item>
+        <item name="android:wallpaperIntraCloseEnterAnimation">@anim/uyut_home_enter</item>
+    </style>
 </resources>

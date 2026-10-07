@@ -107,7 +107,7 @@ class SettingsActivity : ComponentActivity() {
 }
 
 private enum class Screen(val title: String) {
-    MAIN("Уют"), THEMES("Темы"), EDITOR("Свой стиль"), FONTS("Шрифты"), GESTURES("Жесты"), HIDDEN("Скрытые приложения"),
+    MAIN("Уют"), HOME("Главный экран"), THEMES("Темы"), EDITOR("Свой стиль"), FONTS("Шрифты"), GESTURES("Жесты"), HIDDEN("Скрытые приложения"),
     ICONS("Набор иконок"), LIVE("Живые плитки и разрешения"), SYSTEM("Системный шрифт и обои"), SMOOTH("Плавность и батарея"), ABOUT("О приложении")
 }
 
@@ -124,6 +124,7 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
         Box(Modifier.weight(1f).navigationBarsPadding()) {
             when (screen) {
                 Screen.MAIN -> MainScreen { screen = it }
+                Screen.HOME -> HomeScreenSettings()
                 Screen.THEMES -> ThemesScreen { screen = Screen.EDITOR }
                 Screen.EDITOR -> EditorScreen(openFonts = { fontTarget = it; screen = Screen.FONTS })
                 Screen.FONTS -> FontsScreen(fontTarget)
@@ -178,6 +179,7 @@ private fun MainScreen(go: (Screen) -> Unit) {
             }
         }
         item { NavRow("Все темы", "${Presets.all.size} готовых тем с живым предпросмотром") { go(Screen.THEMES) } }
+        item { NavRow("Главный экран", "Перетаскивание и папки, новые приложения, анимация возврата к иконке") { go(Screen.HOME) } }
         item { NavRow("Свой стиль", "Шрифты, цвета, форма иконок, сетка, анимации, обои") { go(Screen.EDITOR) } }
         item { NavRow("Шрифты", "${org.ivanivorontsov.launcher.ui.FontCatalog.all.size} шрифтов с кириллицей, в том числе рукописные") { go(Screen.FONTS) } }
         item { NavRow("Системный шрифт и обои", "Что можно поменять во всём телефоне") { go(Screen.SYSTEM) } }
@@ -460,6 +462,31 @@ private fun SystemScreen() {
                 }
             }) { Text("Установить обои темы") }
             if (spec.wallpaper == WallpaperStyle.SYSTEM) Info("В этой теме используются обои телефона.")
+        } }
+    }
+}
+
+@Composable
+private fun HomeScreenSettings() {
+    val store = LauncherApp.instance.store
+    val cfg by store.config.collectAsStateCompat()
+    val spec by store.theme.collectAsStateCompat()
+    val own = cfg.hasOwnLayout(spec.id)
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { Section("Новые приложения") {
+            SwitchRow("Добавлять новые приложения на главный экран", cfg.autoAddNew) { v -> store.update { it.copy(autoAddNew = v) } }
+            Info("Только что установленное приложение встаёт в первую свободную ячейку (в «Плитках» — маленькой плиткой). Обновления, системные приложения и копии из рабочего профиля не добавляются.")
+        } }
+        item { Section("Перетаскивание") {
+            Info("Долгое нажатие поднимает иконку — тяните её: остальные иконки расступаются. Отпустите на другой иконке, чтобы сделать папку; у края экрана страница перелистнётся сама. Сверху появятся «Удалить с экрана», «О приложении» и «Удалить приложение».")
+            Info("Из меню приложений можно вытащить иконку прямо на главный экран. В «Плитках» плитки двигаются так же, а размер меняется кнопкой в углу плитки.")
+            Info(if (own) "У темы «${spec.name}» своя расстановка — у каждой темы она хранится отдельно." else "Тема «${spec.name}» пока использует общую расстановку. Как только вы что-то передвинете, у неё появится своя.")
+            if (own) OutlinedButton(onClick = { store.update { it.resetLayout(spec.id) } }) { Text("Сбросить расстановку этой темы") }
+        } }
+        item { Section("Возврат на главный экран") {
+            SwitchRow("Анимация «приложение сворачивается в иконку»", cfg.returnAnimation) { v -> store.update { it.copy(returnAnimation = v) } }
+            SwitchRow("Жест «домой» прилетает в иконку (Android 11+)", cfg.gestureContract) { v -> store.update { it.copy(gestureContract = v) } }
+            Info("Окно чужого приложения сторонний лаунчер анимировать не может — это делает система. Уют сообщает системе, где лежит иконка (так же, как Lawnchair), и сам дорисовывает «сворачивание» карточки в иконку. На части прошивок (в том числе ColorOS / realme UI) система этот сигнал игнорирует — тогда работает только анимация Уюта.")
         } }
     }
 }
