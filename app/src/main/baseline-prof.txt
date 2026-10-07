@@ -1,0 +1,8 @@
+# Hand-written baseline profile: precompile the launcher's own startup + frame code paths and the Compose runtime hot paths.
+HSPLorg/ivanivorontsov/launcher/**->**(**)**
+Lorg/ivanivorontsov/launcher/**;
+HSPLandroidx/compose/runtime/**->**(**)**
+HSPLandroidx/compose/ui/**->**(**)**
+HSPLandroidx/compose/foundation/**->**(**)**
+HSPLandroidx/compose/animation/**->**(**)**
+HSPLkotlinx/serialization/json/**->**(**)**

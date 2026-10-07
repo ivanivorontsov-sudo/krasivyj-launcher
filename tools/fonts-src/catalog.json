@@ -1,0 +1,675 @@
+[
+ {
+  "unmodified": false,
+  "id": "caveat",
+  "name": "Caveat",
+  "category": "handwritten",
+  "designer": "Impallari Type",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat)",
+  "files": [
+   {
+    "res": "f_caveat",
+    "weight": 400,
+    "bytes": 167496
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "marck_script",
+  "name": "Marck Script",
+  "category": "handwritten",
+  "designer": "Denis Masharov",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright (c) 2011, Denis Masharov <denis.masharov@gmail.com> & Marck Fogel,",
+  "files": [
+   {
+    "res": "f_marck_script",
+    "weight": 400,
+    "bytes": 83664,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "bad_script",
+  "name": "Bad Script",
+  "category": "handwritten",
+  "designer": "Gaslight",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2011 The Bad Script Project Authors (https://github.com/alexeiva/badscript)",
+  "files": [
+   {
+    "res": "f_bad_script",
+    "weight": 400,
+    "bytes": 65032
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "neucha",
+  "name": "Neucha",
+  "category": "handwritten",
+  "designer": "Jovanny Lemonad",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright (c) 2008-2010 by Jovanny Lemonad (http://www.jovanny.ru)",
+  "files": [
+   {
+    "res": "f_neucha",
+    "weight": 400,
+    "bytes": 46620
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "amatic_sc",
+  "name": "Amatic SC",
+  "category": "handwritten",
+  "designer": "Vernon Adams, Ben Nathan",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2015 The Amatic SC Project Authors (https://github.com/googlefonts/AmaticSC)",
+  "files": [
+   {
+    "res": "f_amatic_sc",
+    "weight": 400,
+    "bytes": 51556
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "pacifico",
+  "name": "Pacifico",
+  "category": "handwritten",
+  "designer": "Vernon Adams, Jacques Le Bailly",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2018 The Pacifico Project Authors (https://github.com/googlefonts/Pacifico)",
+  "files": [
+   {
+    "res": "f_pacifico",
+    "weight": 400,
+    "bytes": 62684
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "lobster",
+  "name": "Lobster",
+  "category": "handwritten",
+  "designer": "Impallari Type",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2010 The Lobster Project Authors (https://github.com/impallari/The-Lobster-Font), with Reserved Font Name \"Lobster\".",
+  "files": [
+   {
+    "res": "f_lobster",
+    "weight": 400,
+    "bytes": 406076,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "pangolin",
+  "name": "Pangolin",
+  "category": "handwritten",
+  "designer": "Kevin Burke",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2016 The Pangolin Project Authors (https://github.com/googlefonts/pangolin)",
+  "files": [
+   {
+    "res": "f_pangolin",
+    "weight": 400,
+    "bytes": 125668
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "shantell_sans",
+  "name": "Shantell Sans",
+  "category": "handwritten",
+  "designer": "Shantell Martin, Arrow Type",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2022 The Shantell Sans Project Authors (https://github.com/arrowtype/shantell-sans)",
+  "files": [
+   {
+    "res": "f_shantell_sans",
+    "weight": 400,
+    "bytes": 256716
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "great_vibes",
+  "name": "Great Vibes",
+  "category": "handwritten",
+  "designer": "TypeSETit",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2015 The Great Vibes Pro Project Authors (https://github.com/googlefonts/great-vibes)",
+  "files": [
+   {
+    "res": "f_great_vibes",
+    "weight": 400,
+    "bytes": 131340
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "comforter",
+  "name": "Comforter",
+  "category": "handwritten",
+  "designer": "Robert Leuschke",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2015 The Comforter Project Authors (https://github.com/googlefonts/comforter)",
+  "files": [
+   {
+    "res": "f_comforter",
+    "weight": 400,
+    "bytes": 81780
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "balsamiq_sans",
+  "name": "Balsamiq Sans",
+  "category": "handwritten",
+  "designer": "Balsamiq, Michael Angeles",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2011 The Balsamiq Sans Project Authors (https://github.com/balsamiq/balsamiqsans)",
+  "files": [
+   {
+    "res": "f_balsamiq_sans",
+    "weight": 400,
+    "bytes": 69908
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "klee_one",
+  "name": "Klee One",
+  "category": "handwritten",
+  "designer": "Fontworks",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2020 The Klee Project Authors (https://github.com/fontworks-fonts/Klee)",
+  "files": [
+   {
+    "res": "f_klee_one",
+    "weight": 400,
+    "bytes": 58240
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "underdog",
+  "name": "Underdog",
+  "category": "handwritten",
+  "designer": "Sorkin Type",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright (c) 2012, Sergey Steblina (sergey@steblina.com), Jovanny Lemonad (lemonad@jovanny.ru), with Reserved Font Name 'Underdog'",
+  "files": [
+   {
+    "res": "f_underdog",
+    "weight": 400,
+    "bytes": 101480,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "marmelad",
+  "name": "Marmelad",
+  "category": "handwritten",
+  "designer": "Cyreal",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2016 The Marmelad Project Authors (https://github.com/cyrealtype/Marmelad-Cyrillic).",
+  "files": [
+   {
+    "res": "f_marmelad",
+    "weight": 400,
+    "bytes": 50884
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "pattaya",
+  "name": "Pattaya",
+  "category": "handwritten",
+  "designer": "Cadson Demak",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright (c) 2015, Cadson Demak (info@cadsondemak.com), Copyright (c) 2010, Pablo Impallari (www.impallari.com|impallari@gmail.com), Copyright (c) 2010, 2011, Alexei Vanyashin (www.cyreal.org|a@cyreal.org), with Reserved Font Name Lobster.",
+  "files": [
+   {
+    "res": "f_pattaya",
+    "weight": 400,
+    "bytes": 90340
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "gabriela",
+  "name": "Gabriela",
+  "category": "handwritten",
+  "designer": "Eduardo Tunni",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2013 The Gabriela Project Authors (https://github.com/etunni/Gabriela), with Reserved Font Name \"Gabriela\".",
+  "files": [
+   {
+    "res": "f_gabriela",
+    "weight": 400,
+    "bytes": 70984,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "ruslan_display",
+  "name": "Ruslan Display",
+  "category": "display",
+  "designer": "Oleg Pospelov",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2011 Oleg Snarsky, Denis Masharov, Vladimir Rabdu, with Reserved Font Name 'Ruslan', 'Ruslan Display'.",
+  "files": [
+   {
+    "res": "f_ruslan_display",
+    "weight": 400,
+    "bytes": 55048,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "yeseva_one",
+  "name": "Yeseva One",
+  "category": "display",
+  "designer": "Jovanny Lemonad",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2012 The Yeseva One Project Authors (lemonad@jovanny.ru), with Reserved Font Name \"Yeseva\".",
+  "files": [
+   {
+    "res": "f_yeseva_one",
+    "weight": 400,
+    "bytes": 108016,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "poiret_one",
+  "name": "Poiret One",
+  "category": "display",
+  "designer": "Denis Masharov",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2011 The Poiret One Project Authors (https://github.com/alexeiva/poiretone)",
+  "files": [
+   {
+    "res": "f_poiret_one",
+    "weight": 400,
+    "bytes": 36392
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "cormorant",
+  "name": "Cormorant Garamond",
+  "category": "serif",
+  "designer": "Christian Thalmann",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2015 the Cormorant Project Authors (github.com/CatharsisFonts/Cormorant)",
+  "files": [
+   {
+    "res": "f_cormorant",
+    "weight": 400,
+    "bytes": 81452
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "oranienbaum",
+  "name": "Oranienbaum",
+  "category": "serif",
+  "designer": "Oleg Pospelov",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright (c) 2012, Oleg Pospelov (oleg@pospelov.com), Jovanny Lemonad (lemonad@jovanny.ru), with Reserved Font Name 'Oranienbaum'",
+  "files": [
+   {
+    "res": "f_oranienbaum",
+    "weight": 400,
+    "bytes": 141220,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "kelly_slab",
+  "name": "Kelly Slab",
+  "category": "display",
+  "designer": "Denis Masharov",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright (c) 2011, Denis Masharov <denis.masharov@gmail.com>,",
+  "files": [
+   {
+    "res": "f_kelly_slab",
+    "weight": 400,
+    "bytes": 77816,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "russo_one",
+  "name": "Russo One",
+  "category": "display",
+  "designer": "Jovanny Lemonad",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright (c) 2011-2012, Jovanny Lemonad (jovanny.ru), with Reserved Font Name \"Russo\"",
+  "files": [
+   {
+    "res": "f_russo_one",
+    "weight": 400,
+    "bytes": 39124,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "unbounded",
+  "name": "Unbounded",
+  "category": "display",
+  "designer": "NaN",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2022 The Unbounded Project Authors (https://github.com/googlefonts/unbounded)",
+  "files": [
+   {
+    "res": "f_unbounded",
+    "weight": 400,
+    "bytes": 70148
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "stalinist_one",
+  "name": "Stalinist One",
+  "category": "display",
+  "designer": "Alexey Maslov, Jovanny Lemonad",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright (c) 2009-2011, Alexey Maslov, Jovanny Lemonad (lemonad@jovanny.ru), with Reserved Font Name 'Stalinist'",
+  "files": [
+   {
+    "res": "f_stalinist_one",
+    "weight": 400,
+    "bytes": 48808,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "press_start",
+  "name": "Press Start 2P",
+  "category": "mono",
+  "designer": "CodeMan38",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net), with Reserved Font Name \"Press Start 2P\".",
+  "files": [
+   {
+    "res": "f_press_start",
+    "weight": 400,
+    "bytes": 118204,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "tiny5",
+  "name": "Tiny5",
+  "category": "mono",
+  "designer": "Stefan Schmidt",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2022-2024 The Tiny5 Project Authors (https://github.com/Gissio/font_tiny5)",
+  "files": [
+   {
+    "res": "f_tiny5",
+    "weight": 400,
+    "bytes": 19812
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "jetbrains_mono",
+  "name": "JetBrains Mono",
+  "category": "mono",
+  "designer": "JetBrains",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)",
+  "files": [
+   {
+    "res": "f_jetbrains_mono",
+    "weight": 400,
+    "bytes": 57836
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "plex_mono",
+  "name": "IBM Plex Mono",
+  "category": "mono",
+  "designer": "Mike Abbink, Bold Monday",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright © 2017 IBM Corp. with Reserved Font Name \"Plex\"",
+  "files": [
+   {
+    "res": "f_plex_mono",
+    "weight": 400,
+    "bytes": 135580,
+    "variable": false
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "inter",
+  "name": "Inter",
+  "category": "clean",
+  "designer": "Rasmus Andersson",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter)",
+  "files": [
+   {
+    "res": "f_inter_300",
+    "weight": 300,
+    "bytes": 54612
+   },
+   {
+    "res": "f_inter_400",
+    "weight": 400,
+    "bytes": 54556
+   },
+   {
+    "res": "f_inter_600",
+    "weight": 600,
+    "bytes": 54616
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "open_sans",
+  "name": "Open Sans",
+  "category": "clean",
+  "designer": "Steve Matteson",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2020 The Open Sans Project Authors (https://github.com/googlefonts/opensans)",
+  "files": [
+   {
+    "res": "f_open_sans_300",
+    "weight": 300,
+    "bytes": 25924
+   },
+   {
+    "res": "f_open_sans_400",
+    "weight": 400,
+    "bytes": 25896
+   },
+   {
+    "res": "f_open_sans_600",
+    "weight": 600,
+    "bytes": 25884
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "manrope",
+  "name": "Manrope",
+  "category": "clean",
+  "designer": "Mikhail Sharanda",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2018 The Manrope Project Authors (https://github.com/googlefonts/manrope)",
+  "files": [
+   {
+    "res": "f_manrope",
+    "weight": 400,
+    "bytes": 44744
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "nunito",
+  "name": "Nunito",
+  "category": "clean",
+  "designer": "Vernon Adams, Cyreal",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2014 The Nunito Project Authors (https://github.com/googlefonts/nunito)",
+  "files": [
+   {
+    "res": "f_nunito",
+    "weight": 400,
+    "bytes": 49424
+   }
+  ]
+ },
+ {
+  "unmodified": true,
+  "id": "comfortaa",
+  "name": "Comfortaa",
+  "category": "clean",
+  "designer": "Johan Aakerlund",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2011 The Comfortaa Project Authors (https://github.com/alexeiva/comfortaa), with Reserved Font Name \"Comfortaa\".",
+  "files": [
+   {
+    "res": "f_comfortaa",
+    "weight": 400,
+    "bytes": 201756,
+    "variable": true
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "golos",
+  "name": "Golos Text",
+  "category": "clean",
+  "designer": "Paratype",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2019 The Golos Text Project Authors (https://github.com/googlefonts/golos-text)",
+  "files": [
+   {
+    "res": "f_golos",
+    "weight": 400,
+    "bytes": 37244
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "jura",
+  "name": "Jura",
+  "category": "clean",
+  "designer": "Daniel Johnson",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2019 The Jura Project Authors (https://github.com/ossobuffo/jura)",
+  "files": [
+   {
+    "res": "f_jura",
+    "weight": 400,
+    "bytes": 42240
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "exo2",
+  "name": "Exo 2",
+  "category": "clean",
+  "designer": "Natanael Gama",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2013 The Exo 2 Project Authors (https://github.com/googlefonts/Exo-2.0)",
+  "files": [
+   {
+    "res": "f_exo2",
+    "weight": 400,
+    "bytes": 63828
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "tektur",
+  "name": "Tektur",
+  "category": "display",
+  "designer": "Adam Jagosz",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2023 The Tektur Project Authors (https://www.github.com/hyvyys/Tektur)",
+  "files": [
+   {
+    "res": "f_tektur",
+    "weight": 400,
+    "bytes": 22136
+   }
+  ]
+ },
+ {
+  "unmodified": false,
+  "id": "philosopher",
+  "name": "Philosopher",
+  "category": "clean",
+  "designer": "Jovanny Lemonad",
+  "license": "SIL Open Font License 1.1",
+  "copyright": "Copyright 2011 The Philosopher Project Authors (https://github.com/alexeiva/philosopher)",
+  "files": [
+   {
+    "res": "f_philosopher",
+    "weight": 400,
+    "bytes": 48764
+   }
+  ]
+ }
+]

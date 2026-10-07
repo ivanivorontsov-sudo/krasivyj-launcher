@@ -1,0 +1,849 @@
+{
+ "raw/alexbrush/AlexBrush-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 575,
+  "size": 116244
+ },
+ "raw/alice/Alice-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 436,
+  "size": 129200
+ },
+ "raw/allura/Allura-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 587,
+  "size": 246632
+ },
+ "raw/amaticsc/AmaticSC-Bold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 797,
+  "size": 156180
+ },
+ "raw/amaticsc/AmaticSC-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 797,
+  "size": 151624
+ },
+ "raw/badscript/BadScript-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 758,
+  "size": 184216
+ },
+ "raw/ballet/Ballet[opsz].ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 694,
+  "size": 134000
+ },
+ "raw/balsamiqsans/BalsamiqSans-Bold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 979,
+  "size": 369860
+ },
+ "raw/balsamiqsans/BalsamiqSans-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 979,
+  "size": 407528
+ },
+ "raw/bellota/Bellota-Bold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 803,
+  "size": 201076
+ },
+ "raw/bellota/Bellota-Light.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 803,
+  "size": 191872
+ },
+ "raw/bellota/Bellota-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 803,
+  "size": 194464
+ },
+ "raw/caveat/Caveat[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 753,
+  "size": 403648
+ },
+ "raw/caveatbrush/CaveatBrush-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 641,
+  "size": 295568
+ },
+ "raw/comfortaa/Comfortaa[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 850,
+  "size": 201756
+ },
+ "raw/comforter/Comforter-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 707,
+  "size": 279684
+ },
+ "raw/comforterbrush/ComforterBrush-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 701,
+  "size": 807248
+ },
+ "raw/cormorantgaramond/CormorantGaramond[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 974,
+  "size": 1195560
+ },
+ "raw/cuprum/Cuprum[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 597,
+  "size": 84324
+ },
+ "raw/dancingscript/DancingScript[wght].ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 559,
+  "size": 133636
+ },
+ "raw/didactgothic/DidactGothic-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1194,
+  "size": 194200
+ },
+ "raw/exo2/Exo2[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 911,
+  "size": 303940
+ },
+ "raw/firacode/FiraCode[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1551,
+  "size": 260364
+ },
+ "raw/firasans/FiraSans-Black.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1686,
+  "size": 507204
+ },
+ "raw/firasans/FiraSans-Bold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1686,
+  "size": 489720
+ },
+ "raw/firasans/FiraSans-ExtraBold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1686,
+  "size": 497028
+ },
+ "raw/firasans/FiraSans-ExtraLight.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1686,
+  "size": 447324
+ },
+ "raw/firasans/FiraSans-Light.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1686,
+  "size": 449660
+ },
+ "raw/firasans/FiraSans-Medium.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1686,
+  "size": 457248
+ },
+ "raw/firasans/FiraSans-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1686,
+  "size": 456996
+ },
+ "raw/firasans/FiraSans-SemiBold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1686,
+  "size": 489028
+ },
+ "raw/firasans/FiraSans-Thin.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1686,
+  "size": 442852
+ },
+ "raw/forum/Forum-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 578,
+  "size": 303316
+ },
+ "raw/gabriela/Gabriela-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 566,
+  "size": 70984
+ },
+ "raw/geologica/Geologica[CRSV,SHRP,slnt,wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 836,
+  "size": 348640
+ },
+ "raw/golostext/GolosText[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 566,
+  "size": 184292
+ },
+ "raw/greatvibes/GreatVibes-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1081,
+  "size": 457588
+ },
+ "raw/handlee/Handlee-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 201,
+  "size": 39132
+ },
+ "raw/ibmplexmono/IBMPlexMono-Bold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 930,
+  "size": 137784
+ },
+ "raw/ibmplexmono/IBMPlexMono-ExtraLight.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 930,
+  "size": 135980
+ },
+ "raw/ibmplexmono/IBMPlexMono-Light.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 930,
+  "size": 135216
+ },
+ "raw/ibmplexmono/IBMPlexMono-Medium.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 930,
+  "size": 136704
+ },
+ "raw/ibmplexmono/IBMPlexMono-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 930,
+  "size": 135580
+ },
+ "raw/ibmplexmono/IBMPlexMono-SemiBold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 930,
+  "size": 140216
+ },
+ "raw/ibmplexmono/IBMPlexMono-Thin.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 930,
+  "size": 137900
+ },
+ "raw/inter/Inter[opsz,wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 2849,
+  "size": 876576
+ },
+ "raw/jetbrainsmono/JetBrainsMono[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 976,
+  "size": 187208
+ },
+ "raw/jura/Jura[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1052,
+  "size": 258404
+ },
+ "raw/kaushanscript/KaushanScript-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 397,
+  "size": 210672
+ },
+ "raw/kellyslab/KellySlab-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 451,
+  "size": 77816
+ },
+ "raw/kleeone/KleeOne-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 10178,
+  "size": 8724204
+ },
+ "raw/kleeone/KleeOne-SemiBold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 10178,
+  "size": 8905128
+ },
+ "raw/kurale/Kurale-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 767,
+  "size": 265304
+ },
+ "raw/lobster/Lobster-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 828,
+  "size": 406076
+ },
+ "raw/lobstertwo/LobsterTwo-Bold.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 257,
+  "size": 241104
+ },
+ "raw/lobstertwo/LobsterTwo-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 257,
+  "size": 254332
+ },
+ "raw/manrope/Manrope[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 678,
+  "size": 164700
+ },
+ "raw/mansalva/Mansalva-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 775,
+  "size": 355776
+ },
+ "raw/marckscript/MarckScript-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 442,
+  "size": 83664
+ },
+ "raw/marmelad/Marmelad-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 749,
+  "size": 142764
+ },
+ "raw/montserratalternates/MontserratAlternates-Black.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 969,
+  "size": 221652
+ },
+ "raw/montserratalternates/MontserratAlternates-Bold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 969,
+  "size": 214248
+ },
+ "raw/montserratalternates/MontserratAlternates-ExtraBold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 969,
+  "size": 214904
+ },
+ "raw/montserratalternates/MontserratAlternates-ExtraLight.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 969,
+  "size": 212840
+ },
+ "raw/montserratalternates/MontserratAlternates-Light.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 969,
+  "size": 212192
+ },
+ "raw/montserratalternates/MontserratAlternates-Medium.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 969,
+  "size": 213000
+ },
+ "raw/montserratalternates/MontserratAlternates-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 969,
+  "size": 215068
+ },
+ "raw/montserratalternates/MontserratAlternates-SemiBold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 969,
+  "size": 213876
+ },
+ "raw/montserratalternates/MontserratAlternates-Thin.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 969,
+  "size": 212056
+ },
+ "raw/neucha/Neucha.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 283,
+  "size": 141432
+ },
+ "raw/nunito/Nunito[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 938,
+  "size": 276932
+ },
+ "raw/oi/Oi-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1509,
+  "size": 554780
+ },
+ "raw/onest/Onest[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 780,
+  "size": 193056
+ },
+ "raw/opensans/OpenSans[wdth,wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1010,
+  "size": 532636
+ },
+ "raw/oranienbaum/Oranienbaum-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 413,
+  "size": 141220
+ },
+ "raw/orbitron/Orbitron[wght].ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "«»№",
+  "glyphs": 207,
+  "size": 38576
+ },
+ "raw/pacifico/Pacifico-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 805,
+  "size": 329380
+ },
+ "raw/pangolin/Pangolin-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 856,
+  "size": 593408
+ },
+ "raw/parisienne/Parisienne-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 368,
+  "size": 61248
+ },
+ "raw/pattaya/Pattaya-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 803,
+  "size": 420092
+ },
+ "raw/philosopher/Philosopher-Bold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 538,
+  "size": 110068
+ },
+ "raw/philosopher/Philosopher-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 538,
+  "size": 111676
+ },
+ "raw/pixelifysans/PixelifySans[wght].ttf": {
+  "ru_missing": "ОП",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 574,
+  "size": 79160
+ },
+ "raw/playpensans/PlaypenSans[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1051,
+  "size": 1567080
+ },
+ "raw/playwritecz/PlaywriteCZ[wght].ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 486,
+  "size": 353980
+ },
+ "raw/playwritees/PlaywriteES[wght].ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 486,
+  "size": 338740
+ },
+ "raw/playwritepl/PlaywritePL[wght].ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 486,
+  "size": 338596
+ },
+ "raw/podkova/Podkova[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 890,
+  "size": 163368
+ },
+ "raw/poiretone/PoiretOne-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 759,
+  "size": 130176
+ },
+ "raw/pressstart2p/PressStart2P-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 656,
+  "size": 118204
+ },
+ "raw/prostoone/ProstoOne-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 402,
+  "size": 96868
+ },
+ "raw/ptmono/PTM55FT.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 805,
+  "size": 185912
+ },
+ "raw/ptsans/PT_Sans-Web-Bold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 717,
+  "size": 470240
+ },
+ "raw/ptsans/PT_Sans-Web-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 717,
+  "size": 442960
+ },
+ "raw/rubik/Rubik[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 885,
+  "size": 359804
+ },
+ "raw/rubikdoodleshadow/RubikDoodleShadow-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 689,
+  "size": 1361560
+ },
+ "raw/rubikwetpaint/RubikWetPaint-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 689,
+  "size": 442628
+ },
+ "raw/ruslandisplay/RuslanDisplay-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 451,
+  "size": 55048
+ },
+ "raw/russoone/RussoOne-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 410,
+  "size": 39124
+ },
+ "raw/sacramento/Sacramento-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 370,
+  "size": 79696
+ },
+ "raw/seymourone/SeymourOne-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 527,
+  "size": 93576
+ },
+ "raw/shantellsans/ShantellSans[BNCE,INFM,SPAC,wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 837,
+  "size": 1284736
+ },
+ "raw/silkscreen/Silkscreen-Bold.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 226,
+  "size": 30632
+ },
+ "raw/silkscreen/Silkscreen-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 226,
+  "size": 32220
+ },
+ "raw/sixtyfour/Sixtyfour[BLED,SCAN].ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 470,
+  "size": 71536
+ },
+ "raw/sofiasans/SofiaSans[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 606,
+  "size": 345684
+ },
+ "raw/spacemono/SpaceMono-Bold.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 624,
+  "size": 98232
+ },
+ "raw/spacemono/SpaceMono-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 624,
+  "size": 99356
+ },
+ "raw/stalinistone/StalinistOne-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 333,
+  "size": 48808
+ },
+ "raw/tektur/Tektur[wdth,wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 962,
+  "size": 163160
+ },
+ "raw/tiny5/Tiny5-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1154,
+  "size": 132124
+ },
+ "raw/ubuntu/Ubuntu-Bold.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1194,
+  "size": 331612
+ },
+ "raw/ubuntu/Ubuntu-Light.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1194,
+  "size": 413600
+ },
+ "raw/ubuntu/Ubuntu-Medium.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1194,
+  "size": 339360
+ },
+ "raw/ubuntu/Ubuntu-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1194,
+  "size": 351884
+ },
+ "raw/unbounded/Unbounded[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 1138,
+  "size": 778272
+ },
+ "raw/underdog/Underdog-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 407,
+  "size": 101480
+ },
+ "raw/vt323/VT323-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 568,
+  "size": 153116
+ },
+ "raw/yanonekaffeesatz/YanoneKaffeesatz[wght].ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 598,
+  "size": 129312
+ },
+ "raw/yesevaone/YesevaOne-Regular.ttf": {
+  "ru_missing": "",
+  "lat_missing": "",
+  "extra_missing": "",
+  "glyphs": 652,
+  "size": 108016
+ },
+ "raw/yesteryear/Yesteryear-Regular.ttf": {
+  "ru_missing": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "lat_missing": "",
+  "extra_missing": "№",
+  "glyphs": 369,
+  "size": 64856
+ }
+}

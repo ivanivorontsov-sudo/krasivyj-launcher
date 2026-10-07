@@ -1,0 +1,811 @@
+{
+ "alexbrush": {
+  "license": "ofl",
+  "files": [
+   "AlexBrush-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "alice": {
+  "license": "ofl",
+  "files": [
+   "Alice-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "allura": {
+  "license": "ofl",
+  "files": [
+   "Allura-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "amaticsc": {
+  "license": "ofl",
+  "files": [
+   "AmaticSC-Bold.ttf",
+   "AmaticSC-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "badscript": {
+  "license": "ofl",
+  "files": [
+   "BadScript-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "ballet": {
+  "license": "ofl",
+  "files": [
+   "Ballet[opsz].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "balsamiqsans": {
+  "license": "ofl",
+  "files": [
+   "BalsamiqSans-Bold.ttf",
+   "BalsamiqSans-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "bellota": {
+  "license": "ofl",
+  "files": [
+   "Bellota-Bold.ttf",
+   "Bellota-Light.ttf",
+   "Bellota-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "caveat": {
+  "license": "ofl",
+  "files": [
+   "Caveat[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "caveatbrush": {
+  "license": "ofl",
+  "files": [
+   "CaveatBrush-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "comfortaa": {
+  "license": "ofl",
+  "files": [
+   "Comfortaa[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "comforter": {
+  "license": "ofl",
+  "files": [
+   "Comforter-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "comforterbrush": {
+  "license": "ofl",
+  "files": [
+   "ComforterBrush-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "cormorantgaramond": {
+  "license": "ofl",
+  "files": [
+   "CormorantGaramond[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "cuprum": {
+  "license": "ofl",
+  "files": [
+   "Cuprum[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "dancingscript": {
+  "license": "ofl",
+  "files": [
+   "DancingScript[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "didactgothic": {
+  "license": "ofl",
+  "files": [
+   "DidactGothic-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "exo2": {
+  "license": "ofl",
+  "files": [
+   "Exo2[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "firacode": {
+  "license": "ofl",
+  "files": [
+   "FiraCode[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "firasans": {
+  "license": "ofl",
+  "files": [
+   "FiraSans-Black.ttf",
+   "FiraSans-Bold.ttf",
+   "FiraSans-ExtraBold.ttf",
+   "FiraSans-ExtraLight.ttf",
+   "FiraSans-Light.ttf",
+   "FiraSans-Medium.ttf",
+   "FiraSans-Regular.ttf",
+   "FiraSans-SemiBold.ttf",
+   "FiraSans-Thin.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "forum": {
+  "license": "ofl",
+  "files": [
+   "Forum-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "gabriela": {
+  "license": "ofl",
+  "files": [
+   "Gabriela-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "geologica": {
+  "license": "ofl",
+  "files": [
+   "Geologica[CRSV,SHRP,slnt,wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "golostext": {
+  "license": "ofl",
+  "files": [
+   "GolosText[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "greatvibes": {
+  "license": "ofl",
+  "files": [
+   "GreatVibes-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "handlee": {
+  "license": "ofl",
+  "files": [
+   "Handlee-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "ibmplexmono": {
+  "license": "ofl",
+  "files": [
+   "IBMPlexMono-Bold.ttf",
+   "IBMPlexMono-ExtraLight.ttf",
+   "IBMPlexMono-Light.ttf",
+   "IBMPlexMono-Medium.ttf",
+   "IBMPlexMono-Regular.ttf",
+   "IBMPlexMono-SemiBold.ttf",
+   "IBMPlexMono-Thin.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "inter": {
+  "license": "ofl",
+  "files": [
+   "Inter[opsz,wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "jetbrainsmono": {
+  "license": "ofl",
+  "files": [
+   "JetBrainsMono[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "jura": {
+  "license": "ofl",
+  "files": [
+   "Jura[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "kaushanscript": {
+  "license": "ofl",
+  "files": [
+   "KaushanScript-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "kellyslab": {
+  "license": "ofl",
+  "files": [
+   "KellySlab-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "kleeone": {
+  "license": "ofl",
+  "files": [
+   "KleeOne-Regular.ttf",
+   "KleeOne-SemiBold.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "kurale": {
+  "license": "ofl",
+  "files": [
+   "Kurale-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "lobster": {
+  "license": "ofl",
+  "files": [
+   "Lobster-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "lobstertwo": {
+  "license": "ofl",
+  "files": [
+   "LobsterTwo-Bold.ttf",
+   "LobsterTwo-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "manrope": {
+  "license": "ofl",
+  "files": [
+   "Manrope[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "mansalva": {
+  "license": "ofl",
+  "files": [
+   "Mansalva-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "marckscript": {
+  "license": "ofl",
+  "files": [
+   "MarckScript-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "marmelad": {
+  "license": "ofl",
+  "files": [
+   "Marmelad-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "montserratalternates": {
+  "license": "ofl",
+  "files": [
+   "MontserratAlternates-Black.ttf",
+   "MontserratAlternates-Bold.ttf",
+   "MontserratAlternates-ExtraBold.ttf",
+   "MontserratAlternates-ExtraLight.ttf",
+   "MontserratAlternates-Light.ttf",
+   "MontserratAlternates-Medium.ttf",
+   "MontserratAlternates-Regular.ttf",
+   "MontserratAlternates-SemiBold.ttf",
+   "MontserratAlternates-Thin.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "neucha": {
+  "license": "ofl",
+  "files": [
+   "Neucha.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "nunito": {
+  "license": "ofl",
+  "files": [
+   "Nunito[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "oi": {
+  "license": "ofl",
+  "files": [
+   "Oi-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "onest": {
+  "license": "ofl",
+  "files": [
+   "Onest[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "opensans": {
+  "license": "ofl",
+  "files": [
+   "OpenSans[wdth,wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "oranienbaum": {
+  "license": "ofl",
+  "files": [
+   "Oranienbaum-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "orbitron": {
+  "license": "ofl",
+  "files": [
+   "Orbitron[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "pacifico": {
+  "license": "ofl",
+  "files": [
+   "Pacifico-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "pangolin": {
+  "license": "ofl",
+  "files": [
+   "Pangolin-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "parisienne": {
+  "license": "ofl",
+  "files": [
+   "Parisienne-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "pattaya": {
+  "license": "ofl",
+  "files": [
+   "Pattaya-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "philosopher": {
+  "license": "ofl",
+  "files": [
+   "Philosopher-Bold.ttf",
+   "Philosopher-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "pixelifysans": {
+  "license": "ofl",
+  "files": [
+   "PixelifySans[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "playpensans": {
+  "license": "ofl",
+  "files": [
+   "PlaypenSans[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "playwritecz": {
+  "license": "ofl",
+  "files": [
+   "PlaywriteCZ[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "playwritees": {
+  "license": "ofl",
+  "files": [
+   "PlaywriteES[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "playwritepl": {
+  "license": "ofl",
+  "files": [
+   "PlaywritePL[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "podkova": {
+  "license": "ofl",
+  "files": [
+   "Podkova[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "poiretone": {
+  "license": "ofl",
+  "files": [
+   "PoiretOne-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "pressstart2p": {
+  "license": "ofl",
+  "files": [
+   "PressStart2P-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "prostoone": {
+  "license": "ofl",
+  "files": [
+   "ProstoOne-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "ptmono": {
+  "license": "ofl",
+  "files": [
+   "PTM55FT.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "ptsans": {
+  "license": "ofl",
+  "files": [
+   "PT_Sans-Web-Bold.ttf",
+   "PT_Sans-Web-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "rubik": {
+  "license": "ofl",
+  "files": [
+   "Rubik[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "rubikdoodleshadow": {
+  "license": "ofl",
+  "files": [
+   "RubikDoodleShadow-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "rubikwetpaint": {
+  "license": "ofl",
+  "files": [
+   "RubikWetPaint-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "ruslandisplay": {
+  "license": "ofl",
+  "files": [
+   "RuslanDisplay-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "russoone": {
+  "license": "ofl",
+  "files": [
+   "RussoOne-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "sacramento": {
+  "license": "ofl",
+  "files": [
+   "Sacramento-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "seymourone": {
+  "license": "ofl",
+  "files": [
+   "SeymourOne-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "shantellsans": {
+  "license": "ofl",
+  "files": [
+   "ShantellSans[BNCE,INFM,SPAC,wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "silkscreen": {
+  "license": "ofl",
+  "files": [
+   "Silkscreen-Bold.ttf",
+   "Silkscreen-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "sixtyfour": {
+  "license": "ofl",
+  "files": [
+   "Sixtyfour[BLED,SCAN].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "sofiasans": {
+  "license": "ofl",
+  "files": [
+   "SofiaSans[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "spacemono": {
+  "license": "ofl",
+  "files": [
+   "SpaceMono-Bold.ttf",
+   "SpaceMono-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "stalinistone": {
+  "license": "ofl",
+  "files": [
+   "StalinistOne-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "tektur": {
+  "license": "ofl",
+  "files": [
+   "Tektur[wdth,wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "tiny5": {
+  "license": "ofl",
+  "files": [
+   "Tiny5-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "ubuntu": {
+  "license": "ufl",
+  "files": [
+   "Ubuntu-Bold.ttf",
+   "Ubuntu-Light.ttf",
+   "Ubuntu-Medium.ttf",
+   "Ubuntu-Regular.ttf"
+  ],
+  "licfile": [
+   "UFL.txt"
+  ]
+ },
+ "unbounded": {
+  "license": "ofl",
+  "files": [
+   "Unbounded[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "underdog": {
+  "license": "ofl",
+  "files": [
+   "Underdog-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "vt323": {
+  "license": "ofl",
+  "files": [
+   "VT323-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "yanonekaffeesatz": {
+  "license": "ofl",
+  "files": [
+   "YanoneKaffeesatz[wght].ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "yesevaone": {
+  "license": "ofl",
+  "files": [
+   "YesevaOne-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ },
+ "yesteryear": {
+  "license": "ofl",
+  "files": [
+   "Yesteryear-Regular.ttf"
+  ],
+  "licfile": [
+   "OFL.txt"
+  ]
+ }
+}
