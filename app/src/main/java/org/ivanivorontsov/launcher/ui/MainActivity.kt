@@ -56,7 +56,8 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         enableEdgeToEdge(SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT), SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT))
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
-        ui = UiState(lifecycleScope)
+        // Animations need a MonotonicFrameClock: AndroidUiDispatcher.Main carries the Choreographer-backed one.
+        ui = UiState(kotlinx.coroutines.CoroutineScope(lifecycleScope.coroutineContext + androidx.compose.ui.platform.AndroidUiDispatcher.Main))
         ui.actions = this
         setContent {
             CompositionLocalProvider(LocalActions provides this) { LauncherRoot(ui) }
@@ -103,11 +104,11 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val anim = Device.animationsEnabled()
         if (ui.launchedApp) {
             ui.launchedApp = false
-            lifecycleScope.launch {
+            ui.scope.launch {
                 if (ui.turnstile.value > 0f) ui.turnstile.animateTo(0f, if (anim) tween(420, easing = MotionSpecs.turnstileEase) else tween(0))
                 else if (anim) { ui.enter.snapTo(0f); ui.enter.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 260f)) }
             }
-        } else lifecycleScope.launch { ui.turnstile.snapTo(0f); ui.enter.snapTo(1f) }
+        } else ui.scope.launch { ui.turnstile.snapTo(0f); ui.enter.snapTo(1f) }
     }
 
     override fun onPause() { super.onPause(); wasResumed = false; ui.resumed = false; ui.menu = null }
@@ -138,7 +139,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             } catch (e: Exception) { Toast.makeText(this, "Не удалось открыть «${app.label}»", Toast.LENGTH_SHORT).show() }
         }
         if (spec.layout == HomeLayout.TILES && Device.animationsEnabled() && ui.drawer.progress == 0f) {
-            lifecycleScope.launch { ui.turnstile.animateTo(1f, tween(260, easing = MotionSpecs.turnstileEase)); doLaunch() }
+            ui.scope.launch { ui.turnstile.animateTo(1f, tween(260, easing = MotionSpecs.turnstileEase)); doLaunch() }
         } else doLaunch()
     }
 

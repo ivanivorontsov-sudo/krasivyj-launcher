@@ -97,7 +97,7 @@ class SettingsActivity : ComponentActivity() {
             val spec by LauncherApp.instance.store.theme.collectAsStateCompat()
             WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = !spec.dark
             LauncherTheme(spec) {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { SettingsRoot(start) { finish() } }
+                androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) { SettingsRoot(start) { finish() } }
             }
         }
     }
@@ -121,7 +121,7 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
             Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { if (screen == Screen.MAIN) close() else screen = if (screen == Screen.FONTS) Screen.EDITOR else Screen.MAIN }.padding(horizontal = 14.dp))
             Text(screen.title, style = MaterialTheme.typography.headlineSmall)
         }
-        Box(Modifier.weight(1f)) {
+        Box(Modifier.weight(1f).navigationBarsPadding()) {
             when (screen) {
                 Screen.MAIN -> MainScreen { screen = it }
                 Screen.THEMES -> ThemesScreen { screen = Screen.EDITOR }
