@@ -50,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -115,18 +116,31 @@ private enum class Screen(val title: String) {
 private fun SettingsRoot(start: String?, close: () -> Unit) {
     var screen by remember { mutableStateOf(if (start == "themes") Screen.THEMES else Screen.MAIN) }
     var fontTarget by remember { mutableStateOf("all") }
-    BackHandler { if (screen == Screen.MAIN) close() else screen = if (screen == Screen.FONTS) Screen.EDITOR else Screen.MAIN }
+    // Keep the actual navigation path: fonts can be opened from the main menu or the editor,
+    // and nested screens should return to their caller instead of jumping to an unrelated screen.
+    val backStack = remember { mutableStateListOf<Screen>() }
+    fun navigate(to: Screen) {
+        if (to != screen) {
+            backStack.add(screen)
+            screen = to
+        }
+    }
+    fun goBack() {
+        if (backStack.isNotEmpty()) screen = backStack.removeAt(backStack.lastIndex)
+        else close()
+    }
+    BackHandler { goBack() }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { if (screen == Screen.MAIN) close() else screen = if (screen == Screen.FONTS) Screen.EDITOR else Screen.MAIN }.padding(horizontal = 14.dp))
+            Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { goBack() }.padding(horizontal = 14.dp))
             Text(screen.title, style = MaterialTheme.typography.headlineSmall)
         }
         Box(Modifier.weight(1f).navigationBarsPadding()) {
             when (screen) {
-                Screen.MAIN -> MainScreen { screen = it }
+                Screen.MAIN -> MainScreen { navigate(it) }
                 Screen.HOME -> HomeScreenSettings()
-                Screen.THEMES -> ThemesScreen { screen = Screen.EDITOR }
-                Screen.EDITOR -> EditorScreen(openFonts = { fontTarget = it; screen = Screen.FONTS })
+                Screen.THEMES -> ThemesScreen { navigate(Screen.EDITOR) }
+                Screen.EDITOR -> EditorScreen(openFonts = { fontTarget = it; navigate(Screen.FONTS) })
                 Screen.FONTS -> FontsScreen(fontTarget)
                 Screen.GESTURES -> GesturesScreen()
                 Screen.HIDDEN -> HiddenScreen()

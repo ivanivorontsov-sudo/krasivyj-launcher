@@ -85,9 +85,14 @@ android {
     }
 }
 
-// Refuse to produce an unsigned/debug-signed release APK.
+// Refuse to produce an unsigned/debug-signed release APK, but allow release unit tests
+// to run in pull requests where the private signing key is intentionally unavailable.
 gradle.taskGraph.whenReady {
-    if (allTasks.any { it.name.contains("Release") && (it.name.startsWith("assemble") || it.name.startsWith("package")) }) {
+    val requestedReleasePackaging = gradle.startParameter.taskNames.any { requested ->
+        val task = requested.substringAfterLast(":")
+        task == "assembleRelease" || task == "packageRelease"
+    }
+    if (requestedReleasePackaging) {
         require(signingValue("storeFile", "SIGNING_STORE_FILE") != null) {
             "Release signing key missing: provide keystore.properties or SIGNING_* env vars"
         }
