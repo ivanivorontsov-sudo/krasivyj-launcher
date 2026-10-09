@@ -218,6 +218,12 @@ fun LauncherRoot(ui: UiState) {
             if (ui.widgetPicker) WidgetPicker(onDismiss = { ui.widgetPicker = false })
 
             // HOME pressed while already home → close everything, go to the main page.
+            LaunchedEffect(ui.revealPage, ui.revealFolder) {
+                val page = ui.revealPage ?: return@LaunchedEffect
+                ui.revealFolder?.let { ui.openFolder = it }
+                if (spec.layout != HomeLayout.TILES && homePager.currentPage != page) homePager.scrollToPage(page)
+                ui.revealPage = null
+            }
             LaunchedEffect(ui.homePresses) {
                 if (ui.homePresses == 0) return@LaunchedEffect
                 ui.menu = null; ui.tileEdit = null; ui.widgetEdit = false; ui.cancelDrag()

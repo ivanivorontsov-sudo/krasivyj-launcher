@@ -41,7 +41,7 @@ fun ReturnOverlay(ui: UiState, layout: ScreenLayout) {
         fun onScreen(b: Rect?) = b != null && b.width > 0f && b.overlaps(screen) && screen.contains(b.center)
         val ids = listOfNotNull(r.key, layout.folderOf(r.key), "t_" + r.key)
         val target = ids.firstNotNullOfOrNull { ui.iconBounds[it]?.bounds()?.takeIf(::onScreen) } ?: r.fallback?.takeIf(::onScreen)
-        val end = target ?: Rect(Offset(size.width / 2f - 30.dp.toPx(), size.height - 140.dp.toPx()), Size(60.dp.toPx(), 60.dp.toPx()))
+        val end = target ?: return
         val rect = Rect(lerp(screen.topLeft, end.topLeft, e), Size(size.width + (end.width - size.width) * e, size.height + (end.height - size.height) * e))
         val corner = 34.dp.toPx() + (end.minDimension * 0.3f - 34.dp.toPx()) * e
         val fade = if (target == null) 1f - e else 1f

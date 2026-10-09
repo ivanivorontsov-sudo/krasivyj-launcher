@@ -194,21 +194,38 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         @Suppress("DEPRECATION") val cb = extras.getParcelable<android.os.Message>(EXTRA_REMOTE_CALLBACK) ?: return
         val replyTo = cb.replyTo ?: return
         val key = app.apps.keyFor(cn, user)
-        val layout = app.store.config.value.layoutFor(app.store.theme.value.id)
-        val ids = listOfNotNull(key, layout.folderOf(key), "t_$key")
-        if (ids.none { ui.iconBounds.containsKey(it) }) return
+        val theme = app.store.theme.value
+        val layout = app.store.config.value.layoutFor(theme.id)
+        val folder = layout.folderOf(key)
+        val ids = listOfNotNull(key, folder, "t_$key")
         contractKey = key
+        val clockRows = if (theme.clockStyle == org.ivanivorontsov.launcher.core.ClockStyle.NONE) 0 else 2
+        val firstCap = theme.columns * (theme.rows - clockRows)
+        val cap = (theme.columns * theme.rows).coerceAtLeast(1)
+        val holder = folder ?: key
+        val idx = layout.home.indexOf(holder).takeIf { it >= 0 } ?: layout.dock.indexOf(holder)
+        if (folder != null) ui.revealFolder = folder
+        if (idx >= 0) {
+            val appPage = if (idx < firstCap) 0 else 1 + (idx - firstCap) / cap
+            ui.revealPage = appPage + 1
+        }
         ui.scope.launch {
-            // Let the home page settle (drawer/folder just closed) so the rectangle is the final one.
-            kotlinx.coroutines.withTimeoutOrNull(64) { androidx.compose.runtime.withFrameNanos { } }
-            val r = ids.firstNotNullOfOrNull { ui.iconBounds[it]?.bounds() } ?: return@launch
-            val data = Bundle()
-            data.putParcelable(EXTRA_ICON_POSITION, android.graphics.RectF(r.left, r.top, r.right, r.bottom))
-            data.putParcelable(EXTRA_ICON_SURFACE, null)
-            val msg = android.os.Message.obtain()
-            msg.copyFrom(cb)
-            msg.data = data
-            try { replyTo.send(msg) } catch (_: Exception) { contractKey = null }
+            repeat(12) {
+                kotlinx.coroutines.withTimeoutOrNull(32) { androidx.compose.runtime.withFrameNanos { } }
+                val r = ids.firstNotNullOfOrNull { ui.iconBounds[it]?.bounds() } ?: return@repeat
+                if (r.width < 8f || r.height < 8f) return@repeat
+                val loc = IntArray(2)
+                window.decorView.getLocationOnScreen(loc)
+                val data = Bundle()
+                data.putParcelable(EXTRA_ICON_POSITION, android.graphics.RectF(r.left + loc[0], r.top + loc[1], r.right + loc[0], r.bottom + loc[1]))
+                data.putParcelable(EXTRA_ICON_SURFACE, null)
+                val msg = android.os.Message.obtain()
+                msg.copyFrom(cb)
+                msg.data = data
+                try { replyTo.send(msg) } catch (_: Exception) { contractKey = null }
+                return@launch
+            }
+            contractKey = null
         }
     }
 
@@ -224,8 +241,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val b = bounds ?: return null
         val v: View = window.decorView
         val spec = app.store.theme.value
-        return if (spec.motion == Motion.TURNSTILE || spec.motion == Motion.PIXEL_STEP) ActivityOptions.makeClipRevealAnimation(v, b.left.toInt(), b.top.toInt(), b.width.toInt(), b.height.toInt())
-        else ActivityOptions.makeScaleUpAnimation(v, b.left.toInt(), b.top.toInt(), b.width.toInt(), b.height.toInt())
+        return ActivityOptions.makeScaleUpAnimation(v, b.left.toInt(), b.top.toInt(), b.width.toInt().coerceAtLeast(1), b.height.toInt().coerceAtLeast(1))
     }
 
     override fun launch(app: AppInfo, bounds: Rect?) {
