@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -282,18 +281,6 @@ private fun Modifier.composedDrag(ui: UiState, configNow: LauncherConfig, height
     )
 }
 
-
-/** Cylinder carousel: center page flat, neighbors turned on Y so the drum is visible at rest. */
-private fun Modifier.cylinderPage(pager: PagerState, page: Int): Modifier = this.graphicsLayer {
-    val offset = ((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
-    rotationY = offset * 62f
-    cameraDistance = 10f * density
-    transformOrigin = TransformOrigin(0.5f, 0.5f)
-    val scale = 1f - 0.06f * abs(offset)
-    scaleX = scale
-    scaleY = scale
-}
-
 // ---------------------------------------------------------------- GRID (Купертино-style, «Письмо» and generic)
 
 /** Maps the finger to a reorder slot / dock slot / folder target on the icon grid; edge auto-scroll. */
@@ -370,21 +357,12 @@ fun GridHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, wal
         host.screenW = constraints.maxWidth.toFloat()
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-            HorizontalPager(
-                pager,
-                Modifier.weight(1f).fillMaxWidth(),
-                beyondViewportPageCount = 1,
-                contentPadding = PaddingValues(horizontal = 28.dp),
-                pageSpacing = 0.dp,
-                key = { it },
-            ) { page ->
-                Box(Modifier.fillMaxSize().cylinderPage(pager, page)) {
-                    if (page == 0) WidgetsPage(ui)
-                    else {
-                        val ref = remember(page) { BoundsRef() }
-                        androidx.compose.runtime.DisposableEffect(page, ref) { host.pageGrid[page - 1] = ref; onDispose { if (host.pageGrid[page - 1] === ref) host.pageGrid.remove(page - 1) } }
-                        AppPage(ui, pages.getOrNull(page - 1).orEmpty(), preview, byKey, first = page == 1, clockRows = clockRows, inset = inset, gridRef = ref)
-                    }
+            HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, key = { it }) { page ->
+                if (page == 0) WidgetsPage(ui)
+                else {
+                    val ref = remember(page) { BoundsRef() }
+                    androidx.compose.runtime.DisposableEffect(page, ref) { host.pageGrid[page - 1] = ref; onDispose { if (host.pageGrid[page - 1] === ref) host.pageGrid.remove(page - 1) } }
+                    AppPage(ui, pages.getOrNull(page - 1).orEmpty(), preview, byKey, first = page == 1, clockRows = clockRows, inset = inset, gridRef = ref)
                 }
             }
             PageDots(pager, minOf(pager.pageCount, pages.size + 1 + if (ui.drag.item != null) 1 else 0))
@@ -521,8 +499,7 @@ fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, 
     val favKeys = preview.favorites.ifEmpty { defaults }.filter { it in byKey }.take(8)
     host.shown = favKeys
     androidx.compose.runtime.DisposableEffect(host) { ui.drag.host = host; onDispose { if (ui.drag.host === host) ui.drag.host = null } }
-    HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, contentPadding = PaddingValues(horizontal = 28.dp)) { page ->
-        Box(Modifier.fillMaxSize().cylinderPage(pager, page)) {
+    HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
         if (page == 0) WidgetsPage(ui)
         else if (page == 1) Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 30.dp)) {
             Spacer(Modifier.height(36.dp))
@@ -551,7 +528,6 @@ fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, 
             Text(if (spec.labelPrefix.isNotEmpty()) "$ ls /apps  ↑" else "↑  все приложения", style = labelStyle(colors.onWallpaper.copy(alpha = 0.45f), 13.sp),
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 18.dp).clickable(remember { MutableInteractionSource() }, null) { ui.drawer.open() })
         } else Box(Modifier.fillMaxSize())
-        }
     }
 }
 

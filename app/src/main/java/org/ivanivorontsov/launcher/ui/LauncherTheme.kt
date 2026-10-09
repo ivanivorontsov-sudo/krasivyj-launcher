@@ -20,7 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
@@ -63,10 +63,10 @@ data class LauncherColors(
 @Immutable
 data class LauncherFonts(val heading: FontFamily, val body: FontFamily, val clock: FontFamily)
 
-val LocalSpec = staticCompositionLocalOf { org.ivanivorontsov.launcher.core.Presets.cupertino }
-val LocalColors = staticCompositionLocalOf { LauncherColors(Color.Blue, Color.Black, Color.DarkGray, Color.White, Color.White, Color.Gray, true) }
-val LocalFonts = staticCompositionLocalOf { LauncherFonts(FontFamily.Default, FontFamily.Default, FontFamily.Default) }
-val LocalAnimations = staticCompositionLocalOf { true }
+val LocalSpec = compositionLocalOf { org.ivanivorontsov.launcher.core.Presets.cupertino }
+val LocalColors = compositionLocalOf { LauncherColors(Color.Blue, Color.Black, Color.DarkGray, Color.White, Color.White, Color.Gray, true) }
+val LocalFonts = compositionLocalOf { LauncherFonts(FontFamily.Default, FontFamily.Default, FontFamily.Default) }
+val LocalAnimations = compositionLocalOf { true }
 
 /** Motion language per theme. All specs are time/physics based, so they look identical at 60…144 Hz. */
 object MotionSpecs {
