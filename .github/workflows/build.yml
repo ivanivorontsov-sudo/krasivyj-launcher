@@ -44,7 +44,7 @@ jobs:
           echo "SIGNING_STORE_FILE=keystore/uyut-upload.jks" >> "$GITHUB_ENV"
 
       - name: Unit tests
-        run: ./gradlew --stacktrace testReleaseUnitTest
+        run: ./gradlew --stacktrace testDebugUnitTest
 
       - name: Assemble signed release
         if: github.event_name != 'pull_request'
