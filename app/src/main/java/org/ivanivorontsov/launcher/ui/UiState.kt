@@ -81,6 +81,8 @@ class UiState(val scope: CoroutineScope) {
     var lastLaunch: LaunchRecord? = null
     var returning by mutableStateOf<ReturnAnim?>(null)
     val returnProgress = Animatable(1f)
+    /** 0..1 while the "fold into icon" plays: the icon grid zooms in from 94 % (Pixel-like). */
+    val homeZoom = Animatable(1f)
     /** Icon that gets a small "landing" pop (after the system flew the window into it). */
     var popKey by mutableStateOf<String?>(null)
     val pop = Animatable(0f)
@@ -92,4 +94,5 @@ class UiState(val scope: CoroutineScope) {
 /** What was launched and from where, for the return animation and the gesture-nav contract. */
 class LaunchRecord(val key: String, val bounds: Rect?, val time: Long)
 
-class ReturnAnim(val key: String, val color: Int?, val fallback: Rect?)
+/** [fromBack]: the app was left with Back (its own close transition already shrank it a bit). */
+class ReturnAnim(val key: String, val color: Int?, val fallback: Rect?, val fromBack: Boolean = false)

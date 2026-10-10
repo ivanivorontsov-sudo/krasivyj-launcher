@@ -103,7 +103,6 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     }
 
     override fun onStart() { super.onStart(); try { WidgetHostHolder.host(this).startListening() } catch (_: Exception) {} }
-    override fun onStop() { super.onStop(); try { WidgetHostHolder.host(this).stopListening() } catch (_: Exception) {} }
 
     private var refreshApplied: Boolean? = null
     private fun applyRefreshRate(high: Boolean) {
@@ -114,7 +113,9 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     /** Key of the app whose window the system is flying into our icon (gesture-nav contract answered). */
     private var contractKey: String? = null
-    private var enterDone: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    /** Completed when our window is really on screen (enter transition done or window focused). */
+    private var visible: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    private var stoppedAt = 0L
 
     override fun onResume() {
         super.onResume()
@@ -122,34 +123,58 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         ui.resumed = true
         val anim = Device.animationsEnabled()
         if (ui.animations != anim) ui.animations = anim
-        // Nothing heavy here: home must be on screen in the very next frame.
-        val rec = ui.lastLaunch
-        val returning = ui.launchedApp
+        // 1.2: zero work here. The return card was already composed (invisible) in onStop, so the very first
+        // visible frame can animate. Everything else is deferred until after that frame.
+        val pending = ui.returning
+        if (pending != null) {
+            if (contractKey == pending.key) { ui.returning = null; playPop(pending.key) } else playReturn()
+        } else ui.scope.launch { if (ui.turnstile.value != 0f) ui.turnstile.snapTo(0f) }
         ui.launchedApp = false
-        ui.scope.launch { if (ui.turnstile.value != 0f) ui.turnstile.snapTo(0f) }
-        val cfg = app.store.config.value
-        if (returning && rec != null && anim && cfg.returnAnimation) {
-            if (contractKey == rec.key) playPop(rec.key) else playReturn(rec)
-        }
         contractKey = null
-        window.decorView.post { app.live.refreshNow() }
+        window.decorView.post { window.decorView.post { app.live.refreshNow() } }
     }
 
-    private fun playReturn(rec: LaunchRecord) {
-        val done = kotlinx.coroutines.CompletableDeferred<Unit>().also { enterDone = it }
-        ui.returning = ReturnAnim(rec.key, app.icons.color(rec.key), rec.bounds)
+    override fun onStop() {
+        super.onStop()
+        try { WidgetHostHolder.host(this).stopListening() } catch (_: Exception) {}
+        stoppedAt = android.os.SystemClock.uptimeMillis()
+        // Pre-warm the return animation while we are invisible: compose the full-screen card now, so the
+        // first frame after any way back home (gesture, Home button, Back, recents) already shows it.
+        val rec = ui.lastLaunch
+        if (ui.launchedApp && rec != null && Device.animationsEnabled() && app.store.config.value.returnAnimation &&
+            System.currentTimeMillis() - rec.time < 6 * 60 * 60_000L) {
+            ui.returning = ReturnAnim(rec.key, app.icons.color(rec.key), rec.bounds)
+            ui.scope.launch { ui.returnProgress.snapTo(0f); ui.homeZoom.snapTo(0f); if (ui.turnstile.value != 0f) ui.turnstile.snapTo(0f) }
+        }
+        visible = kotlinx.coroutines.CompletableDeferred()
+    }
+
+    /**
+     * Starts as soon as our window is actually visible. On ColorOS / realme UI with gesture navigation the system
+     * keeps a third-party home hidden for up to ~1 s (wallpaper only) after the gesture; a fixed 90 ms start (1.1)
+     * made the whole animation run while nobody could see it. Now it waits for window focus / the end of the
+     * enter transition (whichever comes first, at most 1.5 s) and then plays a spring.
+     */
+    private fun playReturn() {
+        val gate = visible
+        val key = ui.returning?.key
         ui.scope.launch {
-            ui.returnProgress.snapTo(0f)
-            // Start right after our window's (fast) enter transition, or after 90 ms at most.
-            kotlinx.coroutines.withTimeoutOrNull(90) { done.await() }
-            ui.returnProgress.animateTo(1f, tween(380, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+            if (gate != null) kotlinx.coroutines.withTimeoutOrNull(1_500) { gate.await() }
+            kotlinx.coroutines.coroutineScope {
+                launch { ui.homeZoom.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = 320f)) }
+                // Medium-low stiffness, slightly under-damped: ~420 ms with a soft overshoot into the icon.
+                ui.returnProgress.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 340f, visibilityThreshold = 0.002f))
+            }
             ui.returning = null
+            // The real icon takes over with a small spring "pop" (scale overshoot).
+            if (key != null) playPop(key)
         }
     }
 
     private fun playPop(key: String) {
         ui.popKey = key
         ui.scope.launch {
+            ui.homeZoom.snapTo(1f)
             ui.pop.snapTo(0f)
             ui.pop.animateTo(1f, tween(110))
             ui.pop.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 500f))
@@ -157,9 +182,14 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         }
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) visible?.complete(Unit)
+    }
+
     override fun onEnterAnimationComplete() {
         super.onEnterAnimationComplete()
-        enterDone?.complete(Unit)
+        visible?.complete(Unit)
     }
 
     override fun onPause() {

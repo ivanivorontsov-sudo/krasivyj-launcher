@@ -102,7 +102,9 @@ fun TilesHome(ui: UiState, config: LauncherConfig, layout: ScreenLayout, byKey: 
         onDispose { if (ui.showStartPage === f) ui.showStartPage = null }
     }
     HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = ui.drag.item == null) { page ->
-        if (page == 0) TileStart(ui, config, layout, byKey, wall, isCurrent = { pager.currentPage == 0 }, toList = { scope.launch { pager.animateScrollToPage(1) } })
+        if (page == 0) Box(Modifier.fillMaxSize().pageEffect(LocalPageEffect.current, pager, 0)) {
+            TileStart(ui, config, layout, byKey, wall, isCurrent = { pager.currentPage == 0 }, toList = { scope.launch { pager.animateScrollToPage(1) } })
+        }
         else Column(Modifier.fillMaxSize().statusBarsPadding().graphicsLayer {
             // the list swings in from the right edge as the page arrives
             val f = (pager.currentPage - 1 + pager.currentPageOffsetFraction).coerceIn(-1f, 0f)

@@ -20,6 +20,7 @@ class LauncherApp : Application() {
         apps = AppRepository(this, store)
         live = LiveSources(this)
         apps.onPackageGone = { icons.forgetPackage(it) }
+        org.ivanivorontsov.launcher.stop.StopGuard.init(this)
     }
 
     override fun onTrimMemory(level: Int) {

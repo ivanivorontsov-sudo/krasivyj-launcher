@@ -156,7 +156,10 @@ fun LauncherRoot(ui: UiState) {
     val app = LauncherApp.instance
     val spec by app.store.theme.collectAsStateCompat()
     val config by app.store.config.collectAsStateCompat()
-    val apps by app.apps.apps.collectAsStateCompat()
+    val allApps by app.apps.apps.collectAsStateCompat()
+    // «Стоп-экран»: forbidden apps simply do not exist for the launcher (home, dock, folders, drawer, search, tiles).
+    val stop by org.ivanivorontsov.launcher.stop.StopGuard.view.collectAsStateCompat()
+    val apps = remember(allApps, stop.hidden) { if (stop.hidden.isEmpty()) allApps else allApps.filter { it.pkg !in stop.hidden } }
     val animations = ui.animations
     ui.drawer.animationsEnabled = animations
     ui.themeId = spec.id
@@ -167,7 +170,7 @@ fun LauncherRoot(ui: UiState) {
     ui.onFolderHover = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
 
     LauncherTheme(spec, animations) {
-      CompositionLocalProvider(LocalUi provides ui, LocalAppsByKey provides byKey) {
+      CompositionLocalProvider(LocalUi provides ui, LocalAppsByKey provides byKey, LocalPageEffect provides config.pageEffectFor(spec.id, spec.layout)) {
         val density = LocalDensity.current
         BoxWithConstraints(Modifier.fillMaxSize().dragTracker(ui)) {
             val wPx = with(density) { maxWidth.roundToPx() }; val hPx = with(density) { maxHeight.roundToPx() }
@@ -194,7 +197,9 @@ fun LauncherRoot(ui: UiState) {
             val homePager = rememberPagerState(initialPage = 1) { countState.value }
             val homeModifier = Modifier.fillMaxSize().graphicsLayer {
                 val p = ui.drawer.progress
-                val s = 1f - 0.06f * p
+                // 1.2: while an app folds back into its icon, the grid zooms in from 94 % (like Pixel).
+                val z = ui.homeZoom.value
+                val s = (1f - 0.06f * p) * (0.94f + 0.06f * z)
                 scaleX = s; scaleY = s
                 alpha = 1f - p
             }
@@ -212,6 +217,7 @@ fun LauncherRoot(ui: UiState) {
             ReturnOverlay(ui, layout)
             MenuOverlay(ui)
             DragLayer(ui)
+            StopBanner(ui, stop)
             RenameDialog(ui)
             FolderRenameDialog(ui, layout)
             if (ui.widgetPicker) WidgetPicker(onDismiss = { ui.widgetPicker = false })
@@ -351,12 +357,16 @@ fun GridHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, wal
         host.screenW = constraints.maxWidth.toFloat()
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            val effect = LocalPageEffect.current
             HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, key = { it }) { page ->
-                if (page == 0) WidgetsPage(ui)
-                else {
-                    val ref = remember(page) { BoundsRef() }
-                    androidx.compose.runtime.DisposableEffect(page, ref) { host.pageGrid[page - 1] = ref; onDispose { if (host.pageGrid[page - 1] === ref) host.pageGrid.remove(page - 1) } }
-                    AppPage(ui, pages.getOrNull(page - 1).orEmpty(), preview, byKey, first = page == 1, clockRows = clockRows, inset = inset, gridRef = ref)
+                val fx = remember(effect, pager, page) { PageFx(effect, pager, page) }
+                Box(Modifier.fillMaxSize().pageEffect(effect, pager, page, itemsDoIt = page > 0)) {
+                    if (page == 0) WidgetsPage(ui)
+                    else androidx.compose.runtime.CompositionLocalProvider(LocalPageFx provides fx) {
+                        val ref = remember(page) { BoundsRef() }
+                        androidx.compose.runtime.DisposableEffect(page, ref) { host.pageGrid[page - 1] = ref; onDispose { if (host.pageGrid[page - 1] === ref) host.pageGrid.remove(page - 1) } }
+                        AppPage(ui, pages.getOrNull(page - 1).orEmpty(), preview, byKey, first = page == 1, clockRows = clockRows, inset = inset, gridRef = ref)
+                    }
                 }
             }
             PageDots(pager, minOf(pager.pageCount, pages.size + 1 + if (ui.drag.item != null) 1 else 0))
@@ -382,10 +392,14 @@ private fun HomeItem(ui: UiState, id: String, layout: ScreenLayout, byKey: Map<S
 @Composable
 private fun AppPage(ui: UiState, keys: List<String>, layout: ScreenLayout, byKey: Map<String, AppInfo>, first: Boolean, clockRows: Int, inset: androidx.compose.ui.unit.Dp, gridRef: BoundsRef) {
     val spec = LocalSpec.current
+    val fx = LocalPageFx.current?.takeIf { it.effect.perItem() }
+    val insetPx = with(LocalDensity.current) { inset.toPx() }
     Column(Modifier.fillMaxSize().padding(horizontal = inset)) {
         val rows = if (first) spec.rows - clockRows else spec.rows
         if (first && clockRows > 0) {
-            Box(Modifier.fillMaxWidth().weight(clockRows.toFloat()), contentAlignment = Alignment.Center) { ClockHeader() }
+            Box(Modifier.fillMaxWidth().weight(clockRows.toFloat())
+                .then(if (fx == null) Modifier else Modifier.graphicsLayer { itemPageLayer(fx, 0f, 0f, size.width + 2 * insetPx, size.height) }),
+                contentAlignment = Alignment.Center) { ClockHeader() }
         }
         val cols = spec.columns
         Layout(
@@ -395,9 +409,16 @@ private fun AppPage(ui: UiState, keys: List<String>, layout: ScreenLayout, byKey
             val cw = c.maxWidth / cols; val ch = c.maxHeight / rows.coerceAtLeast(1)
             val placeables = measurables.map { it.measure(Constraints(maxWidth = cw, maxHeight = ch)) }
             layout(c.maxWidth, c.maxHeight) {
+                val pageW = c.maxWidth + 2 * insetPx
                 placeables.forEachIndexed { i, p ->
                     val col = i % cols; val row = i / cols
-                    p.place(col * cw + (cw - p.width) / 2, row * ch + (ch - p.height) / 2)
+                    val x = col * cw + (cw - p.width) / 2; val y = row * ch + (ch - p.height) / 2
+                    if (fx == null) p.place(x, y)
+                    else {
+                        // Column centre relative to the page centre: the cylinder/wave bends each column separately.
+                        val cx = insetPx + col * cw + cw / 2f - pageW / 2f
+                        p.placeWithLayer(x, y) { itemPageLayer(fx, cx, 0f, pageW, c.maxHeight.toFloat()) }
+                    }
                 }
             }
         }
@@ -493,7 +514,9 @@ fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, 
     val favKeys = preview.favorites.ifEmpty { defaults }.filter { it in byKey }.take(8)
     host.shown = favKeys
     androidx.compose.runtime.DisposableEffect(host) { ui.drag.host = host; onDispose { if (ui.drag.host === host) ui.drag.host = null } }
+    val effect = LocalPageEffect.current
     HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
+      Box(Modifier.fillMaxSize().pageEffect(effect, pager, page)) {
         if (page == 0) WidgetsPage(ui)
         else if (page == 1) Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 30.dp)) {
             Spacer(Modifier.height(36.dp))
@@ -522,6 +545,7 @@ fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, 
             Text(if (spec.labelPrefix.isNotEmpty()) "$ ls /apps  ↑" else "↑  все приложения", style = labelStyle(colors.onWallpaper.copy(alpha = 0.45f), 13.sp),
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 18.dp).clickable(remember { MutableInteractionSource() }, null) { ui.drawer.open() })
         } else Box(Modifier.fillMaxSize())
+      }
     }
 }
 

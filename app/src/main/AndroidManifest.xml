@@ -81,6 +81,13 @@
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
         </service>
 
+        <activity
+            android:name=".stop.StopActivity"
+            android:exported="false"
+            android:label="Стоп-экран"
+            android:theme="@style/Theme.Launcher.Settings"
+            android:windowSoftInputMode="adjustResize" />
+
         <service
             android:name=".service.LockService"
             android:exported="true"

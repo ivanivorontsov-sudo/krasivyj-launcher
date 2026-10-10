@@ -17,6 +17,11 @@ import kotlinx.serialization.json.Json
 @Serializable enum class Motion(val title: String) { SPRING("Пружина (плавно)"), SMOOTH("Мягкое затухание"), TURNSTILE("Турникет и наклон"), SNAPPY("Быстро"), PIXEL_STEP("Пиксельные шаги") }
 @Serializable enum class Overlay(val title: String) { NONE("Нет"), SCANLINES("Строки ЭЛТ"), GRAIN("Зерно бумаги"), VIGNETTE("Виньетка") }
 @Serializable enum class TextCase(val title: String) { AS_IS("Как есть"), LOWER("строчные"), UPPER("ПРОПИСНЫЕ") }
+/** Page-turn effects of the home screen (1.2). */
+@Serializable enum class PageEffect(val title: String) {
+    NONE("Без эффекта"), CYLINDER("Цилиндр (карусель)"), CUBE("Куб"), FLIP("Переворот"), ROTATE("Поворот"),
+    ZOOM("Приближение"), STACK("Стопка"), WAVE("Волна")
+}
 @Serializable enum class PageIndicator(val title: String) { DOTS("Точки"), LINE("Линия"), NONE("Нет") }
 @Serializable enum class TileFill(val title: String) { ACCENT("Цвет акцента"), ICON_COLOR("Цвет иконки"), TRANSPARENT("Прозрачные (обои внутри плиток)") }
 

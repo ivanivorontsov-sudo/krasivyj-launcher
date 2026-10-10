@@ -53,38 +53,67 @@ fun ClockHeader(modifier: Modifier = Modifier, styleOverride: ClockStyle? = null
     val style = styleOverride ?: spec.clockStyle
     val c = colors.onWallpaper
     val tap = Modifier.pressFeedback(onClick = { Device.openClock(ctx) }, onLongClick = null, tiltOverride = false)
-    when (style) {
-        ClockStyle.NONE -> {}
-        ClockStyle.BIG -> Column(modifier.then(tap).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(timeText(t), style = labelStyle(c, 76.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight)))
-            Text(spec.withCase(dateText(t)) + (alarm?.let { "  ·  ⏰ $it" } ?: ""), style = labelStyle(c, 15.sp).copy(fontFamily = fonts.heading))
-        }
-        ClockStyle.STACKED -> Column(modifier.then(tap).padding(horizontal = 28.dp)) {
-            val (h, m) = timeText(t).split(":")
-            Text(h, style = labelStyle(c, 92.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight), lineHeight = 88.sp))
-            Text(m, style = labelStyle(colors.accent, 92.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight), lineHeight = 88.sp))
-            Text(spec.withCase(dateText(t)), style = labelStyle(c, 16.sp).copy(fontFamily = fonts.heading))
-        }
-        ClockStyle.SCRIPT -> Column(modifier.then(tap).padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(timeText(t), style = labelStyle(c, 84.sp).copy(fontFamily = fonts.clock))
-            Text(dateText(t), style = labelStyle(c, 24.sp).copy(fontFamily = fonts.heading))
-        }
-        ClockStyle.TERMINAL -> Column(modifier.then(tap).padding(horizontal = 22.dp)) {
-            val blink = rememberInfiniteTransition(label = "cursor")
-            val a by blink.animateFloat(1f, 0f, infiniteRepeatable(tween(530, easing = { if (it < 0.5f) 0f else 1f }), RepeatMode.Restart), label = "a")
-            Text("ivan@uyut:~$ date", style = labelStyle(c.copy(alpha = 0.7f), 14.sp).copy(fontFamily = fonts.body))
-            Text(timeText(t), style = labelStyle(c, 64.sp).copy(fontFamily = fonts.clock))
-            Text(dateText(t).lowercase() + (alarm?.let { "  [будильник $it]" } ?: ""), style = labelStyle(c, 14.sp).copy(fontFamily = fonts.body))
-            Row { Text("ivan@uyut:~$ ", style = labelStyle(c, 14.sp).copy(fontFamily = fonts.body)); Text("█", style = labelStyle(c, 14.sp), modifier = Modifier.alpha(a)) }
-        }
-        ClockStyle.CARD -> Box(modifier.padding(horizontal = 22.dp).fillMaxWidth().height(156.dp).glass(spec.cornerDp.dp, colors, 0.14f).then(tap).padding(18.dp)) {
-            Column(Modifier.align(Alignment.TopStart)) {
-                Text(dayOfWeek(t).uppercase(), style = labelStyle(colors.accent.copy(alpha = 1f), 13.sp).copy(fontFamily = fonts.heading, fontWeight = FontWeight.SemiBold))
-                Text(dayNumber(t), style = labelStyle(c, 40.sp).copy(fontFamily = fonts.heading, fontWeight = FontWeight.Light))
+    if (style == ClockStyle.NONE) return
+    // 1.2: the clock never overflows its slot. Measured at its natural size and scaled down uniformly to fit
+    // whatever the home page gives it (small screens, 2-row slot, big system font scale, wide script fonts).
+    val start = style == ClockStyle.STACKED || style == ClockStyle.TERMINAL
+    FitBox(modifier, boundedWidth = style == ClockStyle.CARD, alignStart = start) {
+        when (style) {
+            ClockStyle.NONE -> {}
+            ClockStyle.BIG -> Column(Modifier.then(tap).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(timeText(t), style = labelStyle(c, 76.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight)))
+                Text(spec.withCase(dateText(t)) + (alarm?.let { "  ·  ⏰ $it" } ?: ""), style = labelStyle(c, 15.sp).copy(fontFamily = fonts.heading))
             }
-            Column(Modifier.align(Alignment.BottomEnd), horizontalAlignment = Alignment.End) {
-                Text(timeText(t), style = labelStyle(c, 54.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight)), textAlign = TextAlign.End)
-                Text(alarm?.let { "Будильник $it" } ?: monthText(t), style = labelStyle(c.copy(alpha = 0.8f), 13.sp))
+            ClockStyle.STACKED -> Column(Modifier.then(tap).padding(horizontal = 28.dp)) {
+                val (h, m) = timeText(t).split(":")
+                Text(h, style = labelStyle(c, 92.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight), lineHeight = 88.sp))
+                Text(m, style = labelStyle(colors.accent, 92.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight), lineHeight = 88.sp))
+                Text(spec.withCase(dateText(t)), style = labelStyle(c, 16.sp).copy(fontFamily = fonts.heading))
+            }
+            ClockStyle.SCRIPT -> Column(Modifier.then(tap).padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(timeText(t), style = labelStyle(c, 84.sp).copy(fontFamily = fonts.clock))
+                Text(dateText(t), style = labelStyle(c, 24.sp).copy(fontFamily = fonts.heading))
+            }
+            ClockStyle.TERMINAL -> Column(Modifier.then(tap).padding(horizontal = 22.dp)) {
+                val blink = rememberInfiniteTransition(label = "cursor")
+                val a by blink.animateFloat(1f, 0f, infiniteRepeatable(tween(530, easing = { if (it < 0.5f) 0f else 1f }), RepeatMode.Restart), label = "a")
+                Text("ivan@uyut:~$ date", style = labelStyle(c.copy(alpha = 0.7f), 14.sp).copy(fontFamily = fonts.body))
+                Text(timeText(t), style = labelStyle(c, 64.sp).copy(fontFamily = fonts.clock))
+                Text(dateText(t).lowercase() + (alarm?.let { "  [будильник $it]" } ?: ""), style = labelStyle(c, 14.sp).copy(fontFamily = fonts.body))
+                Row { Text("ivan@uyut:~$ ", style = labelStyle(c, 14.sp).copy(fontFamily = fonts.body)); Text("█", style = labelStyle(c, 14.sp), modifier = Modifier.alpha(a)) }
+            }
+            ClockStyle.CARD -> Box(Modifier.padding(horizontal = 22.dp).fillMaxWidth().height(156.dp).glass(spec.cornerDp.dp, colors, 0.14f).then(tap).padding(18.dp)) {
+                Column(Modifier.align(Alignment.TopStart)) {
+                    Text(dayOfWeek(t).uppercase(), style = labelStyle(colors.accent.copy(alpha = 1f), 13.sp).copy(fontFamily = fonts.heading, fontWeight = FontWeight.SemiBold))
+                    Text(dayNumber(t), style = labelStyle(c, 40.sp).copy(fontFamily = fonts.heading, fontWeight = FontWeight.Light))
+                }
+                Column(Modifier.align(Alignment.BottomEnd), horizontalAlignment = Alignment.End) {
+                    Text(timeText(t), style = labelStyle(c, 54.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight)), textAlign = TextAlign.End)
+                    Text(alarm?.let { "Будильник $it" } ?: monthText(t), style = labelStyle(c.copy(alpha = 0.8f), 13.sp))
+                }
+            }
+        }
+    }
+}
+
+/** Lays out [content] at its natural size and scales it down (never up) so it fits the incoming constraints. */
+@Composable
+fun FitBox(modifier: Modifier = Modifier, boundedWidth: Boolean = false, alignStart: Boolean = false, content: @Composable () -> Unit) {
+    androidx.compose.ui.layout.Layout(content, modifier) { ms, c ->
+        val child = androidx.compose.ui.unit.Constraints(
+            maxWidth = if (boundedWidth && c.hasBoundedWidth) c.maxWidth else androidx.compose.ui.unit.Constraints.Infinity)
+        val ps = ms.map { it.measure(child) }
+        val w = (ps.maxOfOrNull { it.width } ?: 0).coerceAtLeast(1)
+        val h = (ps.maxOfOrNull { it.height } ?: 0).coerceAtLeast(1)
+        val sw = if (c.hasBoundedWidth) c.maxWidth.toFloat() / w else 1f
+        val sh = if (c.hasBoundedHeight) c.maxHeight.toFloat() / h else 1f
+        val s = minOf(1f, sw, sh)
+        val outW = (if (c.hasBoundedWidth && c.minWidth > 0) c.maxWidth else (w * s).toInt()).coerceIn(c.minWidth, c.maxWidth)
+        val outH = (h * s).toInt().coerceIn(c.minHeight, c.maxHeight)
+        layout(outW, outH) {
+            ps.forEach { p ->
+                val x = if (alignStart) ((p.width * s - p.width) / 2f).toInt() else (outW - p.width) / 2
+                p.placeWithLayer(x, (outH - p.height) / 2) { scaleX = s; scaleY = s }
             }
         }
     }

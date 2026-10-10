@@ -56,6 +56,8 @@ data class LauncherConfig(
     val gestureContract: Boolean = true,
     /** Play the in-launcher "return into icon" animation when coming back home. */
     val returnAnimation: Boolean = true,
+    /** 1.2: page-turn effect per theme id (absent = the theme's default, see [pageEffectFor]). */
+    val pageEffects: Map<String, PageEffect> = emptyMap(),
 ) {
     fun baseLayout(): ScreenLayout = base ?: ScreenLayout(home = home, dock = dock, tiles = tiles, favorites = minimalFavorites)
 
@@ -74,6 +76,9 @@ data class LauncherConfig(
         if (next == cur && themeId in layouts) return this
         return copy(layouts = layouts + (themeId to next), lastEdited = themeId)
     }
+
+    fun pageEffectFor(themeId: String, layout: HomeLayout): PageEffect =
+        pageEffects[themeId] ?: if (layout == HomeLayout.GRID) PageEffect.CYLINDER else PageEffect.NONE
 
     fun hasOwnLayout(themeId: String): Boolean = themeId in layouts
 

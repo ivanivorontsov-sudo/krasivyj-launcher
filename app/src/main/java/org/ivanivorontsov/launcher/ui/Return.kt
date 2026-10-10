@@ -34,21 +34,39 @@ fun ReturnOverlay(ui: UiState, layout: ScreenLayout) {
     val iconPx = with(density) { spec.iconSizeDp.dp.roundToPx() }
     val icon = app?.let { rememberIcon(it, iconPx, spec.iconShape) }
     val base = r.color?.let { Color(it) } ?: colors.surface
+    val view = androidx.compose.ui.platform.LocalView.current
+    // Start radius = the display's own rounded corner (Android 12+), so the card looks like the app window.
+    val screenCorner = androidx.compose.runtime.remember(view) {
+        if (android.os.Build.VERSION.SDK_INT >= 31) view.rootWindowInsets?.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_LEFT)?.radius?.toFloat() else null
+    } ?: with(density) { 28.dp.toPx() }
     Canvas(Modifier.fillMaxSize()) {
+        // Spring progress: may overshoot slightly past 1 (card dips under the icon size, then settles).
         val t = ui.returnProgress.value
-        val e = FastOutSlowInEasing.transform(t.coerceIn(0f, 1f))
+        val e = t.coerceAtLeast(0f)
         val screen = Rect(Offset.Zero, size)
         fun onScreen(b: Rect?) = b != null && b.width > 0f && b.overlaps(screen) && screen.contains(b.center)
         val ids = listOfNotNull(r.key, layout.folderOf(r.key), "t_" + r.key)
         val target = ids.firstNotNullOfOrNull { ui.iconBounds[it]?.bounds()?.takeIf(::onScreen) } ?: r.fallback?.takeIf(::onScreen)
         val end = target ?: Rect(Offset(size.width / 2f - 30.dp.toPx(), size.height - 140.dp.toPx()), Size(60.dp.toPx(), 60.dp.toPx()))
-        val rect = Rect(lerp(screen.topLeft, end.topLeft, e), Size(size.width + (end.width - size.width) * e, size.height + (end.height - size.height) * e))
-        val corner = 34.dp.toPx() + (end.minDimension * 0.3f - 34.dp.toPx()) * e
-        val fade = if (target == null) 1f - e else 1f
-        val cardAlpha = (if (t < 0.6f) 1f else 1f - (t - 0.6f) / 0.4f).coerceIn(0f, 1f) * fade
+        // The card begins slightly inset (like an app window that has started to shrink) — no full-screen pop.
+        val startRect = Rect(size.width * 0.04f, size.height * 0.03f, size.width * 0.96f, size.height * 0.97f)
+        val rect = Rect(
+            lerp(startRect.topLeft, end.topLeft, e),
+            Size(startRect.width + (end.width - startRect.width) * e, startRect.height + (end.height - startRect.height) * e),
+        )
+        val endCorner = when (spec.iconShape) {
+            org.ivanivorontsov.launcher.core.IconShape.CIRCLE, org.ivanivorontsov.launcher.core.IconShape.PEBBLE, org.ivanivorontsov.launcher.core.IconShape.COOKIE -> end.minDimension / 2f
+            org.ivanivorontsov.launcher.core.IconShape.SQUARE -> 0f
+            org.ivanivorontsov.launcher.core.IconShape.ROUNDED -> end.minDimension * 0.22f
+            else -> end.minDimension * 0.32f
+        }
+        val corner = (screenCorner + (endCorner - screenCorner) * e.coerceAtMost(1f)).coerceAtMost(rect.minDimension / 2f)
+        val fade = if (target == null) (1f - e).coerceIn(0f, 1f) else 1f
+        // Fade in during the first 10 %, hand over to the real icon after 60 %.
+        val cardAlpha = (minOf(t / 0.1f, if (t < 0.6f) 1f else 1f - (t - 0.6f) / 0.35f)).coerceIn(0f, 1f) * fade
         drawRoundRect(base.copy(alpha = cardAlpha), rect.topLeft, rect.size, CornerRadius(corner))
         if (icon != null) {
-            val side = minOf(rect.width, rect.height).coerceAtMost(end.width * (1f + 1.6f * (1f - e)))
+            val side = minOf(rect.width, rect.height).coerceAtMost(end.width * (1f + 1.6f * (1f - e).coerceAtLeast(0f)))
             val a = ((t - 0.15f) / 0.5f).coerceIn(0f, 1f) * fade
             drawImage(icon, dstOffset = IntOffset((rect.center.x - side / 2).roundToInt(), (rect.center.y - side / 2).roundToInt()),
                 dstSize = IntSize(side.roundToInt().coerceAtLeast(1), side.roundToInt().coerceAtLeast(1)), alpha = a)
