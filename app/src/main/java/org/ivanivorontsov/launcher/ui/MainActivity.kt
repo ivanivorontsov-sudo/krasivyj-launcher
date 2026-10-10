@@ -104,21 +104,16 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     override fun onStart() { super.onStart(); try { WidgetHostHolder.host(this).startListening() } catch (_: Exception) {} }
 
-    private var refreshApplied: Boolean? = null
-    private fun applyRefreshRate(high: Boolean) {
-        if (refreshApplied == high) return
-        refreshApplied = high
-        Device.applyRefreshRate(window, high)
-    }
+    // Re-assert the preferred mode on every resume: Android/OEM task transitions can reset it.
+    private fun applyRefreshRate(high: Boolean) = Device.applyRefreshRate(window, high)
 
-    /** Key of the app whose window the system is flying into our icon (gesture-nav contract answered). */
-    private var contractKey: String? = null
     /** Completed when our window is really on screen (enter transition done or window focused). */
     private var visible: kotlinx.coroutines.CompletableDeferred<Unit>? = null
-    private var stoppedAt = 0L
 
     override fun onResume() {
         super.onResume()
+        // Reassert the highest user-selected refresh mode before the first animated frame.
+        applyRefreshRate(app.store.config.value.highRefreshRate)
         // Settings live in a separate task. Reconcile the persisted theme before the
         // first visible frame so wallpaper and shaped-icon caches cannot stay stale.
         if (app.store.refreshThemeFromPreferences()) app.icons.clear()
@@ -126,21 +121,20 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         ui.resumed = true
         val anim = Device.animationsEnabled()
         if (ui.animations != anim) ui.animations = anim
-        // 1.2: zero work here. The return card was already composed (invisible) in onStop, so the very first
-        // visible frame can animate. Everything else is deferred until after that frame.
+        // Always draw the in-launcher flight. Some ROMs accept GestureNavContract but do
+        // not run the system animation, so treating the callback as proof caused a missing flight.
         val pending = ui.returning
         if (pending != null) {
-            if (contractKey == pending.key) { ui.returning = null; playPop(pending.key) } else playReturn()
+            if (window.decorView.hasWindowFocus()) visible?.complete(Unit)
+            playReturn()
         } else ui.scope.launch { if (ui.turnstile.value != 0f) ui.turnstile.snapTo(0f) }
         ui.launchedApp = false
-        contractKey = null
         window.decorView.post { window.decorView.post { app.live.refreshNow() } }
     }
 
     override fun onStop() {
         super.onStop()
         try { WidgetHostHolder.host(this).stopListening() } catch (_: Exception) {}
-        stoppedAt = android.os.SystemClock.uptimeMillis()
         // Pre-warm the return animation while we are invisible: compose the full-screen card now, so the
         // first frame after any way back home (gesture, Home button, Back, recents) already shows it.
         val rec = ui.lastLaunch
@@ -153,23 +147,30 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     }
 
     /**
-     * Starts as soon as our window is actually visible. On ColorOS / realme UI with gesture navigation the system
-     * keeps a third-party home hidden for up to ~1 s (wallpaper only) after the gesture; a fixed 90 ms start (1.1)
-     * made the whole animation run while nobody could see it. Now it waits for window focus / the end of the
-     * enter transition (whichever comes first, at most 1.5 s) and then plays a spring.
+     * Play once the resumed home window is visible. If the OEM misses the focus/transition
+     * callback, don't hold the Home gesture for 1.5 seconds: use a short 360 ms guard instead.
+     * All progress is frame-clock based, not frame-count based, so 144 Hz gets every available frame.
      */
     private fun playReturn() {
         val gate = visible
         val key = ui.returning?.key
         ui.scope.launch {
-            if (gate != null) kotlinx.coroutines.withTimeoutOrNull(1_500) { gate.await() }
+            if (window.decorView.hasWindowFocus()) gate?.complete(Unit)
+            if (gate != null) kotlinx.coroutines.withTimeoutOrNull(360) { gate.await() }
             kotlinx.coroutines.coroutineScope {
-                launch { ui.homeZoom.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = 320f)) }
-                // Medium-low stiffness, slightly under-damped: ~420 ms with a soft overshoot into the icon.
-                ui.returnProgress.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 340f, visibilityThreshold = 0.002f))
+                launch {
+                    ui.homeZoom.animateTo(
+                        1f,
+                        spring(dampingRatio = 0.88f, stiffness = 270f, visibilityThreshold = 0.001f)
+                    )
+                }
+                // Soft, continuous spring: the screen card and home grid settle together into the icon.
+                ui.returnProgress.animateTo(
+                    1f,
+                    spring(dampingRatio = 0.84f, stiffness = 270f, visibilityThreshold = 0.001f)
+                )
             }
             ui.returning = null
-            // The real icon takes over with a small spring "pop" (scale overshoot).
             if (key != null) playPop(key)
         }
     }
@@ -179,8 +180,8 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         ui.scope.launch {
             ui.homeZoom.snapTo(1f)
             ui.pop.snapTo(0f)
-            ui.pop.animateTo(1f, tween(110))
-            ui.pop.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 500f))
+            ui.pop.animateTo(1f, tween(145, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+            ui.pop.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 420f, visibilityThreshold = 0.001f))
             ui.popKey = null
         }
     }
@@ -231,7 +232,6 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val layout = app.store.config.value.layoutFor(theme.id)
         val folder = layout.folderOf(key)
         val ids = listOfNotNull(key, folder, "t_$key")
-        contractKey = key
         val clockRows = if (theme.clockStyle == org.ivanivorontsov.launcher.core.ClockStyle.NONE) 0 else 2
         val firstCap = theme.columns * (theme.rows - clockRows)
         val cap = (theme.columns * theme.rows).coerceAtLeast(1)
@@ -254,7 +254,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
                 val msg = android.os.Message.obtain()
                 msg.copyFrom(cb)
                 msg.data = data
-                return try { replyTo.send(msg); true } catch (_: Exception) { contractKey = null; false }
+                return try { replyTo.send(msg); true } catch (_: Exception) { false }
             }
 
             repeat(45) {
@@ -271,7 +271,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             val fallback = ui.lastLaunch?.takeIf { it.key == key }?.bounds
             if (fallback != null && fallback.width >= 8f && fallback.height >= 8f) {
                 replyWithBounds(fallback)
-            } else contractKey = null
+            }
         }
     }
 
