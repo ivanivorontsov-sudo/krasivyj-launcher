@@ -274,6 +274,8 @@ object SettingsPolicy {
             !windowMinutes(new.scheduleStartMin, new.scheduleEndMin).containsAll(windowMinutes(old.scheduleStartMin, old.scheduleEndMin))
         ) r += "сокращение окна блокировки"
         if (old.strictMode && !new.strictMode) r += "выключение строгого режима"
+        if (old.warningsEnabled && !new.warningsEnabled) r += "отключение предупреждений"
+        if (old.finalWarning && !new.finalWarning) r += "отключение финального предупреждения"
         if (!old.whitelist.containsAll(new.whitelist)) r += "расширение списка разрешённых приложений"
         if (old.resetMinuteOfDay != new.resetMinuteOfDay) r += "смена времени сброса"
         return r
