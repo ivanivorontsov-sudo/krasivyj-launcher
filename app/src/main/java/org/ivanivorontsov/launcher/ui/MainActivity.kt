@@ -119,6 +119,9 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     override fun onResume() {
         super.onResume()
+        // Settings live in a separate task. Reconcile the persisted theme before the
+        // first visible frame so wallpaper and shaped-icon caches cannot stay stale.
+        if (app.store.refreshThemeFromPreferences()) app.icons.clear()
         wasResumed = true
         ui.resumed = true
         val anim = Device.animationsEnabled()
