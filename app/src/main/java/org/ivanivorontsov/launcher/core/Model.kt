@@ -69,10 +69,14 @@ data class LauncherConfig(
     /** The arrangement shown for [themeId]: its own, else the most recently edited one, else the shared base. */
     fun layoutFor(themeId: String): ScreenLayout = layouts[themeId] ?: lastEdited?.let { layouts[it] } ?: baseLayout()
 
+    /** What the user sees for [themeId]: [layoutFor] minus the apps veiled by «Стоп-экран». */
+    fun shownLayout(themeId: String): ScreenLayout = layoutFor(themeId).veiled(LayoutVeil.keys)
+
     /** Edits (and forks) the arrangement of [themeId]. A null result from [f] means "not allowed" and keeps everything. */
     fun editLayout(themeId: String, f: (ScreenLayout) -> ScreenLayout?): LauncherConfig {
         val cur = layoutFor(themeId)
-        val next = f(cur)?.normalized() ?: return this
+        val veil = LayoutVeil.keys
+        val next = (if (veil.isEmpty()) f(cur) else f(cur.veiled(veil))?.unveiled(cur, veil))?.normalized() ?: return this
         if (next == cur && themeId in layouts) return this
         return copy(layouts = layouts + (themeId to next), lastEdited = themeId)
     }

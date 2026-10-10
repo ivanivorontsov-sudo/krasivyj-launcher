@@ -190,11 +190,11 @@ private fun UiState.dragFrame(t: Long) {
     if (c != null && t - d.candidateSince >= (if (c is DropSpot.Into) 260_000_000L else 90_000_000L)) {
         if (c is DropSpot.Into) {
             if (d.into != c.target) {
-                val layout = LauncherApp.instance.store.config.value.layoutFor(themeId)
+                val layout = LauncherApp.instance.store.config.value.shownLayout(themeId)
                 if (applyDrop(host.prepare(layout), item, c, host.maxDock) != null) { d.into = c.target; onFolderHover?.invoke() }
             }
         } else if (c != d.spot || d.into != null) {
-            val layout = LauncherApp.instance.store.config.value.layoutFor(themeId)
+            val layout = LauncherApp.instance.store.config.value.shownLayout(themeId)
             if (applyDrop(host.prepare(layout), item, c, host.maxDock) != null) { d.spot = c; d.into = null }
         }
     }
@@ -439,7 +439,7 @@ fun DragLayer(ui: UiState) {
             }
             isFolderId(item.id) -> {
                 val cfg = LauncherApp.instance.store.config.value
-                val f = cfg.layoutFor(ui.themeId).folders[item.id]
+                val f = cfg.shownLayout(ui.themeId).folders[item.id]
                 if (f != null) FolderIcon(f, sizeDp)
             }
             item.app != null -> AppIcon(item.app, sizeDp)

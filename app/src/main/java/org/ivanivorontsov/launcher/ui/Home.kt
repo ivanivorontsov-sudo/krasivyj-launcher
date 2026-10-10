@@ -1,5 +1,6 @@
 package org.ivanivorontsov.launcher.ui
 
+import org.ivanivorontsov.launcher.core.veiled
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -165,7 +166,10 @@ fun LauncherRoot(ui: UiState) {
     ui.themeId = spec.id
     val byKey = remember(apps) { apps.associateBy { it.key } }
     val visibleApps = remember(apps, config.hidden) { apps.filter { it.key !in config.hidden } }
-    val layout = remember(config, spec.id) { config.layoutFor(spec.id) }
+    // Keys of forbidden apps: veiled in the layout (no gaps), edits keep their places for later.
+    val veil = remember(allApps, stop.hidden) { if (stop.hidden.isEmpty()) emptySet() else allApps.filter { it.pkg in stop.hidden }.map { it.key }.toSet() }
+    org.ivanivorontsov.launcher.core.LayoutVeil.keys = veil
+    val layout = remember(config, spec.id, veil) { config.layoutFor(spec.id).let { if (veil.isEmpty()) it else it.veiled(veil) } }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     ui.onFolderHover = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
 
@@ -661,7 +665,7 @@ fun RenameDialog(ui: UiState) {
 fun buildAppMenu(ui: UiState, app: AppInfo?, tile: TileItem?, spec: ThemeSpec, config: LauncherConfig, actions: LauncherActions, anchor: Rect): MenuState {
     val store = LauncherApp.instance.store
     val theme = spec.id
-    val layout = config.layoutFor(theme)
+    val layout = config.shownLayout(theme)
     fun edit(f: (ScreenLayout) -> ScreenLayout?) = store.update { it.editLayout(theme, f) }
     val e = ArrayList<MenuEntry>()
     if (tile != null) {

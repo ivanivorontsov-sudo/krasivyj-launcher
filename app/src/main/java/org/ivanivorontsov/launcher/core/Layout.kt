@@ -192,3 +192,49 @@ data class ScreenLayout(
 internal fun <T> List<T>.insertAt(index: Int, item: T): List<T> {
     val l = toMutableList(); l.add(index.coerceIn(0, l.size), item); return l
 }
+
+/**
+ * «Стоп-экран» (1.2): forbidden apps are veiled — the UI and every edit see the layout without them, but their
+ * places are remembered, so turning the mode off brings everything back exactly where it was.
+ */
+object LayoutVeil {
+    @Volatile var keys: Set<String> = emptySet()
+}
+
+/** The layout as shown while [hidden] apps are forbidden: no gaps, folders keep only visible apps. */
+fun ScreenLayout.veiled(hidden: Set<String>): ScreenLayout {
+    if (hidden.isEmpty()) return this
+    val fs = folders.mapValues { (_, f) -> f.copy(apps = f.apps.filter { it !in hidden }) }
+    fun vis(id: String) = if (isFolderId(id)) (fs[id]?.apps?.isNotEmpty() == true) else id !in hidden
+    return copy(home = home.filter(::vis), dock = dock.filter(::vis), folders = fs,
+        tiles = tiles.filter { it.appKey == null || it.appKey !in hidden }, favorites = favorites.filter { it !in hidden })
+}
+
+/** Puts the veiled apps of [orig] back into [edited] (a result of editing `orig.veiled(hidden)`). Nothing is lost. */
+fun ScreenLayout.unveiled(orig: ScreenLayout, hidden: Set<String>): ScreenLayout {
+    if (hidden.isEmpty()) return this
+    fun hiddenId(id: String) = if (isFolderId(id)) orig.folders[id]?.apps?.all { it in hidden } == true else id in hidden
+    fun reinsert(list: List<String>, src: List<String>): List<String> {
+        val out = list.toMutableList()
+        src.forEachIndexed { i, id -> if (hiddenId(id) && id !in out) out.add(i.coerceAtMost(out.size), id) }
+        return out
+    }
+    var home = reinsert(home, orig.home)
+    val dock = reinsert(dock, orig.dock)
+    val fs = LinkedHashMap(folders)
+    for ((id, f) in orig.folders) {
+        val hid = f.apps.filter { it in hidden }
+        if (hid.isEmpty()) continue
+        val cur = fs[id]
+        if (cur != null) fs[id] = cur.copy(apps = cur.apps + hid.filter { it !in cur.apps })
+        else if (id in home || id in dock) fs[id] = f
+    }
+    val l = ScreenLayout(home, dock, fs,
+        tiles + orig.tiles.filter { t -> t.appKey != null && t.appKey in hidden && tiles.none { it.id == t.id } },
+        reinsert(favorites, orig.favorites))
+    // Whatever still went missing (e.g. its folder was taken apart) goes to the end of the home screen.
+    val placed = l.placedApps().toHashSet()
+    val lost = orig.placedApps().filter { it in hidden && it !in placed }
+    if (lost.isNotEmpty()) home = home + lost
+    return l.copy(home = home)
+}
