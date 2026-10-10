@@ -55,24 +55,6 @@ data class Settings(
     }
 }
 
-/**
- * Compares two configurations from the user's point of view. A change is loosening
- * whenever it gives more screen time, expands the allowed set, removes a guard, or
- * suppresses a warning.
- */
-object SettingsPolicy {
-    fun isLoosening(old: Settings, new: Settings): Boolean =
-        (old.limitEnabled && !new.limitEnabled) ||
-        new.limitMinutes > old.limitMinutes ||
-        (old.scheduleEnabled && !new.scheduleEnabled) ||
-        (old.scheduleEnabled && new.scheduleEnabled && new.scheduleStartMin > old.scheduleStartMin) ||
-        (old.scheduleEnabled && new.scheduleEnabled && new.scheduleEndMin < old.scheduleEndMin) ||
-        (old.strictMode && !new.strictMode) ||
-        (old.warningsEnabled && !new.warningsEnabled) ||
-        (old.finalWarning && !new.finalWarning) ||
-        (!old.whitelist.containsAll(new.whitelist)) ||
-        new.resetMinuteOfDay > old.resetMinuteOfDay
-
 /** Внутреннее состояние учёта (не экспортируется). */
 data class GuardState(
     // TrustedClock
