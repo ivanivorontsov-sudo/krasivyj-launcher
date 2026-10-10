@@ -76,6 +76,9 @@ class UiState(val scope: CoroutineScope) {
     var renameFolder by mutableStateOf<String?>(null)
     /** Set by the tiles home: bring the start screen forward when a drag starts in the app list. */
     var showStartPage: (() -> Unit)? = null
+    /** Pager page to reveal before answering the home-gesture contract (0 = widgets). */
+    var revealPage by mutableStateOf<Int?>(null)
+    var revealFolder by mutableStateOf<String?>(null)
 
     // ---- return-into-icon animation ----
     var lastLaunch: LaunchRecord? = null

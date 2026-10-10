@@ -47,7 +47,8 @@ fun ReturnOverlay(ui: UiState, layout: ScreenLayout) {
         fun onScreen(b: Rect?) = b != null && b.width > 0f && b.overlaps(screen) && screen.contains(b.center)
         val ids = listOfNotNull(r.key, layout.folderOf(r.key), "t_" + r.key)
         val target = ids.firstNotNullOfOrNull { ui.iconBounds[it]?.bounds()?.takeIf(::onScreen) } ?: r.fallback?.takeIf(::onScreen)
-        val end = target ?: Rect(Offset(size.width / 2f - 30.dp.toPx(), size.height - 140.dp.toPx()), Size(60.dp.toPx(), 60.dp.toPx()))
+        // No visible icon (other page, hidden, drawer) → no card: never fly into a made-up spot.
+        val end = target ?: return@Canvas
         // The card begins slightly inset (like an app window that has started to shrink) — no full-screen pop.
         val startRect = Rect(size.width * 0.04f, size.height * 0.03f, size.width * 0.96f, size.height * 0.97f)
         val rect = Rect(
