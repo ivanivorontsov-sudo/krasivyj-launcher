@@ -81,6 +81,9 @@ import org.ivanivorontsov.launcher.core.PageIndicator
 import org.ivanivorontsov.launcher.core.Presets
 import org.ivanivorontsov.launcher.core.TextCase
 import org.ivanivorontsov.launcher.core.ThemeSpec
+import org.ivanivorontsov.launcher.core.TileItem
+import org.ivanivorontsov.launcher.core.TileKind
+import org.ivanivorontsov.launcher.core.TileSize
 import org.ivanivorontsov.launcher.core.TileFill
 import org.ivanivorontsov.launcher.core.WallpaperStyle
 import org.ivanivorontsov.launcher.data.Device
@@ -469,11 +472,30 @@ private fun SystemScreen() {
 
 @Composable
 private fun HomeScreenSettings() {
-    val store = LauncherApp.instance.store
+    val launcher = LauncherApp.instance
+    val store = launcher.store
     val cfg by store.config.collectAsStateCompat()
     val spec by store.theme.collectAsStateCompat()
+    val installedApps by launcher.apps.apps.collectAsStateCompat()
     val own = cfg.hasOwnLayout(spec.id)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { Section("Главный экран без меню приложений") {
+            SwitchRow("Все приложения на главном экране", cfg.allAppsOnHome) { enabled ->
+                val keys = installedApps.filter { it.key !in cfg.hidden }.map { it.key }.distinct()
+                store.update { current ->
+                    val base = current.copy(allAppsOnHome = enabled)
+                    if (!enabled) base else base.editAllLayouts { layout ->
+                        var next = layout
+                        keys.forEach { key ->
+                            next = next.appendHome(key)
+                            next = next.pinTile(TileItem("t_$key", TileKind.APP, key, TileSize.SMALL))
+                        }
+                        next.copy(favorites = (next.favorites + keys).distinct()).normalized()
+                    }
+                }
+            }
+            Info("Включите, чтобы убрать отдельное меню приложений и разместить установленные приложения на страницах главного экрана. В теме «Плитки» они появятся плитками; в минималистичной теме — текстовым списком. Новые приложения тоже будут добавляться автоматически.")
+        } }
         item { Section("Новые приложения") {
             SwitchRow("Добавлять новые приложения на главный экран", cfg.autoAddNew) { v -> store.update { it.copy(autoAddNew = v) } }
             Info("Только что установленное приложение встаёт в первую свободную ячейку (в «Плитках» — маленькой плиткой). Обновления, системные приложения и копии из рабочего профиля не добавляются.")
@@ -518,7 +540,7 @@ private fun SmoothScreen() {
             if (!ignoring) Button(onClick = { Device.requestIgnoreBatteryOptimizations(ctx) }) { Text("Не выгружать Уют") }
             if (Device.oem == Device.Oem.REALME_OPPO_ONEPLUS) {
                 Info("realme / ColorOS: дополнительно откройте «Настройки → Приложения → Уют → Использование батареи» и разрешите фоновую активность; в «Недавних» потяните карточку Уюта вниз, чтобы закрепить её замком.")
-                Info("Жесты навигации и анимация закрытия приложений к иконке у сторонних лаунчеров на realme UI могут быть упрощены системой — это ограничение прошивки, Уют корректно работает и с кнопками, и с жестами.")
+                Info("На realme UI системная анимация сторонних лаунчеров может начинаться с задержкой или пропускать полёт в иконку. Это поведение системного перехода; Уют дополнительно рисует собственную анимацию после возврата, но полностью заменить системный переход без привилегий системного лаунчера не может.")
             }
             if (Device.oem == Device.Oem.XIAOMI) Info("Xiaomi: «Безопасность → Приложения → Уют → Автозапуск» и «Контроль активности → Нет ограничений».")
             if (Device.oem == Device.Oem.SAMSUNG) Info("Samsung: «Батарея → Ограничения фонового использования → Никогда не переводить в спящий режим» → добавьте Уют.")
