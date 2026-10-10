@@ -58,6 +58,8 @@ import org.ivanivorontsov.launcher.stop.core.Backup
 import org.ivanivorontsov.launcher.stop.core.ExitChoice
 import org.ivanivorontsov.launcher.stop.core.HistoryEntry
 import org.ivanivorontsov.launcher.stop.core.Passcode
+import org.ivanivorontsov.launcher.stop.core.Settings
+import org.ivanivorontsov.launcher.stop.core.SettingsPolicy
 import org.ivanivorontsov.launcher.ui.LauncherTheme
 import org.ivanivorontsov.launcher.ui.collectAsStateCompat
 import java.text.SimpleDateFormat
@@ -100,6 +102,11 @@ private fun StopRoot(close: () -> Unit) {
     val store = StopGuard.store
     var unlocked by remember { mutableStateOf(!store.hasPassword || SystemClock.elapsedRealtime() < StopActivity.unlockedUntil) }
     var page by remember { mutableStateOf(Page.MAIN) }
+    var pendingWeakening by remember { mutableStateOf<PendingWeakening?>(null) }
+    val resumeTick = StopActivity.tick
+    LaunchedEffect(resumeTick) {
+        if (store.hasPassword && SystemClock.elapsedRealtime() >= StopActivity.unlockedUntil) unlocked = false
+    }
     BackHandler { if (page == Page.MAIN || !unlocked) close() else page = Page.MAIN }
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -112,13 +119,27 @@ private fun StopRoot(close: () -> Unit) {
             Page.BLOCKED -> AppChecklist(
                 info = "Отмеченные приложения исчезают с главного экрана, из меню, поиска, папок и дока. Если открыть их иначе (уведомление, «Недавние», другое приложение), Уют сразу вернёт на главный экран.",
                 selected = { StopGuard.store.blocked }, protectedPkgs = StopGuard.protectedPackages(),
-            ) { pkg, on -> StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg } }
+            ) { pkg, on ->
+                val apply = { StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg } }
+                if (on) apply() else pendingWeakening = PendingWeakening("Разрешить запрещённое приложение?") { apply() }
+            }
             Page.ALLOWED -> AppChecklist(
                 info = "Во время паузы (лимит исчерпан или по расписанию) остаются только эти приложения, телефон и SMS. Темы и оформление не меняются.",
                 selected = { StopGuard.store.settings.whitelist }, protectedPkgs = emptySet(),
-            ) { pkg, on -> StopGuard.update { settings = settings.copy(whitelist = if (on) settings.whitelist + pkg else settings.whitelist - pkg) } }
+            ) { pkg, on ->
+                val old = StopGuard.store.settings
+                val next = old.copy(whitelist = if (on) old.whitelist + pkg else old.whitelist - pkg)
+                val apply = { StopGuard.update { settings = next } }
+                if (SettingsPolicy.isLoosening(old, next)) pendingWeakening = PendingWeakening("Разрешить приложение во время паузы?") { apply() }
+                else apply()
+            }
             Page.HISTORY -> HistoryPage()
         }
+    }
+    pendingWeakening?.let { pending ->
+        WeakeningDialog(title = pending.title, store = store,
+            onCancel = { pendingWeakening = null },
+            onConfirm = { pending.action(); pendingWeakening = null })
     }
 }
 
@@ -180,7 +201,14 @@ private fun MainPage(go: (Page) -> Unit) {
     var recoveryCode by remember { mutableStateOf<String?>(null) }
     var setPw by remember { mutableStateOf(false) }
     var exitChoice by remember { mutableStateOf<ExitChoice?>(null) }
+    var pendingWeakening by remember { mutableStateOf<PendingWeakening?>(null) }
     fun upd(f: StopStore.() -> Unit) { StopGuard.update(f); ver++ }
+    fun requestWeakening(title: String, action: () -> Unit) { pendingWeakening = PendingWeakening(title, action) }
+    fun changeSettings(next: Settings, title: String) {
+        val old = store.settings
+        if (SettingsPolicy.isLoosening(old, next)) requestWeakening(title) { upd { settings = next } }
+        else upd { settings = next }
+    }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val r = runCatching {
@@ -196,7 +224,10 @@ private fun MainPage(go: (Page) -> Unit) {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Режим") {
-            SwitchRow("Стоп-экран включён", view.enabled) { v -> upd { enabled = v; log(HistoryEntry.SETTINGS, if (v) "Режим включён" else "Режим выключен") } }
+            SwitchRow("Стоп-экран включён", view.enabled) { v ->
+                val apply = { upd { enabled = v; log(HistoryEntry.SETTINGS, if (v) "Режим включён" else "Режим выключен") } }
+                if (v) apply() else requestWeakening("Выключить «Стоп-экран»?", apply)
+            }
             Info(when {
                 !view.enabled -> "Выключен: все приложения на месте."
                 view.paused -> "Пауза" + (if (view.pauseUntil > 0) " до " + SimpleDateFormat("HH:mm", Locale("ru")).format(Date(view.pauseUntil)) else "") + ". На экране только разрешённые приложения, телефон и SMS."
@@ -217,19 +248,23 @@ private fun MainPage(go: (Page) -> Unit) {
             Row(Modifier.fillMaxWidth().clickable { go(Page.ALLOWED) }.padding(vertical = 10.dp)) { Text("Разрешено во время паузы: ${s.whitelist.size}", style = MaterialTheme.typography.bodyLarge) }
         } }
         item { Section("Дневной лимит") {
-            SwitchRow("Лимит экранного времени", s.limitEnabled) { v -> upd { settings = settings.copy(limitEnabled = v) } }
+            SwitchRow("Лимит экранного времени", s.limitEnabled) { v ->
+                changeSettings(s.copy(limitEnabled = v), if (v) "Включить лимит" else "Отключить дневной лимит")
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { upd { settings = settings.copy(limitMinutes = (settings.limitMinutes - 15).coerceAtLeast(15)) } }) { Text("−15") }
+                OutlinedButton(onClick = { changeSettings(s.copy(limitMinutes = (s.limitMinutes - 15).coerceAtLeast(15)), "Уменьшить дневной лимит") }) { Text("−15") }
                 Text(StopGuard.fmt(s.limitMinutes * 60_000L), Modifier.width(110.dp).padding(horizontal = 12.dp), style = MaterialTheme.typography.titleMedium)
-                OutlinedButton(onClick = { upd { settings = settings.copy(limitMinutes = (settings.limitMinutes + 15).coerceAtMost(24 * 60)) } }) { Text("+15") }
+                OutlinedButton(onClick = { changeSettings(s.copy(limitMinutes = (s.limitMinutes + 15).coerceAtMost(24 * 60)), "Увеличить дневной лимит") }) { Text("+15") }
             }
             Info("Считается время, когда экран включён и разблокирован; звонки не считаются. Сброс в полночь.")
         } }
         item { Section("Пауза по расписанию") {
-            SwitchRow("Расписание", s.scheduleEnabled) { v -> upd { settings = settings.copy(scheduleEnabled = v) } }
+            SwitchRow("Расписание", s.scheduleEnabled) { v ->
+                changeSettings(s.copy(scheduleEnabled = v), if (v) "Включить расписание" else "Отключить паузу по расписанию")
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { android.app.TimePickerDialog(ctx, { _, h, m -> upd { settings = settings.copy(scheduleStartMin = h * 60 + m) } }, s.scheduleStartMin / 60, s.scheduleStartMin % 60, true).show() }) { Text("с ${hm(s.scheduleStartMin)}") }
-                OutlinedButton(onClick = { android.app.TimePickerDialog(ctx, { _, h, m -> upd { settings = settings.copy(scheduleEndMin = h * 60 + m) } }, s.scheduleEndMin / 60, s.scheduleEndMin % 60, true).show() }) { Text("до ${hm(s.scheduleEndMin)}") }
+                OutlinedButton(onClick = { android.app.TimePickerDialog(ctx, { _, h, m -> changeSettings(store.settings.copy(scheduleStartMin = h * 60 + m), "Изменить время начала паузы") }, s.scheduleStartMin / 60, s.scheduleStartMin % 60, true).show() }) { Text("с ${hm(s.scheduleStartMin)}") }
+                OutlinedButton(onClick = { android.app.TimePickerDialog(ctx, { _, h, m -> changeSettings(store.settings.copy(scheduleEndMin = h * 60 + m), "Изменить время окончания паузы") }, s.scheduleEndMin / 60, s.scheduleEndMin % 60, true).show() }) { Text("до ${hm(s.scheduleEndMin)}") }
             }
         } }
         item { Section("Защита") {
@@ -237,9 +272,23 @@ private fun MainPage(go: (Page) -> Unit) {
                 LockService.grantUntil = SystemClock.uptimeMillis() + 120_000L
                 runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
             }
-            Info(if (a11y) "Служба спец. возможностей Уюта включена ✓ — запрещённое приложение, открытое из уведомления или «Недавних», сразу закрывается, без всплывающих окон."
-                 else "Включите службу «Уют» в «Спец. возможностях» (на Android 13+ для APK не из магазина: «О приложении → ⋮ → Разрешить ограниченные настройки»). Без неё запрещённые приложения только скрыты.")
-            SwitchRow("Строгий режим", s.strictMode) { v -> upd { settings = settings.copy(strictMode = v) } }
+            Info(if (a11y) "Служба спец. возможностей Уюта включена ✓ — запрещённое приложение, открытое из уведомления или «Недавних», сразу закрывается."
+                 else "Без службы специальных возможностей запрещённые приложения только скрыты: перехват открытия не работает.")
+            Button(onClick = {
+                LockService.grantUntil = SystemClock.uptimeMillis() + 120_000L
+                runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+            }) { Text("Настроить специальные возможности") }
+            OutlinedButton(onClick = {
+                LockService.grantUntil = SystemClock.uptimeMillis() + 120_000L
+                runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${ctx.packageName}"))) }
+            }) { Text("О приложении · разрешить ограниченные настройки") }
+            OutlinedButton(onClick = {
+                LockService.grantUntil = SystemClock.uptimeMillis() + 120_000L
+                runCatching { ctx.startActivity(Intent("android.settings.HOME_SETTINGS")) }
+            }) { Text("Выбрать лаунчер по умолчанию") }
+            SwitchRow("Строгий режим", s.strictMode) { v ->
+                changeSettings(s.copy(strictMode = v), if (v) "Включить строгий режим" else "Отключить строгий режим")
+            }
             Info("Закрывает страницы настроек, через которые можно отключить защиту: «О приложении» Уюта, спец. возможности, выбор лаунчера по умолчанию, «Для разработчиков».")
             Info("Уют должен быть лаунчером по умолчанию: тогда «Домой» всегда ведёт в Уют и никаких окон блокировки не появляется.")
         } }
@@ -247,14 +296,31 @@ private fun MainPage(go: (Page) -> Unit) {
             Info(if (store.hasPassword) "🔑 Пароль задан: без него этот раздел и выход из паузы не открыть." else "Пароль не задан — раздел открыт всем. Пусть пароль задаст другой человек.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { setPw = true }) { Text(if (store.hasPassword) "Сменить пароль" else "Задать пароль") }
-                if (store.hasPassword) OutlinedButton(onClick = { upd { clearPassword(); log(HistoryEntry.SETTINGS, "Пароль удалён") } }) { Text("Убрать") }
+                if (store.hasPassword) OutlinedButton(onClick = {
+                    requestWeakening("Удалить пароль защиты?") { upd { clearPassword(); log(HistoryEntry.SETTINGS, "Пароль удалён") } }
+                }) { Text("Убрать") }
             }
         } }
         item { Section("Перенос из приложения «Стоп-экран»") {
             Info("В старом «Стоп-экран»: Экспорт → сохраните JSON. Здесь: «Импорт» — перенесутся лимит, расписание, разрешённые приложения, строгий режим и история. Пароль переносится вручную: задайте его заново.")
             OutlinedButton(onClick = { importer.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Text("Импорт JSON") }
         } }
+        item { Section("Предупреждения") {
+            SwitchRow("Предупреждать о скором окончании лимита", s.warningsEnabled) { v ->
+                changeSettings(s.copy(warningsEnabled = v), if (v) "Включить предупреждения" else "Отключить предупреждения")
+            }
+            SwitchRow("Финальное предупреждение перед паузой", s.finalWarning) { v ->
+                changeSettings(s.copy(finalWarning = v), if (v) "Включить финальное предупреждение" else "Отключить финальное предупреждение")
+            }
+            Info("Предупреждения показываются перед автоматической паузой. Их отключение считается ослаблением защиты.")
+        } }
         item { Section("История") { Row(Modifier.fillMaxWidth().clickable { go(Page.HISTORY) }.padding(vertical = 10.dp)) { Text("Открыть историю (${store.history.size})") } } }
+    }
+
+    pendingWeakening?.let { pending ->
+        WeakeningDialog(title = pending.title, store = store,
+            onCancel = { pendingWeakening = null },
+            onConfirm = { pending.action(); pendingWeakening = null })
     }
 
     if (setPw) PasswordDialog(onDismiss = { setPw = false }) { pw ->
@@ -267,6 +333,46 @@ private fun MainPage(go: (Page) -> Unit) {
             text = { Column { Text(code, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.padding(4.dp)); Text("Покажется только один раз. Он сбрасывает забытый пароль — спрячьте его.") } })
     }
     exitChoice?.let { c -> HoldConfirm(onCancel = { exitChoice = null }) { exitChoice = null; StopGuard.grantExit(c); ver++ } }
+}
+
+private data class PendingWeakening(val title: String, val action: () -> Unit)
+
+@Composable
+private fun WeakeningDialog(title: String, store: StopStore, onCancel: () -> Unit, onConfirm: () -> Unit) {
+    var password by remember { mutableStateOf("") }
+    var phrase by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+    var seconds by remember { mutableIntStateOf(10) }
+    LaunchedEffect(title) { seconds = 10; while (seconds > 0) { delay(1000); seconds-- } }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Это ослабит защиту «Стоп-экрана». Подтвердите действие вручную. Для продолжения нужно выждать 10 секунд и ввести фразу подтверждения.")
+                if (store.hasPassword) {
+                    OutlinedTextField(password, { password = it }, singleLine = true, label = { Text("Пароль защиты") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+                } else Text("Чтобы ослабить защиту, сначала задайте пароль в разделе «Пароль», затем повторите действие.")
+                OutlinedTextField(phrase, { phrase = it }, singleLine = true, label = { Text("Введите ОСЛАБИТЬ ЗАЩИТУ") }, modifier = Modifier.fillMaxWidth())
+                if (seconds > 0) Text("Кнопка станет активна через $seconds с.")
+                if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = store.hasPassword && seconds == 0 && phrase.trim() == "ОСЛАБИТЬ ЗАЩИТУ", onClick = {
+                if (store.hasPassword) {
+                    when (val result = store.check(password)) {
+                        StopStore.Check.Ok -> onConfirm()
+                        StopStore.Check.Wrong -> message = "Неверный пароль"
+                        is StopStore.Check.Wait -> message = "Слишком много попыток. Подождите ${(result.ms + 999) / 1000} с"
+                    }
+                }
+            }) { Text("Ослабить защиту") }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Отмена") } }
+    )
 }
 
 @Composable
