@@ -198,6 +198,10 @@ private fun MainPage(go: (Page) -> Unit) {
     var ver by remember { mutableIntStateOf(0) }
     val s = remember(ver, view) { store.settings }
     val a11y = remember(tick) { LockService.isEnabled }
+    val adminActive = remember(tick) {
+        val manager = ctx.getSystemService(android.app.admin.DevicePolicyManager::class.java)
+        manager?.isAdminActive(android.content.ComponentName(ctx, StopAdminReceiver::class.java)) == true
+    }
     var recoveryCode by remember { mutableStateOf<String?>(null) }
     var setPw by remember { mutableStateOf(false) }
     var exitChoice by remember { mutableStateOf<ExitChoice?>(null) }
@@ -286,6 +290,24 @@ private fun MainPage(go: (Page) -> Unit) {
                 LockService.grantUntil = SystemClock.uptimeMillis() + 120_000L
                 runCatching { ctx.startActivity(Intent("android.settings.HOME_SETTINGS")) }
             }) { Text("Выбрать лаунчер по умолчанию") }
+            Info(if (adminActive) "Администратор устройства включён ✓. Перед удалением Уюта Android попросит сначала отключить администратора."
+                 else "Администратор устройства добавляет системное подтверждение перед удалением Уюта. Это дополнительный барьер, а не замена пароля и строгого режима.")
+            if (!adminActive) {
+                Button(onClick = {
+                    val component = android.content.ComponentName(ctx, StopAdminReceiver::class.java)
+                    val request = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                        .putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
+                        .putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                            "Для снятия защиты «Стоп-экрана» сначала потребуется отключить администратора устройства в настройках Android.")
+                    runCatching { ctx.startActivity(request) }
+                        .onFailure { Toast.makeText(ctx, "Не удалось открыть активацию администратора", Toast.LENGTH_LONG).show() }
+                }) { Text("Включить администратора устройства") }
+            } else {
+                OutlinedButton(onClick = {
+                    runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)) }
+                        .onFailure { Toast.makeText(ctx, "Откройте настройки безопасности Android вручную", Toast.LENGTH_LONG).show() }
+                }) { Text("Управление администратором устройства") }
+            }
             SwitchRow("Строгий режим", s.strictMode) { v ->
                 changeSettings(s.copy(strictMode = v), if (v) "Включить строгий режим" else "Отключить строгий режим")
             }
