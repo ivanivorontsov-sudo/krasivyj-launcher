@@ -349,7 +349,7 @@ private fun WeakeningDialog(title: String, store: StopStore, onCancel: () -> Uni
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Это ослабит защиту «Стоп-экрана». Изменение будет записано в историю. Подтвердите действие вручную.")
+                Text("Это ослабит защиту «Стоп-экрана». Подтвердите действие вручную. Для продолжения нужно выждать 10 секунд и ввести фразу подтверждения.")
                 if (store.hasPassword) {
                     OutlinedTextField(password, { password = it }, singleLine = true, label = { Text("Пароль защиты") },
                         visualTransformation = PasswordVisualTransformation(),
