@@ -32,12 +32,40 @@ class Store(context: Context) {
 
     init {
         scope.launch { _config.drop(1).debounce(350).collect { prefs.edit().putString(K_CONFIG, ConfigCodec.encode(it)).apply() } }
-        scope.launch { _theme.drop(1).debounce(200).collect { prefs.edit().putString(K_THEME, ThemeCodec.encode(it)).apply() } }
-        scope.launch { _custom.drop(1).debounce(200).collect { c -> prefs.edit().putString(K_CUSTOM, c?.let { ThemeCodec.encode(it) }).apply() } }
     }
 
-    fun setTheme(t: ThemeSpec) { _theme.value = t.sanitized() }
-    fun setCustom(t: ThemeSpec) { val s = t.sanitized().copy(id = "custom"); _custom.value = s; _theme.value = s }
+    // Persist theme edits immediately: the launcher activity may resume before a debounced
+    // write runs, and must never reload an older theme after SettingsActivity closes.
+    fun setTheme(t: ThemeSpec) {
+        val s = t.sanitized()
+        prefs.edit().putString(K_THEME, ThemeCodec.encode(s)).apply()
+        _theme.value = s
+    }
+
+    fun setCustom(t: ThemeSpec) {
+        val s = t.sanitized().copy(id = "custom")
+        prefs.edit()
+            .putString(K_CUSTOM, ThemeCodec.encode(s))
+            .putString(K_THEME, ThemeCodec.encode(s))
+            .apply()
+        _custom.value = s
+        _theme.value = s
+    }
+
+    /**
+     * Re-read theme preferences when the home activity becomes visible again.
+     * This also covers Android recreating the activity/store while the settings task
+     * was active. Returns true when the active theme actually changed.
+     */
+    fun refreshThemeFromPreferences(): Boolean {
+        val saved = ThemeCodec.decode(prefs.getString(K_THEME, null)) ?: Presets.cupertino
+        val custom = ThemeCodec.decode(prefs.getString(K_CUSTOM, null))
+        val changed = _theme.value != saved
+        _custom.value = custom
+        if (changed) _theme.value = saved
+        return changed
+    }
+
     fun update(f: (LauncherConfig) -> LauncherConfig) = _config.update(f)
 
     companion object {
