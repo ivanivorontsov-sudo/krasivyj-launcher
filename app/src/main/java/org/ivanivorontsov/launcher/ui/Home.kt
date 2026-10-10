@@ -275,15 +275,17 @@ private fun Modifier.composedDrag(ui: UiState, configNow: LauncherConfig, height
     val state = rememberDraggableState { delta ->
         if (mode[0] == 0) mode[0] = if (delta < 0) 1 else 2
         acc[0] += delta
-        if (mode[0] == 1 && config.swipeUp == GestureAction.DRAWER) ui.drawer.dragBy(-delta / (height * 0.85f))
+        if (mode[0] == 1 && config.swipeUp == GestureAction.DRAWER && !config.allAppsOnHome) ui.drawer.dragBy(-delta / (height * 0.85f))
     }
     return this.draggable(
         state = state, orientation = Orientation.Vertical,
         onDragStarted = { mode[0] = 0; acc[0] = 0f },
         onDragStopped = { v ->
             when (mode[0]) {
-                1 -> if (config.swipeUp == GestureAction.DRAWER) ui.drawer.settle(-v / (height * 0.85f))
-                     else if (-acc[0] > thresholdPx || v < -1500f) ui.actions?.gesture(config.swipeUp)
+                1 -> if (config.swipeUp == GestureAction.DRAWER && !config.allAppsOnHome) ui.drawer.settle(-v / (height * 0.85f))
+                     else if (-acc[0] > thresholdPx || v < -1500f) {
+                         if (!(config.allAppsOnHome && config.swipeUp == GestureAction.DRAWER)) ui.actions?.gesture(config.swipeUp)
+                     }
                 2 -> if (acc[0] > thresholdPx || v > 1500f) ui.actions?.gesture(config.swipeDown)
             }
             mode[0] = 0
