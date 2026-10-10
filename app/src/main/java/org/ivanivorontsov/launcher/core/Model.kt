@@ -56,6 +56,8 @@ data class LauncherConfig(
     val gestureContract: Boolean = true,
     /** Play the in-launcher "return into icon" animation when coming back home. */
     val returnAnimation: Boolean = true,
+    /** Show every launchable app on home pages instead of a separate app drawer. */
+    val allAppsOnHome: Boolean = false,
     /** 1.2: page-turn effect per theme id (absent = the theme's default, see [pageEffectFor]). */
     val pageEffects: Map<String, PageEffect> = emptyMap(),
 ) {
@@ -107,8 +109,9 @@ data class LauncherConfig(
         if (knownApps.isEmpty()) return copy(knownApps = ids) to emptyList()
         val fresh = installed.filterKeys { it !in knownApps }.values.filter(eligible).filter { it !in hidden }
         var c = copy(knownApps = ids)
-        if (autoAddNew && fresh.isNotEmpty()) c = c.editAllLayouts { l -> fresh.fold(l) { acc, k -> acc.withNewApp(k) } }
-        return c to (if (autoAddNew) fresh else emptyList())
+        val placeFresh = autoAddNew || allAppsOnHome
+        if (placeFresh && fresh.isNotEmpty()) c = c.editAllLayouts { l -> fresh.fold(l) { acc, k -> acc.withNewApp(k) } }
+        return c to (if (placeFresh) fresh else emptyList())
     }
 }
 

@@ -156,7 +156,25 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val key = ui.returning?.key
         ui.scope.launch {
             if (window.decorView.hasWindowFocus()) gate?.complete(Unit)
-            if (gate != null) kotlinx.coroutines.withTimeoutOrNull(360) { gate.await() }
+            if (gate != null) kotlinx.coroutines.withTimeoutOrNull(900) { gate.await() }
+            // realme UI / ColorOS can briefly expose the home activity before the home surface
+            // has actually replaced the wallpaper. Starting here made the icon twitch while the
+            // return overlay had no final target. Give Compose one short layout hand-off on those ROMs.
+            if (Device.oem == Device.Oem.REALME_OPPO_ONEPLUS) kotlinx.coroutines.delay(650)
+            val returnKey = ui.returning?.key
+            if (returnKey != null) {
+                val theme = app.store.theme.value
+                val l = app.store.config.value.layoutFor(theme.id)
+                val candidates = listOfNotNull(returnKey, l.folderOf(returnKey), "t_$returnKey")
+                for (attempt in 0 until 18) {
+                    val ready = candidates.any { k ->
+                        val b = ui.iconBounds[k]?.bounds()
+                        b != null && b.width >= 8f && b.height >= 8f && b.center.x >= 0f && b.center.y >= 0f
+                    }
+                    if (ready) break
+                    kotlinx.coroutines.withTimeoutOrNull(34) { androidx.compose.runtime.withFrameNanos { } }
+                }
+            }
             kotlinx.coroutines.coroutineScope {
                 launch {
                     ui.homeZoom.animateTo(

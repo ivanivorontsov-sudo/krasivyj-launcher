@@ -210,11 +210,11 @@ fun LauncherRoot(ui: UiState) {
             Box(homeModifier.homeGestures(ui, config, hPx.toFloat(), spec.layout != HomeLayout.TILES)) {
                 when (spec.layout) {
                     HomeLayout.GRID -> GridHome(ui, layout, byKey, wall, homePager)
-                    HomeLayout.MINIMAL -> MinimalHome(ui, layout, byKey, homePager)
+                    HomeLayout.MINIMAL -> MinimalHome(ui, layout, byKey, homePager, config)
                     HomeLayout.TILES -> TilesHome(ui, config, layout, byKey, visibleApps, wall)
                 }
             }
-            if (spec.layout != HomeLayout.TILES) DrawerLayer(ui, visibleApps, config, wall)
+            if (spec.layout != HomeLayout.TILES && !config.allAppsOnHome) DrawerLayer(ui, visibleApps, config, wall)
 
             OverlayEffect(spec.overlay)
             FolderOverlay(ui, layout)
@@ -275,15 +275,17 @@ private fun Modifier.composedDrag(ui: UiState, configNow: LauncherConfig, height
     val state = rememberDraggableState { delta ->
         if (mode[0] == 0) mode[0] = if (delta < 0) 1 else 2
         acc[0] += delta
-        if (mode[0] == 1 && config.swipeUp == GestureAction.DRAWER) ui.drawer.dragBy(-delta / (height * 0.85f))
+        if (mode[0] == 1 && config.swipeUp == GestureAction.DRAWER && !config.allAppsOnHome) ui.drawer.dragBy(-delta / (height * 0.85f))
     }
     return this.draggable(
         state = state, orientation = Orientation.Vertical,
         onDragStarted = { mode[0] = 0; acc[0] = 0f },
         onDragStopped = { v ->
             when (mode[0]) {
-                1 -> if (config.swipeUp == GestureAction.DRAWER) ui.drawer.settle(-v / (height * 0.85f))
-                     else if (-acc[0] > thresholdPx || v < -1500f) ui.actions?.gesture(config.swipeUp)
+                1 -> if (config.swipeUp == GestureAction.DRAWER && !config.allAppsOnHome) ui.drawer.settle(-v / (height * 0.85f))
+                     else if (-acc[0] > thresholdPx || v < -1500f) {
+                         if (!(config.allAppsOnHome && config.swipeUp == GestureAction.DRAWER)) ui.actions?.gesture(config.swipeUp)
+                     }
                 2 -> if (acc[0] > thresholdPx || v > 1500f) ui.actions?.gesture(config.swipeDown)
             }
             mode[0] = 0
@@ -513,7 +515,7 @@ private class MinimalHost(val ui: UiState) : DropHost {
 }
 
 @Composable
-fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, pager: PagerState) {
+fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, pager: PagerState, config: LauncherConfig) {
     val spec = LocalSpec.current; val colors = LocalColors.current; val fonts = LocalFonts.current
     val actions = LocalActions.current
     val host = remember { MinimalHost(ui) }
@@ -521,17 +523,18 @@ fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, 
     host.defaults = defaults
     host.pagerPage = pager.currentPage
     val preview = ui.drag.preview(layout)
-    val favKeys = preview.favorites.ifEmpty { defaults }.filter { it in byKey }.take(8)
+    val favKeys = preview.favorites.ifEmpty { defaults }.filter { it in byKey }.let { if (config.allAppsOnHome) it else it.take(8) }
     host.shown = favKeys
     androidx.compose.runtime.DisposableEffect(host) { ui.drag.host = host; onDispose { if (ui.drag.host === host) ui.drag.host = null } }
     val effect = LocalPageEffect.current
     HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
       Box(Modifier.fillMaxSize().pageEffect(effect, pager, page)) {
         if (page == 0) WidgetsPage(ui)
-        else if (page == 1) Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 30.dp)) {
+        else if (page == 1) Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 30.dp)
+            .then(if (config.allAppsOnHome) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
             Spacer(Modifier.height(36.dp))
             ClockHeader(Modifier.fillMaxWidth())
-            Spacer(Modifier.weight(1f))
+            if (config.allAppsOnHome) Spacer(Modifier.height(24.dp)) else Spacer(Modifier.weight(1f))
             Column(Modifier.fillMaxWidth().trackBounds(host.area)) {
                 favKeys.forEach { k ->
                     val a = byKey[k] ?: return@forEach
@@ -551,9 +554,11 @@ fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, 
                     }
                 }
             }
-            Spacer(Modifier.weight(0.6f))
-            Text(if (spec.labelPrefix.isNotEmpty()) "$ ls /apps  ↑" else "↑  все приложения", style = labelStyle(colors.onWallpaper.copy(alpha = 0.45f), 13.sp),
-                modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 18.dp).clickable(remember { MutableInteractionSource() }, null) { ui.drawer.open() })
+            if (config.allAppsOnHome) Spacer(Modifier.height(20.dp)) else {
+                Spacer(Modifier.weight(0.6f))
+                Text(if (spec.labelPrefix.isNotEmpty()) "$ ls /apps  ↑" else "↑  все приложения", style = labelStyle(colors.onWallpaper.copy(alpha = 0.45f), 13.sp),
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 18.dp).clickable(remember { MutableInteractionSource() }, null) { ui.drawer.open() })
+            }
         } else Box(Modifier.fillMaxSize())
       }
     }
