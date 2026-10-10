@@ -88,6 +88,16 @@
             android:theme="@style/Theme.Launcher.Settings"
             android:windowSoftInputMode="adjustResize" />
 
+        <receiver
+            android:name=".stop.StopAdminReceiver"
+            android:exported="true"
+            android:label="@string/lock_label"
+            android:description="@string/stop_admin_description"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data android:name="android.app.device_admin" android:resource="@xml/stop_device_admin" />
+            <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
+        </receiver>
+
         <service
             android:name=".service.LockService"
             android:exported="true"
