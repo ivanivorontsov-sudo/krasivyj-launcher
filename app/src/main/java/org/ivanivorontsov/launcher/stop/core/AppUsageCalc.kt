@@ -43,7 +43,13 @@ object AppUsageCalc {
                     activePackage = event.pkg
                     activeSince = event.at
                 }
-                PAUSED -> if (activePackage == event.pkg) close(event.at)
+                PAUSED -> {
+                    if (activePackage == event.pkg) close(event.at)
+                    else if (activePackage == null) {
+                        val duration = (event.at - start).coerceAtLeast(0L)
+                        if (duration > 0) totals[event.pkg] = (totals[event.pkg] ?: 0L) + duration
+                    }
+                }
                 SCREEN_OFF -> close(event.at)
             }
         }
