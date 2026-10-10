@@ -354,21 +354,21 @@ private fun WeakeningDialog(title: String, store: StopStore, onCancel: () -> Uni
                     OutlinedTextField(password, { password = it }, singleLine = true, label = { Text("Пароль защиты") },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
-                } else Text("Пароль не задан — подтвердить его нельзя. Рекомендуется сначала задать пароль в разделе «Пароль».")
+                } else Text("Чтобы ослабить защиту, сначала задайте пароль в разделе «Пароль», затем повторите действие.")
                 OutlinedTextField(phrase, { phrase = it }, singleLine = true, label = { Text("Введите ОСЛАБИТЬ ЗАЩИТУ") }, modifier = Modifier.fillMaxWidth())
                 if (seconds > 0) Text("Кнопка станет активна через $seconds с.")
                 if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
             }
         },
         confirmButton = {
-            TextButton(enabled = seconds == 0 && phrase.trim() == "ОСЛАБИТЬ ЗАЩИТУ", onClick = {
+            TextButton(enabled = store.hasPassword && seconds == 0 && phrase.trim() == "ОСЛАБИТЬ ЗАЩИТУ", onClick = {
                 if (store.hasPassword) {
                     when (val result = store.check(password)) {
                         StopStore.Check.Ok -> onConfirm()
                         StopStore.Check.Wrong -> message = "Неверный пароль"
                         is StopStore.Check.Wait -> message = "Слишком много попыток. Подождите ${(result.ms + 999) / 1000} с"
                     }
-                } else onConfirm()
+                }
             }) { Text("Ослабить защиту") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Отмена") } }
