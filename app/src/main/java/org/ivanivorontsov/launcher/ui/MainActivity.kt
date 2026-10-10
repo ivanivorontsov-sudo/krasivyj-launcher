@@ -243,10 +243,9 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             ui.revealPage = appPage + 1
         }
         ui.scope.launch {
-            repeat(12) {
-                kotlinx.coroutines.withTimeoutOrNull(32) { androidx.compose.runtime.withFrameNanos { } }
-                val r = ids.firstNotNullOfOrNull { ui.iconBounds[it]?.bounds() } ?: return@repeat
-                if (r.width < 8f || r.height < 8f) return@repeat
+            // The home pager may need several frames to reveal the page containing the
+            // target icon after a gesture-home intent. Give Compose up to ~750 ms to lay it out.
+            fun replyWithBounds(r: Rect): Boolean {
                 val loc = IntArray(2)
                 window.decorView.getLocationOnScreen(loc)
                 val data = Bundle()
@@ -255,10 +254,24 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
                 val msg = android.os.Message.obtain()
                 msg.copyFrom(cb)
                 msg.data = data
-                try { replyTo.send(msg) } catch (_: Exception) { contractKey = null }
+                return try { replyTo.send(msg); true } catch (_: Exception) { contractKey = null; false }
+            }
+
+            repeat(45) {
+                kotlinx.coroutines.withTimeoutOrNull(32) { androidx.compose.runtime.withFrameNanos { } }
+                val r = ids.firstNotNullOfOrNull { ui.iconBounds[it]?.bounds() } ?: return@repeat
+                if (r.width < 8f || r.height < 8f) return@repeat
+                replyWithBounds(r)
                 return@launch
             }
-            contractKey = null
+
+            // If the icon never reports fresh bounds (some OEM launchers skip a layout
+            // pass during the gesture), answer with the launch-time icon rectangle instead
+            // of silently dropping the system's app-to-icon transition.
+            val fallback = ui.lastLaunch?.takeIf { it.key == key }?.bounds
+            if (fallback != null && fallback.width >= 8f && fallback.height >= 8f) {
+                replyWithBounds(fallback)
+            } else contractKey = null
         }
     }
 
