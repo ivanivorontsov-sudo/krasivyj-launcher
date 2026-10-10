@@ -66,6 +66,19 @@ jobs:
           grep -i "SHA-256 digest: 73b837775d17eb48ca098de362d1dc1bc529ec351f82e67999444425868bce35" dist/signature.txt \
             || { echo "::error::APK is not signed with the dedicated release key"; exit 1; }
 
+      # Always keep a directly downloadable APK on the latest release, even if Actions artifact storage is full.
+      - name: Publish latest Android APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="dist/uyut-launcher-${VERSION_NAME}.apk"
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest "$APK" --clobber
+          else
+            gh release create latest "$APK" --title "Уют — последняя сборка" --notes "Последний подписанный APK лаунчера Уют. Собран GitHub Actions из main."
+          fi
+
       # Artifact storage quota is exhausted until 2026-11-01: never fail the build because of it.
       - name: Upload artifact (best effort)
         if: github.event_name != 'pull_request'
