@@ -102,6 +102,11 @@ private fun StopRoot(close: () -> Unit) {
     val store = StopGuard.store
     var unlocked by remember { mutableStateOf(!store.hasPassword || SystemClock.elapsedRealtime() < StopActivity.unlockedUntil) }
     var page by remember { mutableStateOf(Page.MAIN) }
+    var pendingWeakening by remember { mutableStateOf<PendingWeakening?>(null) }
+    val resumeTick = StopActivity.tick
+    LaunchedEffect(resumeTick) {
+        if (store.hasPassword && SystemClock.elapsedRealtime() >= StopActivity.unlockedUntil) unlocked = false
+    }
     BackHandler { if (page == Page.MAIN || !unlocked) close() else page = Page.MAIN }
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -114,13 +119,27 @@ private fun StopRoot(close: () -> Unit) {
             Page.BLOCKED -> AppChecklist(
                 info = "Отмеченные приложения исчезают с главного экрана, из меню, поиска, папок и дока. Если открыть их иначе (уведомление, «Недавние», другое приложение), Уют сразу вернёт на главный экран.",
                 selected = { StopGuard.store.blocked }, protectedPkgs = StopGuard.protectedPackages(),
-            ) { pkg, on -> StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg } }
+            ) { pkg, on ->
+                val apply = { StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg } }
+                if (on) apply() else pendingWeakening = PendingWeakening("Разрешить запрещённое приложение?") { apply() }
+            }
             Page.ALLOWED -> AppChecklist(
                 info = "Во время паузы (лимит исчерпан или по расписанию) остаются только эти приложения, телефон и SMS. Темы и оформление не меняются.",
                 selected = { StopGuard.store.settings.whitelist }, protectedPkgs = emptySet(),
-            ) { pkg, on -> StopGuard.update { settings = settings.copy(whitelist = if (on) settings.whitelist + pkg else settings.whitelist - pkg) } }
+            ) { pkg, on ->
+                val old = StopGuard.store.settings
+                val next = old.copy(whitelist = if (on) old.whitelist + pkg else old.whitelist - pkg)
+                val apply = { StopGuard.update { settings = next } }
+                if (SettingsPolicy.isLoosening(old, next)) pendingWeakening = PendingWeakening("Разрешить приложение во время паузы?") { apply() }
+                else apply()
+            }
             Page.HISTORY -> HistoryPage()
         }
+    }
+    pendingWeakening?.let { pending ->
+        WeakeningDialog(title = pending.title, store = store,
+            onCancel = { pendingWeakening = null },
+            onConfirm = { pending.action(); pendingWeakening = null })
     }
 }
 
