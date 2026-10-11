@@ -136,7 +136,7 @@ fun FolderOverlay(ui: UiState, layout: ScreenLayout) {
                 val apps = folder.apps.mapNotNull { byKey[it] }
                 apps.chunked(4).forEach { row ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                        row.forEach { a -> Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AppCell(a, (spec.iconSizeDp - 2).dp, true, labelColor = colors.onSurface, source = DragSource.FOLDER) } }
+                        row.forEach { a -> Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AppCell(a, (spec.iconSizeDp - 2).dp, true, labelColor = colors.onSurface, source = DragSource.FOLDER, folderId = folder.id) } }
                         repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }

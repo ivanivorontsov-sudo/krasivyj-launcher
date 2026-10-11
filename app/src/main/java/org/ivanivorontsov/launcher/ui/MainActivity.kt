@@ -1,6 +1,8 @@
 package org.ivanivorontsov.launcher.ui
 
 import android.app.ActivityOptions
+import android.hardware.display.DisplayManager
+import android.os.SystemClock
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
@@ -43,6 +45,10 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     private val app get() = LauncherApp.instance
     private lateinit var ui: UiState
     private var wasResumed = false
+    private var displayRefresh: DisplayManager.DisplayListener? = null
+    /** System close animation owns the first frames; our in-window flight starts after it. */
+    private var returnArmed = false
+    private var resumeUptime = 0L
     private var pendingWidgetId = -1
     private var pendingWidgetInfo: AppWidgetProviderInfo? = null
 
@@ -103,7 +109,13 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         } catch (_: Exception) {}
     }
 
-    override fun onStart() { super.onStart(); try { WidgetHostHolder.host(this).startListening() } catch (_: Exception) {} }
+    override fun onStart() {
+        super.onStart()
+        try { WidgetHostHolder.host(this).startListening() } catch (_: Exception) {}
+        if (displayRefresh == null) {
+            displayRefresh = Device.registerDisplayRefresh(this) { app.store.config.value.highRefreshRate }
+        }
+    }
 
     // Re-assert the preferred mode on every resume: Android/OEM task transitions can reset it.
     private fun applyRefreshRate(high: Boolean) = Device.applyRefreshRate(window, high)
@@ -113,12 +125,11 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     override fun onResume() {
         super.onResume()
+        resumeUptime = SystemClock.uptimeMillis()
         val comingHome = ui.returning != null
-        // Reassert the highest user-selected refresh mode before the first animated frame.
-        // After a swipe-home, do it on the next frame so the return animation is not blocked
-        // by a display-mode binder call.
-        if (!comingHome) applyRefreshRate(app.store.config.value.highRefreshRate)
-        else window.decorView.post { applyRefreshRate(app.store.config.value.highRefreshRate) }
+        // Cached mode id only: ColorOS drops a third-party launcher to 60 Hz for the
+        // swipe-home transition unless this window has already asked for the high mode.
+        applyRefreshRate(app.store.config.value.highRefreshRate)
         // Settings live in a separate task. Reconcile the persisted theme before the
         // first visible frame so wallpaper and shaped-icon caches cannot stay stale.
         // Skip it on the way back from an app: that path must stay as cheap as Back.
@@ -126,31 +137,42 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         wasResumed = true
         // Live tiles pause while we are stopped. This flag is not an animation key:
         // the home grid must stay composed, and `enter` / hasAnimatedIn are not reset here.
-        ui.resumed = true
+        // While the system close animation is running, leave tiles paused.
+        if (!comingHome) ui.resumed = true
         val anim = Device.animationsEnabled()
         if (ui.animations != anim) ui.animations = anim
-        // Always draw the in-launcher flight. Some ROMs accept GestureNavContract but do
-        // not run the system animation, so treating the callback as proof caused a missing flight.
         if (comingHome) {
             if (window.decorView.hasWindowFocus()) visible?.complete(Unit)
-            playReturn()
+            // onEnterAnimationComplete starts the in-window flight. If ColorOS never
+            // sends it, start after the system transition would have finished.
+            window.decorView.postDelayed({ beginReturnFlight() }, 450)
         } else ui.scope.launch { if (ui.turnstile.value != 0f) ui.turnstile.snapTo(0f) }
         ui.launchedApp = false
-        if (comingHome) window.decorView.postDelayed({ app.live.refreshNow() }, 800)
-        else window.decorView.post { window.decorView.post { app.live.refreshNow() } }
-        DigitOverlay.poke(this)
+        if (comingHome) window.decorView.postDelayed({
+            ui.resumed = true
+            app.live.refreshNow()
+            DigitOverlay.poke(this)
+        }, 450)
+        else {
+            window.decorView.post { window.decorView.post { app.live.refreshNow() } }
+            DigitOverlay.poke(this)
+        }
     }
 
     override fun onStop() {
         super.onStop()
         try { WidgetHostHolder.host(this).stopListening() } catch (_: Exception) {}
-        // Pre-warm the return animation while we are invisible: compose the full-screen card now, so the
-        // first frame after any way back home (gesture, Home button, Back, recents) already shows it.
+        resumeUptime = 0L
+        Device.unregisterDisplayRefresh(this, displayRefresh)
+        displayRefresh = null
+        // Remember the return, but leave progress at 1 so the card stays invisible while the
+        // system is still animating the closing app. Snapping to 0 here drew a full-screen
+        // card on the first revealed frame and stuttered that transition.
         val rec = ui.lastLaunch
         if (ui.launchedApp && rec != null && Device.animationsEnabled() && app.store.config.value.returnAnimation &&
             System.currentTimeMillis() - rec.time < 6 * 60 * 60_000L) {
-            ui.returning = ReturnAnim(rec.key, app.icons.color(rec.key), rec.bounds)
-            ui.scope.launch { ui.returnProgress.snapTo(0f); ui.homeZoom.snapTo(0f); if (ui.turnstile.value != 0f) ui.turnstile.snapTo(0f) }
+            ui.returning = ReturnAnim(rec.key, app.icons.color(rec.key), rec.bounds, folderId = rec.folderId)
+            returnArmed = false
         }
         visible = kotlinx.coroutines.CompletableDeferred()
     }
@@ -160,6 +182,14 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
      * callback, don't hold the Home gesture for 1.5 seconds: use a short 360 ms guard instead.
      * All progress is frame-clock based, not frame-count based, so 144 Hz gets every available frame.
      */
+    private fun beginReturnFlight() {
+        if (ui.returning == null || returnArmed || resumeUptime == 0L) return
+        if (SystemClock.uptimeMillis() - resumeUptime < 80) return
+        returnArmed = true
+        ui.resumed = true
+        playReturn()
+    }
+
     private fun playReturn() {
         val gate = visible
         val key = ui.returning?.key
@@ -210,6 +240,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     override fun onEnterAnimationComplete() {
         super.onEnterAnimationComplete()
         visible?.complete(Unit)
+        beginReturnFlight()
     }
 
     override fun onPause() {
@@ -221,6 +252,8 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
+            // Ask for 144 Hz before the system starts compositing this window.
+            applyRefreshRate(app.store.config.value.highRefreshRate)
             // homePresses only closes overlays or scrolls to the main page. It must not
             // restart the one-shot home enter animation (hasAnimatedIn / enter).
             // A swipe-up HOME while we are still marked resumed (resumeWhilePausing) is
@@ -228,8 +261,10 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             val returning = ui.returning != null || ui.launchedApp
             if (wasResumed && !returning) ui.homePresses++
             else {
-                // Coming home from an app: show the home page as it was, instantly, with nothing left open.
-                ui.drawer.close(animated = false); ui.menu = null; ui.openFolder = null; ui.tileEdit = null; ui.cancelDrag()
+                ui.drawer.close(animated = false); ui.menu = null; ui.tileEdit = null; ui.cancelDrag()
+                // An app opened from a folder must come back into that folder, not onto the grid.
+                val folder = ui.lastLaunch?.folderId
+                if (folder != null) ui.openFolder = folder
             }
             handleGestureContract(intent)
         }
@@ -246,15 +281,19 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         intent.removeExtra(EXTRA_GESTURE_CONTRACT)
         if (!app.store.config.value.gestureContract) return
         @Suppress("DEPRECATION") val cn = extras.getParcelable<android.content.ComponentName>(Intent.EXTRA_COMPONENT_NAME)
-        @Suppress("DEPRECATION") val user = extras.getParcelable<android.os.UserHandle>(Intent.EXTRA_USER)
         @Suppress("DEPRECATION") val cb = extras.getParcelable<android.os.Message>(EXTRA_REMOTE_CALLBACK) ?: return
         val replyTo = cb.replyTo ?: return
-        val key = if (cn != null && user != null) runCatching { app.apps.keyFor(cn, user) }.getOrNull() else null
+        // No UserManager lookup before the reply: that binder call stalls the system animation.
         val recent = ui.lastLaunch?.takeIf { System.currentTimeMillis() - it.time < 6 * 60 * 60_000L }
-        val known = key?.let { ui.iconBounds[it]?.bounds() }?.takeIf { it.width >= 8f && it.height >= 8f }
-            ?: recent?.takeIf { key == null || it.key == key }?.bounds?.takeIf { it.width >= 8f && it.height >= 8f }
-            ?: recent?.bounds?.takeIf { it.width >= 8f && it.height >= 8f }
-        val r = known ?: run {
+        val prefix = cn?.flattenToShortString()
+        val match = recent != null && (prefix == null || recent.key.substringBefore('#') == prefix)
+        val known = if (match && recent.folderId != null) {
+            ui.openFolder = recent.folderId
+            ui.folderIconBounds[recent.key]?.bounds()?.takeIf { it.width >= 8f && it.height >= 8f } ?: recent.bounds
+        } else if (match) {
+            ui.iconBounds[recent.key]?.bounds()?.takeIf { it.width >= 8f && it.height >= 8f } ?: recent.bounds
+        } else null
+        val r = known?.takeIf { it.width >= 8f && it.height >= 8f } ?: run {
             val w = window.decorView.width.toFloat()
             val h = window.decorView.height.toFloat()
             if (w < 8f || h < 8f) Rect(0f, 0f, 1f, 1f) else Rect(w / 2f - 48f, h / 2f - 48f, w / 2f + 48f, h / 2f + 48f)
@@ -285,13 +324,13 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         return ActivityOptions.makeScaleUpAnimation(v, b.left.toInt(), b.top.toInt(), b.width.toInt().coerceAtLeast(1), b.height.toInt().coerceAtLeast(1))
     }
 
-    override fun launch(app: AppInfo, bounds: Rect?) {
+    override fun launch(app: AppInfo, bounds: Rect?, folderId: String?) {
         val spec = this.app.store.theme.value
         val doLaunch = {
             try {
                 this.app.apps.launcher.startMainActivity(app.component, app.user, bounds?.let { android.graphics.Rect(it.left.toInt(), it.top.toInt(), it.right.toInt(), it.bottom.toInt()) }, opts(bounds)?.toBundle())
                 ui.launchedApp = true
-                ui.lastLaunch = LaunchRecord(app.key, bounds, System.currentTimeMillis())
+                ui.lastLaunch = LaunchRecord(app.key, bounds, System.currentTimeMillis(), folderId)
                 this.app.store.update { it.bumpUsage(app.key) }
             } catch (e: Exception) { Toast.makeText(this, "Не удалось открыть «${app.label}»", Toast.LENGTH_SHORT).show() }
         }

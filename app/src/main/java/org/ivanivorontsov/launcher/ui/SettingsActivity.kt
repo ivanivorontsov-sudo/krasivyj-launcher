@@ -112,7 +112,27 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() { super.onResume(); resumeTick++ }
+    private var displayRefresh: android.hardware.display.DisplayManager.DisplayListener? = null
+
+    override fun onStart() {
+        super.onStart()
+        if (displayRefresh == null) {
+            displayRefresh = Device.registerDisplayRefresh(this) { LauncherApp.instance.store.config.value.highRefreshRate }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumeTick++
+        Device.applyRefreshRate(window, LauncherApp.instance.store.config.value.highRefreshRate)
+    }
+
+    override fun onStop() {
+        Device.unregisterDisplayRefresh(this, displayRefresh)
+        displayRefresh = null
+        super.onStop()
+    }
+
     companion object { var resumeTick by mutableIntStateOf(0) }
 }
 
@@ -651,8 +671,25 @@ private fun SmoothScreen() {
     val anim = remember(tick) { Device.animationsEnabled() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Частота экрана") {
+            val activeHz = remember(tick) { Device.activeRefreshRate(ctx.window) }
+            var taps by remember { mutableIntStateOf(0) }
+            Text(
+                "Сейчас ${if (activeHz > 1f) "%.0f".format(activeHz) else "—"} Гц",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.clickable {
+                    taps++
+                    val now = Device.activeRefreshRate(ctx.window)
+                    val line = "UyutHz: active ${"%.1f".format(now)}Hz"
+                    android.util.Log.i("UyutHz", line)
+                    if (taps >= 5) {
+                        taps = 0
+                        Toast.makeText(ctx, "Частота окна: ${"%.1f".format(now)} Гц (лог UyutHz)", Toast.LENGTH_LONG).show()
+                    }
+                },
+            )
             SwitchRow("Максимальная частота (до $maxHz Гц)", cfg.highRefreshRate) { v -> store.update { it.copy(highRefreshRate = v) } }
-            Info("Все анимации считаются по времени, а не по кадрам: на 60, 90, 120 и 144 Гц они одинаковые по длительности, просто плавнее.")
+            Info("Все анимации считаются по времени, а не по кадрам: на 60, 90, 120 и 144 Гц они одинаковые по длительности, просто плавнее. Уют просит самый высокий режим для текущего разрешения и не меняет разрешение.")
+            Info("realme и ColorOS часто держат сторонние приложения на 60 Гц, даже если экран умеет 144. Если жест «Домой» всё равно дёргается: Настройки телефона → Экран → Частота обновления → высокая частота для приложений — добавьте Уют. Фактический режим пишется в logcat, тег UyutHz. Пять нажатий на строку «Сейчас» показывают его тостом.")
         } }
         item { Section("Анимации") { Info(if (anim) "Системные анимации включены ✓" else "В настройках телефона отключены анимации — Уют работает без анимаций и не тратит на них энергию.") } }
         item { Section("Фоновая работа") {
@@ -660,7 +697,7 @@ private fun SmoothScreen() {
             if (!ignoring) Button(onClick = { Device.requestIgnoreBatteryOptimizations(ctx) }) { Text("Не выгружать Уют") }
             if (Device.oem == Device.Oem.REALME_OPPO_ONEPLUS) {
                 Info("realme / ColorOS: дополнительно откройте «Настройки → Приложения → Уют → Использование батареи» и разрешите фоновую активность; в «Недавних» потяните карточку Уюта вниз, чтобы закрепить её замком.")
-                Info("На realme UI системная анимация сторонних лаунчеров может начинаться с задержкой или пропускать полёт в иконку. Это поведение системного перехода; Уют дополнительно рисует собственную анимацию после возврата, но полностью заменить системный переход без привилегий системного лаунчера не может.")
+                Info("На realme UI системная анимация сторонних лаунчеров может начинаться с задержкой или идти на 60 Гц. Добавьте Уют в список приложений с высокой частотой обновления (Экран → Частота обновления). Уют дополнительно рисует собственную анимацию после системного перехода.")
             }
             if (Device.oem == Device.Oem.XIAOMI) Info("Xiaomi: «Безопасность → Приложения → Уют → Автозапуск» и «Контроль активности → Нет ограничений».")
             if (Device.oem == Device.Oem.SAMSUNG) Info("Samsung: «Батарея → Ограничения фонового использования → Никогда не переводить в спящий режим» → добавьте Уют.")

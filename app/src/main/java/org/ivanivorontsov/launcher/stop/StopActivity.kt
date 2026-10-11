@@ -90,9 +90,27 @@ class StopActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() { super.onResume(); tick++ ; StopGuard.tick() }
+    private var displayRefresh: android.hardware.display.DisplayManager.DisplayListener? = null
+
+    override fun onStart() {
+        super.onStart()
+        if (displayRefresh == null) {
+            displayRefresh = org.ivanivorontsov.launcher.data.Device.registerDisplayRefresh(this) {
+                org.ivanivorontsov.launcher.LauncherApp.instance.store.config.value.highRefreshRate
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        tick++
+        StopGuard.tick()
+        org.ivanivorontsov.launcher.data.Device.applyRefreshRate(window, org.ivanivorontsov.launcher.LauncherApp.instance.store.config.value.highRefreshRate)
+    }
     /** Leaving Stop Screen settings ends the one-password editing session. */
     override fun onStop() {
+        org.ivanivorontsov.launcher.data.Device.unregisterDisplayRefresh(this, displayRefresh)
+        displayRefresh = null
         super.onStop()
         // Android's VPN consent screen temporarily backgrounds this activity. Keep the
         // one-password editing session for that system dialog only.

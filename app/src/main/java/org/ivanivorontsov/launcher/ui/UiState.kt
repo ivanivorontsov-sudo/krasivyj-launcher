@@ -80,6 +80,8 @@ class UiState(val scope: CoroutineScope) {
     val drag = DragState()
     /** Icon (not cell) bounds of everything on the home screen, by app key / folder id / tile id. */
     val iconBounds = HashMap<String, BoundsRef>()
+    /** Icons drawn inside the open folder. Separate so they don't overwrite the grid folder icon. */
+    val folderIconBounds = HashMap<String, BoundsRef>()
     var openFolder by mutableStateOf<String?>(null)
     var renameFolder by mutableStateOf<String?>(null)
     /** Set by the tiles home: bring the start screen forward when a drag starts in the app list. */
@@ -103,7 +105,7 @@ class UiState(val scope: CoroutineScope) {
 }
 
 /** What was launched and from where, for the return animation and the gesture-nav contract. */
-class LaunchRecord(val key: String, val bounds: Rect?, val time: Long)
+class LaunchRecord(val key: String, val bounds: Rect?, val time: Long, val folderId: String? = null)
 
-/** [fromBack]: the app was left with Back (its own close transition already shrank it a bit). */
-class ReturnAnim(val key: String, val color: Int?, val fallback: Rect?, val fromBack: Boolean = false)
+/** [folderId]: the app was opened from inside that folder; the return should land on the inner icon. */
+class ReturnAnim(val key: String, val color: Int?, val fallback: Rect?, val fromBack: Boolean = false, val folderId: String? = null)
