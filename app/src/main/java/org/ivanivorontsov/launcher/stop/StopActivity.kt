@@ -92,11 +92,17 @@ class StopActivity : ComponentActivity() {
 
     override fun onResume() { super.onResume(); tick++ ; StopGuard.tick() }
     /** Leaving Stop Screen settings ends the one-password editing session. */
-    override fun onStop() { super.onStop(); if (!isChangingConfigurations) editingUnlocked = false }
+    override fun onStop() {
+        super.onStop()
+        // Android's VPN consent screen temporarily backgrounds this activity. Keep the
+        // one-password editing session for that system dialog only.
+        if (!isChangingConfigurations && !keepEditingUnlockedForExternalActivity) editingUnlocked = false
+    }
 
     companion object {
         var tick by mutableIntStateOf(0)
         @Volatile var editingUnlocked = false
+        @Volatile var keepEditingUnlockedForExternalActivity = false
     }
 }
 
@@ -263,6 +269,7 @@ private fun MainPage(go: (Page) -> Unit) {
     val dnsPrefs = remember { ctx.getSharedPreferences(DnsVpnService.PREFS, android.content.Context.MODE_PRIVATE) }
     var dnsEnabled by remember(tick) { mutableStateOf(dnsPrefs.getBoolean("enabled", false)) }
     val dnsPermission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        StopActivity.keepEditingUnlockedForExternalActivity = false
         if (result.resultCode == Activity.RESULT_OK) {
             val intent = Intent(ctx, DnsVpnService::class.java).putExtra(DnsVpnService.EXTRA_FAMILY, pendingDnsFamily)
             androidx.core.content.ContextCompat.startForegroundService(ctx, intent)
@@ -275,7 +282,10 @@ private fun MainPage(go: (Page) -> Unit) {
         if (permissionIntent == null) {
             androidx.core.content.ContextCompat.startForegroundService(ctx, Intent(ctx, DnsVpnService::class.java).putExtra(DnsVpnService.EXTRA_FAMILY, family))
             dnsEnabled = true
-        } else dnsPermission.launch(permissionIntent)
+        } else {
+            StopActivity.keepEditingUnlockedForExternalActivity = true
+            dnsPermission.launch(permissionIntent)
+        }
     }
     fun disconnectDns() {
         ctx.startService(Intent(ctx, DnsVpnService::class.java).setAction(DnsVpnService.ACTION_STOP))
@@ -324,8 +334,8 @@ private fun MainPage(go: (Page) -> Unit) {
             Info("Уют создаёт локальный DNS-only VPN, как приложения-переключатели DNS. Обычный интернет-трафик не идёт через VPN; DNS-запросы идут к выбранному AdGuard DNS.")
             Info(if (dnsEnabled) "DNS включён. Значок VPN Android должен быть виден в строке состояния." else "DNS выключен.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { connectDns(false) }) { Text("AdGuard DNS") }
-                OutlinedButton(onClick = { connectDns(true) }) { Text("Family DNS") }
+                OutlinedButton(enabled = !dnsEnabled, onClick = { connectDns(false) }) { Text("AdGuard DNS") }
+                OutlinedButton(enabled = !dnsEnabled, onClick = { connectDns(true) }) { Text("Family DNS") }
             }
             if (dnsEnabled) OutlinedButton(onClick = { disconnectDns() }) { Text("Выключить DNS") }
             Info("Обычный режим: 94.140.14.14. Семейный фильтр: 94.140.14.15. Это DNS по UDP/53, не DNS-over-HTTPS; приложения со встроенным DNS могут обходить системный резолвер.")
