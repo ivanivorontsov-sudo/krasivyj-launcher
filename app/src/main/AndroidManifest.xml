@@ -81,6 +81,8 @@
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
         </service>
 
+        <activity android:name=".ui.DnsActivity" android:exported="false" android:label="DNS и защита сайтов" android:theme="@style/Theme.Launcher.Settings" />
+
         <activity
             android:name=".stop.StopActivity"
             android:exported="false"

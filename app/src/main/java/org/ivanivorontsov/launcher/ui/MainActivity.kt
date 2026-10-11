@@ -160,20 +160,9 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             // another 650 ms on realme left only the wallpaper visible before the icon suddenly flew in.
             // ReturnOverlay already has the launch-time icon rectangle as a stable fallback while Compose
             // refreshes the live bounds, so we only allow a very short window hand-off here.
-            if (gate != null) kotlinx.coroutines.withTimeoutOrNull(120) { gate.await() }
-            val returnKey = ui.returning?.key
-            if (returnKey != null) {
-                val theme = app.store.theme.value
-                val l = app.store.config.value.layoutFor(theme.id)
-                val candidates = listOfNotNull(returnKey, l.folderOf(returnKey), "t_$returnKey")
-                repeat(2) {
-                    val ready = candidates.any { k ->
-                        val b = ui.iconBounds[k]?.bounds()
-                        b != null && b.width >= 8f && b.height >= 8f && b.center.x >= 0f && b.center.y >= 0f
-                    }
-                    if (!ready) kotlinx.coroutines.withTimeoutOrNull(34) { androidx.compose.runtime.withFrameNanos { } }
-                }
-            }
+            // Don't leave the wallpaper as the only visible content while waiting for OEM focus callbacks.
+            // ReturnOverlay has a launch-time rectangle fallback, so one frame is enough to hand off to Compose.
+            if (gate != null) kotlinx.coroutines.withTimeoutOrNull(16) { gate.await() }
             kotlinx.coroutines.coroutineScope {
                 launch {
                     ui.homeZoom.animateTo(
