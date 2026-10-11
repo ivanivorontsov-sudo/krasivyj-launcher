@@ -199,13 +199,27 @@ fun LauncherRoot(ui: UiState) {
                 else 1 + layout.pages(spec.columns * (spec.rows - clockRows), spec.columns * spec.rows).size + (if (dragging) 1 else 0)
             val countState = androidx.compose.runtime.rememberUpdatedState(pageCount)
             val homePager = rememberPagerState(initialPage = 1) { countState.value }
+            // One-shot. Keyed on Unit plus the flag stored on UiState, which outlives pause/resume.
+            // A later composition (pager rebuild, theme tweak) sees hasAnimatedIn and snaps to 1
+            // instead of fading the grid out and back in over the wallpaper.
+            LaunchedEffect(Unit) {
+                if (ui.hasAnimatedIn) {
+                    if (ui.enter.value != 1f) ui.enter.snapTo(1f)
+                    return@LaunchedEffect
+                }
+                ui.hasAnimatedIn = true
+                if (ui.animations) ui.enter.animateTo(1f, MotionSpecs.enter(spec.motion, true))
+                else ui.enter.snapTo(1f)
+            }
             val homeModifier = Modifier.fillMaxSize().graphicsLayer {
                 val p = ui.drawer.progress
+                val e = ui.enter.value.coerceIn(0f, 1f)
                 // 1.2: while an app folds back into its icon, the grid zooms in from 94 % (like Pixel).
+                // That zoom is not the enter fade: enter stays at 1 when coming back from an app.
                 val z = ui.homeZoom.value
-                val s = (1f - 0.06f * p) * (0.94f + 0.06f * z)
+                val s = (1f - 0.06f * p) * (0.94f + 0.06f * z) * (0.92f + 0.08f * e)
                 scaleX = s; scaleY = s
-                alpha = 1f - p
+                alpha = (1f - p) * e
             }
             Box(homeModifier.homeGestures(ui, config, hPx.toFloat(), spec.layout != HomeLayout.TILES)) {
                 when (spec.layout) {

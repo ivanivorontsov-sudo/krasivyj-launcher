@@ -39,10 +39,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -68,6 +70,7 @@ import kotlinx.coroutines.withContext
 import org.ivanivorontsov.launcher.BuildConfig
 import org.ivanivorontsov.launcher.LauncherApp
 import org.ivanivorontsov.launcher.core.AccentPalette
+import org.ivanivorontsov.launcher.core.HomeCategories
 import org.ivanivorontsov.launcher.core.ClockStyle
 import org.ivanivorontsov.launcher.core.DockStyle
 import org.ivanivorontsov.launcher.core.DrawerStyle
@@ -86,6 +89,7 @@ import org.ivanivorontsov.launcher.core.TileKind
 import org.ivanivorontsov.launcher.core.TileSize
 import org.ivanivorontsov.launcher.core.TileFill
 import org.ivanivorontsov.launcher.core.WallpaperStyle
+import org.ivanivorontsov.launcher.data.AppInfo
 import org.ivanivorontsov.launcher.data.Device
 import org.ivanivorontsov.launcher.service.LockService
 import org.ivanivorontsov.launcher.service.NotificationCounter
@@ -495,6 +499,7 @@ private fun HomeScreenSettings() {
                 }
             }
             Info("Включите, чтобы убрать отдельное меню приложений и разместить установленные приложения на страницах главного экрана. В теме «Плитки» они появятся плитками; в минималистичной теме — текстовым списком. Новые приложения тоже будут добавляться автоматически.")
+            SortIntoFoldersButton(spec.id, installedApps)
         } }
         item { Section("Новые приложения") {
             SwitchRow("Добавлять новые приложения на главный экран", cfg.autoAddNew) { v -> store.update { it.copy(autoAddNew = v) } }
@@ -518,6 +523,43 @@ private fun HomeScreenSettings() {
             Info("realme UI / ColorOS с жестами: примерно секунду после жеста «Домой» система показывает только обои — так у всех сторонних лаунчеров (Nova, Lawnchair, Niagara, Smart Launcher), это не исправить без root. Уют начинает «сворачивание» ровно в момент, когда система его показала. С кнопочной навигацией задержки нет.")
         } }
     }
+}
+
+@Composable
+private fun SortIntoFoldersButton(themeId: String, installedApps: List<AppInfo>) {
+    val store = LauncherApp.instance.store
+    val ctx = LocalContext.current
+    var confirm by remember { mutableStateOf(false) }
+    val finance = remember { HomeCategories.platformFinanceCategory() }
+    Button(onClick = { confirm = true }, modifier = Modifier.padding(top = 8.dp)) { Text("Разложить по папкам") }
+    Info("Автоматически по категориям. Док не меняется. Уже созданные папки остаются; если папка с таким названием уже есть на главном экране, приложения добавятся в неё.")
+    if (!confirm) return
+    AlertDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text("Разложить по папкам?") },
+        text = {
+            Text("Свободные иконки главного экрана будут собраны в папки: Игры, Музыка, Видео, Фото, Общение, Новости, Карты, Продуктивность, Специальные возможности, Финансы и «Прочее». Док, плитки и ваши папки не разбираются. Одно приложение в категории останется иконкой.")
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                confirm = false
+                val byKey = installedApps.associateBy { it.key }
+                var changed = false
+                store.update { current ->
+                    val cur = current.layoutFor(themeId)
+                    val next = cur.groupHomeIntoFolders { key ->
+                        val app = byKey[key]
+                        if (app == null) HomeCategories.OTHER
+                        else HomeCategories.folderName(app.pkg, app.originalLabel.ifEmpty { app.label }, app.androidCategory, finance)
+                    }
+                    changed = next != cur
+                    if (!changed) current else current.copy(layouts = current.layouts + (themeId to next), lastEdited = themeId)
+                }
+                Toast.makeText(ctx, if (changed) "Готово: приложения разложены по папкам" else "На главном экране нечего собирать в папки", Toast.LENGTH_SHORT).show()
+            }) { Text("Разложить") }
+        },
+        dismissButton = { TextButton(onClick = { confirm = false }) { Text("Отмена") } },
+    )
 }
 
 @Composable

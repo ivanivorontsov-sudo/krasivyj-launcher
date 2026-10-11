@@ -119,6 +119,77 @@ data class ScreenLayout(
         return copy(folders = folders + (id to f.copy(name = name.trim().ifEmpty { f.name })))
     }
 
+    /**
+     * Groups loose icons on the home grid into category folders.
+     *
+     * The dock, tiles and favourites are left untouched. Folders the user already created stay
+     * where they are and are not unpacked — apps inside them are not moved. If a folder already
+     * on the home screen has the same name (ignoring case), loose apps of that category are
+     * merged into it. A category with a single loose app and no such folder stays an icon:
+     * [normalized] dissolves folders of fewer than two apps.
+     *
+     * New folders are inserted where the first app of that category sat, so the grid does not
+     * jump everything to the end.
+     */
+    fun groupHomeIntoFolders(folderName: (appKey: String) -> String): ScreenLayout {
+        if (home.none { !isFolderId(it) }) return this
+        val nameToId = LinkedHashMap<String, String>()
+        for (id in home) {
+            if (!isFolderId(id)) continue
+            val folder = folders[id] ?: continue
+            nameToId.putIfAbsent(folder.name.trim().lowercase(), id)
+        }
+        val looseByName = LinkedHashMap<String, MutableList<String>>()
+        for (id in home) {
+            if (isFolderId(id)) continue
+            val raw = folderName(id).trim().ifEmpty { "Прочее" }
+            looseByName.getOrPut(raw) { ArrayList() }.add(id)
+        }
+        var foldersAcc = folders
+        fun alloc(): String {
+            var n = 1
+            var id = FOLDER_PREFIX + n
+            while (id in foldersAcc) {
+                n++
+                id = FOLDER_PREFIX + n
+            }
+            return id
+        }
+        data class Plan(val folderId: String, val create: Boolean)
+        val plans = LinkedHashMap<String, Plan>()
+        for ((raw, keys) in looseByName) {
+            val existing = nameToId[raw.lowercase()]
+            if (existing != null) {
+                val folder = foldersAcc.getValue(existing)
+                foldersAcc = foldersAcc + (existing to folder.copy(apps = (folder.apps + keys).distinct()))
+                plans[raw] = Plan(existing, create = false)
+            } else if (keys.size >= 2) {
+                val id = alloc()
+                foldersAcc = foldersAcc + (id to Folder(id, raw, keys.distinct()))
+                nameToId[raw.lowercase()] = id
+                plans[raw] = Plan(id, create = true)
+            }
+        }
+        if (plans.isEmpty()) return this
+        val placedNew = HashSet<String>()
+        val newHome = ArrayList<String>(home.size)
+        for (id in home) {
+            if (isFolderId(id)) {
+                newHome += id
+                continue
+            }
+            val raw = folderName(id).trim().ifEmpty { "Прочее" }
+            val plan = plans[raw]
+            if (plan == null) {
+                newHome += id
+                continue
+            }
+            if (!plan.create) continue
+            if (placedNew.add(plan.folderId)) newHome += plan.folderId
+        }
+        return copy(home = newHome, folders = foldersAcc).normalized()
+    }
+
     fun appendHome(key: String): ScreenLayout = if (isPlaced(key)) this else copy(home = home + key)
 
     fun addToDock(key: String, max: Int): ScreenLayout = if (key in dock || dock.size >= max) this else detach(key).let { it.copy(dock = it.dock + key) }

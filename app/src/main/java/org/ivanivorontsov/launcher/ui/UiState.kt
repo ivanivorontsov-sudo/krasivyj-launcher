@@ -57,6 +57,14 @@ class UiState(val scope: CoroutineScope) {
     var homePresses by mutableIntStateOf(0)
     var permissionsVersion by mutableIntStateOf(0)
     var resumed by mutableStateOf(true)
+    /**
+     * Home icons fade in only once per activity: the first time the home screen is shown
+     * after a cold start (or after the activity is really recreated). Resume and HOME
+     * intents must not clear this — that replay is the empty-wallpaper glitch.
+     */
+    var hasAnimatedIn by mutableStateOf(false)
+    /** 0 = icons not yet presented, 1 = settled. Stays at 1 after [hasAnimatedIn]. */
+    val enter = Animatable(0f)
     var widgetEdit by mutableStateOf(false)
     var tileEdit by mutableStateOf<String?>(null)
     /** 0 = tiles in place, 1 = swung away (turnstile). */

@@ -159,6 +159,52 @@ class LayoutTest {
         assertTrue("pz#0" in off.first.knownApps)
     }
 
+    @Test fun groupHomeLeavesDockAndUserFolders() {
+        val user = ScreenLayout(
+            home = listOf("a", "b", "folder:1", "c", "d"),
+            dock = listOf("dockApp", "folder:9"),
+            folders = mapOf(
+                "folder:1" to Folder("folder:1", "Моё", listOf("x", "y")),
+                "folder:9" to Folder("folder:9", "Игры", listOf("p", "q")),
+            ),
+            tiles = listOf(TileItem("t_a", TileKind.APP, "a")),
+            favorites = listOf("a", "c"),
+        )
+        val n = user.groupHomeIntoFolders {
+            when (it) {
+                "a", "b" -> HomeCategories.GAMES
+                "c" -> HomeCategories.AUDIO
+                else -> HomeCategories.OTHER
+            }
+        }
+        assertEquals(listOf("dockApp", "folder:9"), n.dock)
+        assertEquals(listOf("p", "q"), n.folders.getValue("folder:9").apps)
+        assertEquals(listOf("x", "y"), n.folders.getValue("folder:1").apps)
+        assertEquals(user.tiles, n.tiles)
+        assertEquals(user.favorites, n.favorites)
+        // a,b share a new folder placed at a's slot; c stays (only one music app); d is a lone leftover.
+        assertEquals(listOf("folder:2", "folder:1", "c", "d"), n.home)
+        assertEquals(listOf("a", "b"), n.folders.getValue("folder:2").apps)
+        assertEquals(HomeCategories.GAMES, n.folders.getValue("folder:2").name)
+    }
+
+    @Test fun groupHomeMergesIntoSameNamedFolder() {
+        val user = ScreenLayout(
+            home = listOf("a", "folder:1", "b"),
+            folders = mapOf("folder:1" to Folder("folder:1", "игры", listOf("x", "y"))),
+        )
+        val n = user.groupHomeIntoFolders { HomeCategories.GAMES }
+        assertEquals(listOf("folder:1"), n.home)
+        assertEquals(listOf("x", "y", "a", "b"), n.folders.getValue("folder:1").apps)
+        assertEquals("игры", n.folders.getValue("folder:1").name)
+    }
+
+    @Test fun groupHomeKeepsSingleApps() {
+        val user = ScreenLayout(home = listOf("a", "b"), dock = listOf("c"))
+        val n = user.groupHomeIntoFolders { if (it == "a") HomeCategories.GAMES else HomeCategories.AUDIO }
+        assertEquals(user, n)
+    }
+
     @Test fun autoAddDoesNotDuplicatePlacedApp() {
         val c = LauncherConfig(base = ScreenLayout(home = listOf("folder:1"), folders = mapOf("folder:1" to Folder("folder:1", "F", listOf("a", "n")))), knownApps = setOf("pa#0"))
         val (next, _) = c.registerInstalled(mapOf("pa#0" to "a", "pn#0" to "n"), { true })

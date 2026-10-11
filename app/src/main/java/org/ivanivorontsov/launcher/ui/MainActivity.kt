@@ -116,8 +116,11 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         applyRefreshRate(app.store.config.value.highRefreshRate)
         // Settings live in a separate task. Reconcile the persisted theme before the
         // first visible frame so wallpaper and shaped-icon caches cannot stay stale.
+        // No-op (no JSON decode, no icon-cache wipe) when prefs still match memory.
         if (app.store.refreshThemeFromPreferences()) app.icons.clear()
         wasResumed = true
+        // Live tiles pause while we are stopped. This flag is not an animation key:
+        // the home grid must stay composed, and `enter` / hasAnimatedIn are not reset here.
         ui.resumed = true
         val anim = Device.animationsEnabled()
         if (ui.animations != anim) ui.animations = anim
@@ -211,6 +214,8 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
+            // homePresses only closes overlays or scrolls to the main page. It must not
+            // restart the one-shot home enter animation (hasAnimatedIn / enter).
             if (wasResumed) ui.homePresses++
             else {
                 // Coming home from an app: show the home page as it was, instantly, with nothing left open.
