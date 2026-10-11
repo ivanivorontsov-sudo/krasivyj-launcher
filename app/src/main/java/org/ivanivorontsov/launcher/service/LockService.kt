@@ -28,7 +28,10 @@ class LockService : AccessibilityService() {
         e ?: return
         val pkg = e.packageName?.toString() ?: return
         val isState = e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-        if (isState && pkg != "com.android.systemui" && pkg !in ime) StopGuard.lastForeground = pkg
+        if (isState && pkg != "com.android.systemui" && pkg !in ime) {
+            StopGuard.lastForeground = pkg
+            ForegroundClock.note(pkg)
+        }
         if (isState && StopGuard.isForbidden(pkg)) {
             val now = SystemClock.uptimeMillis()
             if (now - lastHome > 400) {

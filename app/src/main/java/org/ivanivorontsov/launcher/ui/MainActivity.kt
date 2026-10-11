@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
                 // Hide the system wallpaper window when the theme paints its own (saves composition work).
                 if (t.wallpaper == org.ivanivorontsov.launcher.core.WallpaperStyle.SYSTEM && t.layout != HomeLayout.TILES) window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                WallpaperApplier.onTheme(this@MainActivity, t)
             }
         }
         lifecycleScope.launch { app.store.config.collect { app.icons.iconPack = it.iconPack; applyRefreshRate(it.highRefreshRate) } }
@@ -112,12 +113,16 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     override fun onResume() {
         super.onResume()
+        val comingHome = ui.returning != null
         // Reassert the highest user-selected refresh mode before the first animated frame.
-        applyRefreshRate(app.store.config.value.highRefreshRate)
+        // After a swipe-home, do it on the next frame so the return animation is not blocked
+        // by a display-mode binder call.
+        if (!comingHome) applyRefreshRate(app.store.config.value.highRefreshRate)
+        else window.decorView.post { applyRefreshRate(app.store.config.value.highRefreshRate) }
         // Settings live in a separate task. Reconcile the persisted theme before the
         // first visible frame so wallpaper and shaped-icon caches cannot stay stale.
-        // No-op (no JSON decode, no icon-cache wipe) when prefs still match memory.
-        if (app.store.refreshThemeFromPreferences()) app.icons.clear()
+        // Skip it on the way back from an app: that path must stay as cheap as Back.
+        if (!comingHome && app.store.refreshThemeFromPreferences()) app.icons.clear()
         wasResumed = true
         // Live tiles pause while we are stopped. This flag is not an animation key:
         // the home grid must stay composed, and `enter` / hasAnimatedIn are not reset here.
@@ -126,13 +131,14 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         if (ui.animations != anim) ui.animations = anim
         // Always draw the in-launcher flight. Some ROMs accept GestureNavContract but do
         // not run the system animation, so treating the callback as proof caused a missing flight.
-        val pending = ui.returning
-        if (pending != null) {
+        if (comingHome) {
             if (window.decorView.hasWindowFocus()) visible?.complete(Unit)
             playReturn()
         } else ui.scope.launch { if (ui.turnstile.value != 0f) ui.turnstile.snapTo(0f) }
         ui.launchedApp = false
-        window.decorView.post { window.decorView.post { app.live.refreshNow() } }
+        if (comingHome) window.decorView.postDelayed({ app.live.refreshNow() }, 800)
+        else window.decorView.post { window.decorView.post { app.live.refreshNow() } }
+        DigitOverlay.poke(this)
     }
 
     override fun onStop() {
@@ -213,10 +219,14 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
             // homePresses only closes overlays or scrolls to the main page. It must not
             // restart the one-shot home enter animation (hasAnimatedIn / enter).
-            if (wasResumed) ui.homePresses++
+            // A swipe-up HOME while we are still marked resumed (resumeWhilePausing) is
+            // still a return from an app: do not scroll the pager.
+            val returning = ui.returning != null || ui.launchedApp
+            if (wasResumed && !returning) ui.homePresses++
             else {
                 // Coming home from an app: show the home page as it was, instantly, with nothing left open.
                 ui.drawer.close(animated = false); ui.menu = null; ui.openFolder = null; ui.tileEdit = null; ui.cancelDrag()
@@ -226,65 +236,38 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     }
 
     /**
-     * GestureNavContract (Android 11+, no permission): with gesture navigation the system's recents
-     * component puts a callback into the HOME intent and asks the launcher where the closing app's icon is,
-     * then animates the app window into that rectangle (Launcher3/Lawnchair do the same). Not every OEM
-     * build sends it (ColorOS/realme UI often do not); then only our in-window return animation plays.
+     * GestureNavContract (Android 11+, no permission): recents asks where the closing app's icon is,
+     * then animates the window into that rectangle. Reply immediately with bounds we already have.
+     * Waiting for a layout pass, or scrolling the pager to the icon's page, freezes the gesture
+     * (Back does not send this contract, which is why Back felt fine).
      */
     private fun handleGestureContract(intent: Intent?) {
         val extras = intent?.getBundleExtra(EXTRA_GESTURE_CONTRACT) ?: return
         intent.removeExtra(EXTRA_GESTURE_CONTRACT)
         if (!app.store.config.value.gestureContract) return
-        @Suppress("DEPRECATION") val cn = extras.getParcelable<android.content.ComponentName>(Intent.EXTRA_COMPONENT_NAME) ?: return
-        @Suppress("DEPRECATION") val user = extras.getParcelable<android.os.UserHandle>(Intent.EXTRA_USER) ?: return
+        @Suppress("DEPRECATION") val cn = extras.getParcelable<android.content.ComponentName>(Intent.EXTRA_COMPONENT_NAME)
+        @Suppress("DEPRECATION") val user = extras.getParcelable<android.os.UserHandle>(Intent.EXTRA_USER)
         @Suppress("DEPRECATION") val cb = extras.getParcelable<android.os.Message>(EXTRA_REMOTE_CALLBACK) ?: return
         val replyTo = cb.replyTo ?: return
-        val key = app.apps.keyFor(cn, user)
-        val theme = app.store.theme.value
-        val layout = app.store.config.value.layoutFor(theme.id)
-        val folder = layout.folderOf(key)
-        val ids = listOfNotNull(key, folder, "t_$key")
-        val clockRows = if (theme.clockStyle == org.ivanivorontsov.launcher.core.ClockStyle.NONE) 0 else 2
-        val firstCap = theme.columns * (theme.rows - clockRows)
-        val cap = (theme.columns * theme.rows).coerceAtLeast(1)
-        val holder = folder ?: key
-        val idx = layout.home.indexOf(holder).takeIf { it >= 0 } ?: layout.dock.indexOf(holder)
-        if (folder != null) ui.revealFolder = folder
-        if (idx >= 0) {
-            val appPage = if (idx < firstCap) 0 else 1 + (idx - firstCap) / cap
-            ui.revealPage = appPage + 1
+        val key = if (cn != null && user != null) runCatching { app.apps.keyFor(cn, user) }.getOrNull() else null
+        val recent = ui.lastLaunch?.takeIf { System.currentTimeMillis() - it.time < 6 * 60 * 60_000L }
+        val known = key?.let { ui.iconBounds[it]?.bounds() }?.takeIf { it.width >= 8f && it.height >= 8f }
+            ?: recent?.takeIf { key == null || it.key == key }?.bounds?.takeIf { it.width >= 8f && it.height >= 8f }
+            ?: recent?.bounds?.takeIf { it.width >= 8f && it.height >= 8f }
+        val r = known ?: run {
+            val w = window.decorView.width.toFloat()
+            val h = window.decorView.height.toFloat()
+            if (w < 8f || h < 8f) Rect(0f, 0f, 1f, 1f) else Rect(w / 2f - 48f, h / 2f - 48f, w / 2f + 48f, h / 2f + 48f)
         }
-        ui.scope.launch {
-            // The home pager may need several frames to reveal the page containing the
-            // target icon after a gesture-home intent. Give Compose up to ~750 ms to lay it out.
-            fun replyWithBounds(r: Rect): Boolean {
-                val loc = IntArray(2)
-                window.decorView.getLocationOnScreen(loc)
-                val data = Bundle()
-                data.putParcelable(EXTRA_ICON_POSITION, android.graphics.RectF(r.left + loc[0], r.top + loc[1], r.right + loc[0], r.bottom + loc[1]))
-                data.putParcelable(EXTRA_ICON_SURFACE, null)
-                val msg = android.os.Message.obtain()
-                msg.copyFrom(cb)
-                msg.data = data
-                return try { replyTo.send(msg); true } catch (_: Exception) { false }
-            }
-
-            repeat(45) {
-                kotlinx.coroutines.withTimeoutOrNull(32) { androidx.compose.runtime.withFrameNanos { } }
-                val r = ids.firstNotNullOfOrNull { ui.iconBounds[it]?.bounds() } ?: return@repeat
-                if (r.width < 8f || r.height < 8f) return@repeat
-                replyWithBounds(r)
-                return@launch
-            }
-
-            // If the icon never reports fresh bounds (some OEM launchers skip a layout
-            // pass during the gesture), answer with the launch-time icon rectangle instead
-            // of silently dropping the system's app-to-icon transition.
-            val fallback = ui.lastLaunch?.takeIf { it.key == key }?.bounds
-            if (fallback != null && fallback.width >= 8f && fallback.height >= 8f) {
-                replyWithBounds(fallback)
-            }
-        }
+        val loc = IntArray(2)
+        window.decorView.getLocationOnScreen(loc)
+        val data = Bundle()
+        data.putParcelable(EXTRA_ICON_POSITION, android.graphics.RectF(r.left + loc[0], r.top + loc[1], r.right + loc[0], r.bottom + loc[1]))
+        data.putParcelable(EXTRA_ICON_SURFACE, null)
+        val msg = android.os.Message.obtain()
+        msg.copyFrom(cb)
+        msg.data = data
+        try { replyTo.send(msg) } catch (_: Exception) {}
     }
 
     private companion object {

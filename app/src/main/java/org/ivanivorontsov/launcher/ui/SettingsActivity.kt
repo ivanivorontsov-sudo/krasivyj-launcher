@@ -49,6 +49,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +73,8 @@ import org.ivanivorontsov.launcher.LauncherApp
 import org.ivanivorontsov.launcher.core.AccentPalette
 import org.ivanivorontsov.launcher.core.HomeCategories
 import org.ivanivorontsov.launcher.core.ClockStyle
+import org.ivanivorontsov.launcher.core.DigitAnchor
+import org.ivanivorontsov.launcher.core.DigitMode
 import org.ivanivorontsov.launcher.core.DockStyle
 import org.ivanivorontsov.launcher.core.DrawerStyle
 import org.ivanivorontsov.launcher.core.FontCategory
@@ -115,7 +118,7 @@ class SettingsActivity : ComponentActivity() {
 
 private enum class Screen(val title: String) {
     MAIN("Уют"), HOME("Главный экран"), THEMES("Темы"), EDITOR("Свой стиль"), FONTS("Шрифты"), GESTURES("Жесты"), HIDDEN("Скрытые приложения"),
-    ICONS("Набор иконок"), LIVE("Живые плитки и разрешения"), SYSTEM("Системный шрифт и обои"), SMOOTH("Плавность и батарея"), ABOUT("О приложении")
+    ICONS("Набор иконок"), LIVE("Живые плитки и разрешения"), DIGITS("Цифры поверх приложений"), SYSTEM("Системный шрифт и обои"), SMOOTH("Плавность и батарея"), ABOUT("О приложении")
 }
 
 @Composable
@@ -139,6 +142,7 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
                 Screen.HIDDEN -> HiddenScreen()
                 Screen.ICONS -> IconPacksScreen()
                 Screen.LIVE -> LiveScreen()
+                Screen.DIGITS -> DigitsScreen()
                 Screen.SYSTEM -> SystemScreen()
                 Screen.SMOOTH -> SmoothScreen()
                 Screen.ABOUT -> AboutScreen()
@@ -193,6 +197,7 @@ private fun MainScreen(go: (Screen) -> Unit) {
         item { NavRow("Системный шрифт и обои", "Что можно поменять во всём телефоне") { go(Screen.SYSTEM) } }
         item { NavRow("Жесты", "Свайпы, двойное касание для блокировки") { go(Screen.GESTURES) } }
         item { NavRow("Живые плитки и разрешения", "Фото, календарь, счётчики уведомлений") { go(Screen.LIVE) } }
+        item { NavRow("Цифры поверх приложений", "Крупный чёрный счётчик времени. Выключен, пока сами не включите") { go(Screen.DIGITS) } }
         item { NavRow("Скрытые приложения") { go(Screen.HIDDEN) } }
         item { NavRow("Набор иконок") { go(Screen.ICONS) } }
         item { NavRow("Плавность и батарея", "Частота экрана, фоновая работа (${Device.oemName()})") { go(Screen.SMOOTH) } }
@@ -445,6 +450,79 @@ private fun copyDownscaled(ctx: android.content.Context, uri: Uri): File? = try 
     val b = ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = s }) }
     b?.let { File(ctx.filesDir, "tile_bg.jpg").also { f -> f.outputStream().use { os -> it.compress(Bitmap.CompressFormat.JPEG, 90, os) } } }
 } catch (_: Exception) { null }
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DigitsScreen() {
+    val ctx = LocalContext.current as ComponentActivity
+    val store = LauncherApp.instance.store
+    val cfg by store.config.collectAsStateCompat()
+    val tick = SettingsActivity.resumeTick
+    var explain by remember { mutableStateOf(false) }
+    var waitingForPermission by remember { mutableStateOf(false) }
+    LaunchedEffect(tick) {
+        if (!waitingForPermission) return@LaunchedEffect
+        waitingForPermission = false
+        if (android.provider.Settings.canDrawOverlays(ctx)) store.update { it.copy(digitOverlay = true) }
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { Section("Показ") {
+            SwitchRow("Показывать цифры", cfg.digitOverlay) { on ->
+                if (!on) {
+                    store.update { it.copy(digitOverlay = false) }
+                    return@SwitchRow
+                }
+                if (android.provider.Settings.canDrawOverlays(ctx)) store.update { it.copy(digitOverlay = true) }
+                else explain = true
+            }
+            Info("Выключено, пока сами не включите. Крупные чёрные цифры рисуются поверх других приложений и обновляются каждую секунду. Касания проходят сквозь них: кнопки под цифрами нажимаются как обычно.")
+            if (cfg.digitOverlay && !android.provider.Settings.canDrawOverlays(ctx)) {
+                Info("Разрешение «Поверх других приложений» не выдано, поэтому цифры сейчас не видны.")
+                Button(onClick = { explain = true }) { Text("Выдать разрешение") }
+            }
+        } }
+        item { Section("Что показывать") {
+            Chips(DigitMode.entries, cfg.digitMode, { it.title }) { v -> store.update { it.copy(digitMode = v) } }
+            Info(when (cfg.digitMode) {
+                DigitMode.APP -> "Сколько это приложение на экране в текущий заход: мм:сс, после часа — ч:мм:сс. Считается, пока включена служба специальных возможностей Уюта (та же, что для «Стоп-экрана»)."
+                DigitMode.CLOCK -> "Текущее время, с секундами."
+                DigitMode.TODAY -> "Сколько сегодня экран был включён, пока цифры включены. В полночь счётчик обнуляется."
+            })
+        } }
+        item { Section("Вид") {
+            Text("Положение", style = MaterialTheme.typography.labelLarge)
+            Chips(DigitAnchor.entries, cfg.digitAnchor, { it.title }) { v -> store.update { it.copy(digitAnchor = v) } }
+            Labeled("Размер: ${cfg.digitSizeSp} sp") {
+                Slider(cfg.digitSizeSp.toFloat(), { v -> store.update { it.copy(digitSizeSp = v.toInt()) } }, valueRange = 36f..140f)
+            }
+            Labeled("Непрозрачность: ${(cfg.digitAlpha * 100).toInt()}%") {
+                Slider(cfg.digitAlpha, { v -> store.update { it.copy(digitAlpha = v) } }, valueRange = 0.25f..1f)
+            }
+            SwitchRow("Тонкая белая обводка", cfg.digitOutline) { v -> store.update { it.copy(digitOutline = v) } }
+            Info("Цифры чёрные. Обводка помогает читать их на тёмном фоне.")
+        } }
+    }
+    if (explain) AlertDialog(
+        onDismissRequest = { explain = false },
+        title = { Text("Цифры поверх приложений") },
+        text = { Text("Чтобы показать цифры поверх других приложений, Android просит разрешение «Поверх других приложений». Без него переключатель останется выключенным. Цифры не перехватывают касания.") },
+        confirmButton = {
+            TextButton(onClick = {
+                explain = false
+                waitingForPermission = true
+                val intent = android.content.Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:${ctx.packageName}"),
+                )
+                runCatching { ctx.startActivity(intent) }.onFailure {
+                    waitingForPermission = false
+                    Toast.makeText(ctx, "Не удалось открыть разрешение", Toast.LENGTH_LONG).show()
+                }
+            }) { Text("Открыть разрешение") }
+        },
+        dismissButton = { TextButton(onClick = { explain = false }) { Text("Не сейчас") } },
+    )
+}
 
 @Composable
 private fun SystemScreen() {

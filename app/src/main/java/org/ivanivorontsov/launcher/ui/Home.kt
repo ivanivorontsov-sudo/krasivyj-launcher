@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -111,18 +112,27 @@ class WallImages(val full: ImageBitmap, val frosted: ImageBitmap, val tall: Bool
 private object WallCache {
     @Volatile var key: String? = null
     @Volatile var images: WallImages? = null
+    val epoch = MutableStateFlow(0)
+}
+
+/** Drop the cached bitmap so the next frame paints the theme that was just selected. */
+internal fun bumpWallpaperEpoch() {
+    WallCache.key = null
+    WallCache.images = null
+    WallCache.epoch.value = WallCache.epoch.value + 1
 }
 
 @Composable
 fun rememberWallpaper(spec: ThemeSpec, wPx: Int, hPx: Int, tilePhoto: String?): WallImages? {
     val ctx = LocalContext.current
+    val epoch by WallCache.epoch.collectAsStateCompat()
     val tall = spec.layout == HomeLayout.TILES && spec.tileFill == TileFill.TRANSPARENT
     val needs = Wallpapers.hasGenerated(spec) || tall
-    val key = "${spec.wallpaper}|${spec.wallpaperColors}|${spec.wallpaperDim}|${spec.id}|$wPx|$hPx|$tall|$tilePhoto|v2"
+    val key = "${spec.wallpaper}|${spec.wallpaperColors}|${spec.wallpaperDim}|${spec.id}|$wPx|$hPx|$tall|$tilePhoto|v3|$epoch"
     val cached = if (WallCache.key == key) WallCache.images else null
-    val img by produceState(cached, key, needs) {
+    val img by produceState(cached, key, needs, wPx, hPx) {
         if (!needs || wPx <= 0 || hPx <= 0) { value = null; return@produceState }
-        if (value != null) return@produceState
+        if (value != null && WallCache.key == key) return@produceState
         value = withContext(Dispatchers.Default) {
             val h = if (tall) (hPx * 1.45f).toInt() else hPx
             val file = java.io.File(ctx.cacheDir, "wall_" + Integer.toHexString(key.hashCode()) + ".jpg")
