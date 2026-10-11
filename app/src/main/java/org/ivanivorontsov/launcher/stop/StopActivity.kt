@@ -1,6 +1,8 @@
 package org.ivanivorontsov.launcher.stop
 
 import android.content.Intent
+import android.app.Activity
+import android.net.VpnService
 import android.os.Bundle
 import android.os.SystemClock
 import android.widget.Toast
@@ -63,6 +65,7 @@ import org.ivanivorontsov.launcher.stop.core.Passcode
 import org.ivanivorontsov.launcher.stop.core.Settings
 import org.ivanivorontsov.launcher.stop.core.SettingsPolicy
 import org.ivanivorontsov.launcher.ui.LauncherTheme
+import org.ivanivorontsov.launcher.ui.DnsVpnService
 import org.ivanivorontsov.launcher.ui.collectAsStateCompat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -130,41 +133,34 @@ private fun StopRoot(close: () -> Unit) {
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (page) {
-                Page.MAIN -> MainPage { page = it }
-                Page.BLOCKED -> AppChecklist(
-                    info = "Отмеченные приложения исчезают с главного экрана, из меню, поиска, папок и дока. Если открыть их иначе (уведомление, «Недавние», другое приложение), Уют сразу вернёт на главный экран.",
-                    selected = { StopGuard.store.blocked }, protectedPkgs = StopGuard.protectedPackages(),
-                ) { pkg, on -> StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg } }
-                Page.ALLOWED -> AppChecklist(
-                    info = "Во время паузы (лимит исчерпан или по расписанию) остаются только эти приложения, телефон и SMS. Темы и оформление не меняются.",
-                    selected = { StopGuard.store.settings.whitelist }, protectedPkgs = emptySet(),
-                ) { pkg, on ->
-                    val old = StopGuard.store.settings
-                    val next = old.copy(whitelist = if (on) old.whitelist + pkg else old.whitelist - pkg)
-                    StopGuard.update { settings = next }
-                }
-                Page.HISTORY -> HistoryPage()
-            }
-            // One session lock covers every subpage, not only the main page. Without this
-            // full-area barrier the app lists remained editable while the password was locked.
             if (!editingUnlocked) {
-                Box(
-                    Modifier.fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.82f))
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) { }
-                )
+                // Do not render settings underneath a translucent lock screen: no labels,
+                // values, toggles, or app lists are visible until the one-time password entry.
                 Column(
-                    Modifier.align(Alignment.TopCenter).padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    Modifier.fillMaxSize().padding(horizontal = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Настройки заблокированы", style = MaterialTheme.typography.titleMedium)
-                    Text("Нажмите «Снять блокировку», введите пароль один раз — и до выхода из настроек любые изменения будут применяться без дополнительных подтверждений.", style = MaterialTheme.typography.bodyMedium)
+                    Text("Настройки скрыты", style = MaterialTheme.typography.headlineSmall)
+                    Text("Введите пароль один раз. После разблокировки можно менять любые параметры без дополнительных паролей и подтверждений — до выхода из настроек.", style = MaterialTheme.typography.bodyMedium)
                     Button(onClick = { showPasswordPrompt = true }) { Text("Снять блокировку") }
+                }
+            } else {
+                when (page) {
+                    Page.MAIN -> MainPage { page = it }
+                    Page.BLOCKED -> AppChecklist(
+                        info = "Отмеченные приложения исчезают с главного экрана, из меню, поиска, папок и дока. Если открыть их иначе (уведомление, «Недавние», другое приложение), Уют сразу вернёт на главный экран.",
+                        selected = { StopGuard.store.blocked }, protectedPkgs = StopGuard.protectedPackages(),
+                    ) { pkg, on -> StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg } }
+                    Page.ALLOWED -> AppChecklist(
+                        info = "Во время паузы (лимит исчерпан или по расписанию) остаются только эти приложения, телефон и SMS. Темы и оформление не меняются.",
+                        selected = { StopGuard.store.settings.whitelist }, protectedPkgs = emptySet(),
+                    ) { pkg, on ->
+                        val old = StopGuard.store.settings
+                        val next = old.copy(whitelist = if (on) old.whitelist + pkg else old.whitelist - pkg)
+                        StopGuard.update { settings = next }
+                    }
+                    Page.HISTORY -> HistoryPage()
                 }
             }
         }
@@ -263,6 +259,29 @@ private fun MainPage(go: (Page) -> Unit) {
     fun upd(f: StopStore.() -> Unit) { StopGuard.update(f); ver++ }
     fun requestWeakening(title: String, action: () -> Unit) { action() }
     fun changeSettings(next: Settings, title: String) { upd { settings = next } }
+    var pendingDnsFamily by remember { mutableStateOf(false) }
+    val dnsPrefs = remember { ctx.getSharedPreferences(DnsVpnService.PREFS, android.content.Context.MODE_PRIVATE) }
+    var dnsEnabled by remember(tick) { mutableStateOf(dnsPrefs.getBoolean("enabled", false)) }
+    val dnsPermission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val intent = Intent(ctx, DnsVpnService::class.java).putExtra(DnsVpnService.EXTRA_FAMILY, pendingDnsFamily)
+            androidx.core.content.ContextCompat.startForegroundService(ctx, intent)
+            dnsEnabled = true
+        }
+    }
+    fun connectDns(family: Boolean) {
+        pendingDnsFamily = family
+        val permissionIntent = VpnService.prepare(ctx)
+        if (permissionIntent == null) {
+            androidx.core.content.ContextCompat.startForegroundService(ctx, Intent(ctx, DnsVpnService::class.java).putExtra(DnsVpnService.EXTRA_FAMILY, family))
+            dnsEnabled = true
+        } else dnsPermission.launch(permissionIntent)
+    }
+    fun disconnectDns() {
+        ctx.startService(Intent(ctx, DnsVpnService::class.java).setAction(DnsVpnService.ACTION_STOP))
+        dnsEnabled = false
+    }
+
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val r = runCatching {
@@ -300,6 +319,16 @@ private fun MainPage(go: (Page) -> Unit) {
         item { Section("Приложения") {
             Row(Modifier.fillMaxWidth().clickable { go(Page.BLOCKED) }.padding(vertical = 10.dp)) { Text("Запрещённые приложения: ${store.blocked.size}", style = MaterialTheme.typography.bodyLarge) }
             Row(Modifier.fillMaxWidth().clickable { go(Page.ALLOWED) }.padding(vertical = 10.dp)) { Text("Разрешено во время паузы: ${s.whitelist.size}", style = MaterialTheme.typography.bodyLarge) }
+        } }
+        item { Section("DNS и защита сайтов") {
+            Info("Уют создаёт локальный DNS-only VPN, как приложения-переключатели DNS. Обычный интернет-трафик не идёт через VPN; DNS-запросы идут к выбранному AdGuard DNS.")
+            Info(if (dnsEnabled) "DNS включён. Значок VPN Android должен быть виден в строке состояния." else "DNS выключен.")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { connectDns(false) }) { Text("AdGuard DNS") }
+                OutlinedButton(onClick = { connectDns(true) }) { Text("Family DNS") }
+            }
+            if (dnsEnabled) OutlinedButton(onClick = { disconnectDns() }) { Text("Выключить DNS") }
+            Info("Обычный режим: 94.140.14.14. Семейный фильтр: 94.140.14.15. Это DNS по UDP/53, не DNS-over-HTTPS; приложения со встроенным DNS могут обходить системный резолвер.")
         } }
         item { Section("Дневной лимит") {
             SwitchRow("Лимит экранного времени", s.limitEnabled) { v ->
