@@ -101,27 +101,42 @@ private enum class Page(val title: String) { MAIN("Стоп-экран"), BLOCKE
 private fun StopRoot(close: () -> Unit) {
     val store = StopGuard.store
     var unlocked by remember { mutableStateOf(!store.hasPassword || SystemClock.elapsedRealtime() < StopActivity.unlockedUntil) }
+    var showPasswordPrompt by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf(Page.MAIN) }
-    var pendingWeakening by remember { mutableStateOf<PendingWeakening?>(null) }
     val resumeTick = StopActivity.tick
     LaunchedEffect(resumeTick) {
-        if (store.hasPassword && SystemClock.elapsedRealtime() >= StopActivity.unlockedUntil) unlocked = false
+        if (store.hasPassword && SystemClock.elapsedRealtime() >= StopActivity.unlockedUntil) {
+            unlocked = false
+            showPasswordPrompt = false
+        }
     }
-    BackHandler { if (page == Page.MAIN || !unlocked) close() else page = Page.MAIN }
+    BackHandler {
+        if (!unlocked && showPasswordPrompt) showPasswordPrompt = false
+        else if (page == Page.MAIN || !unlocked) close()
+        else page = Page.MAIN
+    }
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { if (page == Page.MAIN || !unlocked) close() else page = Page.MAIN }.padding(horizontal = 14.dp))
+            Text("‹", fontSize = 34.sp, modifier = Modifier.clickable {
+                if (!unlocked && showPasswordPrompt) showPasswordPrompt = false
+                else if (page == Page.MAIN || !unlocked) close()
+                else page = Page.MAIN
+            }.padding(horizontal = 14.dp))
             Text(page.title, style = MaterialTheme.typography.headlineSmall)
         }
-        if (!unlocked) PasswordGate { StopActivity.unlockedUntil = SystemClock.elapsedRealtime() + 10 * 60_000L; unlocked = true }
-        else when (page) {
+        if (!unlocked) {
+            if (showPasswordPrompt) PasswordGate {
+                StopActivity.unlockedUntil = Long.MAX_VALUE
+                unlocked = true
+                showPasswordPrompt = false
+            } else LockedSettingsGate { showPasswordPrompt = true }
+        } else when (page) {
             Page.MAIN -> MainPage { page = it }
             Page.BLOCKED -> AppChecklist(
                 info = "Отмеченные приложения исчезают с главного экрана, из меню, поиска, папок и дока. Если открыть их иначе (уведомление, «Недавние», другое приложение), Уют сразу вернёт на главный экран.",
                 selected = { StopGuard.store.blocked }, protectedPkgs = StopGuard.protectedPackages(),
             ) { pkg, on ->
-                val apply = { StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg } }
-                if (on) apply() else pendingWeakening = PendingWeakening("Разрешить запрещённое приложение?") { apply() }
+                StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg }
             }
             Page.ALLOWED -> AppChecklist(
                 info = "Во время паузы (лимит исчерпан или по расписанию) остаются только эти приложения, телефон и SMS. Темы и оформление не меняются.",
@@ -129,17 +144,19 @@ private fun StopRoot(close: () -> Unit) {
             ) { pkg, on ->
                 val old = StopGuard.store.settings
                 val next = old.copy(whitelist = if (on) old.whitelist + pkg else old.whitelist - pkg)
-                val apply = { StopGuard.update { settings = next } }
-                if (SettingsPolicy.isLoosening(old, next)) pendingWeakening = PendingWeakening("Разрешить приложение во время паузы?") { apply() }
-                else apply()
+                StopGuard.update { settings = next }
             }
             Page.HISTORY -> HistoryPage()
         }
     }
-    pendingWeakening?.let { pending ->
-        WeakeningDialog(title = pending.title, store = store,
-            onCancel = { pendingWeakening = null },
-            onConfirm = { pending.action(); pendingWeakening = null })
+}
+
+@Composable
+private fun LockedSettingsGate(onUnlock: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Настройки «Стоп-экрана» заблокированы.", style = MaterialTheme.typography.bodyLarge)
+        Text("Нажмите кнопку, когда захотите изменить настройки. Пароль потребуется ввести только один раз за этот сеанс.", style = MaterialTheme.typography.bodyMedium)
+        Button(onClick = onUnlock) { Text("Снять блокировку") }
     }
 }
 
@@ -150,7 +167,7 @@ private fun PasswordGate(onOk: () -> Unit) {
     var msg by remember { mutableStateOf("") }
     var recovery by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(if (recovery) "Введите код восстановления — пароль будет удалён." else "Настройки «Стоп-экрана» защищены паролем.", style = MaterialTheme.typography.bodyLarge)
+        Text(if (recovery) "Введите код восстановления — пароль будет удалён." else "Введите пароль, чтобы снять блокировку настроек.", style = MaterialTheme.typography.bodyLarge)
         OutlinedTextField(pw, { pw = it }, singleLine = true, label = { Text(if (recovery) "Код восстановления" else "Пароль") },
             visualTransformation = if (recovery) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = if (recovery) KeyboardType.Ascii else KeyboardType.Password), modifier = Modifier.fillMaxWidth())
@@ -204,15 +221,9 @@ private fun MainPage(go: (Page) -> Unit) {
     }
     var recoveryCode by remember { mutableStateOf<String?>(null) }
     var setPw by remember { mutableStateOf(false) }
-    var exitChoice by remember { mutableStateOf<ExitChoice?>(null) }
-    var pendingWeakening by remember { mutableStateOf<PendingWeakening?>(null) }
     fun upd(f: StopStore.() -> Unit) { StopGuard.update(f); ver++ }
-    fun requestWeakening(title: String, action: () -> Unit) { pendingWeakening = PendingWeakening(title, action) }
-    fun changeSettings(next: Settings, title: String) {
-        val old = store.settings
-        if (SettingsPolicy.isLoosening(old, next)) requestWeakening(title) { upd { settings = next } }
-        else upd { settings = next }
-    }
+    fun requestWeakening(title: String, action: () -> Unit) { action() }
+    fun changeSettings(next: Settings, title: String) { upd { settings = next } }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val r = runCatching {
@@ -243,9 +254,9 @@ private fun MainPage(go: (Page) -> Unit) {
         if (view.paused) item { Section("Выйти из паузы") {
             Info("После подтверждения доступ вернётся на выбранное время. Каждый выход записывается в историю.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(15, 30, 60).forEach { m -> OutlinedButton(onClick = { exitChoice = ExitChoice.Extra(m * 60_000L) }) { Text("+$m мин") } }
+                listOf(15, 30, 60).forEach { m -> OutlinedButton(onClick = { StopGuard.grantExit(ExitChoice.Extra(m * 60_000L)); ver++ }) { Text("+$m мин") } }
             }
-            OutlinedButton(onClick = { exitChoice = ExitChoice.RestOfDay }) { Text("До конца суток") }
+            OutlinedButton(onClick = { StopGuard.grantExit(ExitChoice.RestOfDay); ver++ }) { Text("До конца суток") }
         } }
         item { Section("Приложения") {
             Row(Modifier.fillMaxWidth().clickable { go(Page.BLOCKED) }.padding(vertical = 10.dp)) { Text("Запрещённые приложения: ${store.blocked.size}", style = MaterialTheme.typography.bodyLarge) }
@@ -339,12 +350,6 @@ private fun MainPage(go: (Page) -> Unit) {
         item { Section("История") { Row(Modifier.fillMaxWidth().clickable { go(Page.HISTORY) }.padding(vertical = 10.dp)) { Text("Открыть историю (${store.history.size})") } } }
     }
 
-    pendingWeakening?.let { pending ->
-        WeakeningDialog(title = pending.title, store = store,
-            onCancel = { pendingWeakening = null },
-            onConfirm = { pending.action(); pendingWeakening = null })
-    }
-
     if (setPw) PasswordDialog(onDismiss = { setPw = false }) { pw ->
         setPw = false
         recoveryCode = store.setPassword(pw); store.log(HistoryEntry.SETTINGS, "Пароль задан"); ver++
@@ -354,7 +359,6 @@ private fun MainPage(go: (Page) -> Unit) {
             title = { Text("Код восстановления") },
             text = { Column { Text(code, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.padding(4.dp)); Text("Покажется только один раз. Он сбрасывает забытый пароль — спрячьте его.") } })
     }
-    exitChoice?.let { c -> HoldConfirm(onCancel = { exitChoice = null }) { exitChoice = null; StopGuard.grantExit(c); ver++ } }
 }
 
 private data class PendingWeakening(val title: String, val action: () -> Unit)
