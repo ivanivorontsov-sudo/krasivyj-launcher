@@ -11,8 +11,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -86,12 +88,12 @@ class StopActivity : ComponentActivity() {
     }
 
     override fun onResume() { super.onResume(); tick++ ; StopGuard.tick() }
-    /** Leaving the screen locks it again (the password is asked next time). */
-    override fun onStop() { super.onStop(); if (!isChangingConfigurations) unlockedUntil = 0L }
+    /** Leaving Stop Screen settings ends the one-password editing session. */
+    override fun onStop() { super.onStop(); if (!isChangingConfigurations) editingUnlocked = false }
 
     companion object {
         var tick by mutableIntStateOf(0)
-        @Volatile var unlockedUntil = 0L
+        @Volatile var editingUnlocked = false
     }
 }
 
@@ -100,44 +102,60 @@ private enum class Page(val title: String) { MAIN("Стоп-экран"), BLOCKE
 @Composable
 private fun StopRoot(close: () -> Unit) {
     val store = StopGuard.store
-    var unlocked by remember { mutableStateOf(!store.hasPassword || SystemClock.elapsedRealtime() < StopActivity.unlockedUntil) }
+    var editingUnlocked by remember { mutableStateOf(!store.hasPassword || StopActivity.editingUnlocked) }
     var showPasswordPrompt by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf(Page.MAIN) }
     val resumeTick = StopActivity.tick
     LaunchedEffect(resumeTick) {
-        if (store.hasPassword && SystemClock.elapsedRealtime() >= StopActivity.unlockedUntil) {
-            unlocked = false
-            showPasswordPrompt = false
-        }
+        editingUnlocked = !store.hasPassword || StopActivity.editingUnlocked
+        showPasswordPrompt = false
     }
     BackHandler {
-        if (!unlocked && showPasswordPrompt) showPasswordPrompt = false
-        else if (page == Page.MAIN || !unlocked) close()
+        if (showPasswordPrompt) showPasswordPrompt = false
+        else if (page == Page.MAIN) close()
         else page = Page.MAIN
     }
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("‹", fontSize = 34.sp, modifier = Modifier.clickable {
-                if (!unlocked && showPasswordPrompt) showPasswordPrompt = false
-                else if (page == Page.MAIN || !unlocked) close()
+                if (showPasswordPrompt) showPasswordPrompt = false
+                else if (page == Page.MAIN) close()
                 else page = Page.MAIN
             }.padding(horizontal = 14.dp))
-            Text(page.title, style = MaterialTheme.typography.headlineSmall)
+            Text(page.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            if (!editingUnlocked && store.hasPassword) {
+                Button(onClick = { showPasswordPrompt = true }) { Text("Снять блокировку") }
+            } else if (editingUnlocked && store.hasPassword) {
+                Text("Разблокировано ✓", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
         }
-        if (!unlocked) {
-            if (showPasswordPrompt) PasswordGate {
-                StopActivity.unlockedUntil = Long.MAX_VALUE
-                unlocked = true
-                showPasswordPrompt = false
-            } else LockedSettingsGate { showPasswordPrompt = true }
-        } else when (page) {
-            Page.MAIN -> MainPage { page = it }
+        when (page) {
+            Page.MAIN -> Box(Modifier.weight(1f).fillMaxWidth()) {
+                MainPage { page = it }
+                if (!editingUnlocked) {
+                    Box(
+                        Modifier.fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.76f))
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null
+                            ) { }
+                    )
+                    Column(
+                        Modifier.align(Alignment.TopCenter).padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Настройки доступны для просмотра", style = MaterialTheme.typography.titleMedium)
+                        Text("Нажмите «Снять блокировку», введите пароль один раз — и до выхода из настроек любые изменения будут применяться без дополнительных подтверждений.", style = MaterialTheme.typography.bodyMedium)
+                        Button(onClick = { showPasswordPrompt = true }) { Text("Снять блокировку") }
+                    }
+                }
+            }
             Page.BLOCKED -> AppChecklist(
                 info = "Отмеченные приложения исчезают с главного экрана, из меню, поиска, папок и дока. Если открыть их иначе (уведомление, «Недавние», другое приложение), Уют сразу вернёт на главный экран.",
                 selected = { StopGuard.store.blocked }, protectedPkgs = StopGuard.protectedPackages(),
-            ) { pkg, on ->
-                StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg }
-            }
+            ) { pkg, on -> StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg } }
             Page.ALLOWED -> AppChecklist(
                 info = "Во время паузы (лимит исчерпан или по расписанию) остаются только эти приложения, телефон и SMS. Темы и оформление не меняются.",
                 selected = { StopGuard.store.settings.whitelist }, protectedPkgs = emptySet(),
@@ -149,40 +167,59 @@ private fun StopRoot(close: () -> Unit) {
             Page.HISTORY -> HistoryPage()
         }
     }
+    if (showPasswordPrompt) UnlockSettingsDialog(
+        store = store,
+        onDismiss = { showPasswordPrompt = false },
+        onUnlocked = {
+            StopActivity.editingUnlocked = true
+            editingUnlocked = true
+            store.log(HistoryEntry.SETTINGS, "Блокировка редактирования снята на время сеанса")
+            showPasswordPrompt = false
+        }
+    )
 }
 
 @Composable
-private fun LockedSettingsGate(onUnlock: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Настройки «Стоп-экрана» заблокированы.", style = MaterialTheme.typography.bodyLarge)
-        Text("Нажмите кнопку, когда захотите изменить настройки. Пароль потребуется ввести только один раз за этот сеанс.", style = MaterialTheme.typography.bodyMedium)
-        Button(onClick = onUnlock) { Text("Снять блокировку") }
-    }
-}
-
-@Composable
-private fun PasswordGate(onOk: () -> Unit) {
-    val store = StopGuard.store
+private fun UnlockSettingsDialog(store: StopStore, onDismiss: () -> Unit, onUnlocked: () -> Unit) {
     var pw by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
     var recovery by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(if (recovery) "Введите код восстановления — пароль будет удалён." else "Введите пароль, чтобы снять блокировку настроек.", style = MaterialTheme.typography.bodyLarge)
-        OutlinedTextField(pw, { pw = it }, singleLine = true, label = { Text(if (recovery) "Код восстановления" else "Пароль") },
-            visualTransformation = if (recovery) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = if (recovery) KeyboardType.Ascii else KeyboardType.Password), modifier = Modifier.fillMaxWidth())
-        Button(onClick = {
-            val r = if (recovery) store.recover(pw) else store.check(pw)
-            when (r) {
-                StopStore.Check.Ok -> { if (recovery) store.log(HistoryEntry.SETTINGS, "Пароль сброшен кодом восстановления"); onOk() }
-                StopStore.Check.Wrong -> msg = "Неверно"
-                is StopStore.Check.Wait -> msg = "Слишком много попыток. Подождите ${(r.ms + 999) / 1000} с"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Снять блокировку") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(if (recovery) "Введите код восстановления. Пароль будет сброшен." else "Введите пароль один раз. До выхода из настроек любые изменения будут применяться без дополнительных паролей и подтверждений.")
+                OutlinedTextField(
+                    value = pw,
+                    onValueChange = { pw = it; msg = "" },
+                    singleLine = true,
+                    label = { Text(if (recovery) "Код восстановления" else "Пароль") },
+                    visualTransformation = if (recovery) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = if (recovery) KeyboardType.Ascii else KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (msg.isNotEmpty()) Text(msg, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { recovery = !recovery; msg = ""; pw = "" }) {
+                    Text(if (recovery) "Ввести пароль" else "Забыли пароль? Код восстановления")
+                }
             }
-            pw = ""
-        }) { Text("Открыть") }
-        if (msg.isNotEmpty()) Text(msg, color = MaterialTheme.colorScheme.error)
-        TextButton(onClick = { recovery = !recovery; msg = "" }) { Text(if (recovery) "Ввести пароль" else "Забыли пароль? Код восстановления") }
-    }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                when (val result = if (recovery) store.recover(pw) else store.check(pw)) {
+                    StopStore.Check.Ok -> {
+                        if (recovery) store.log(HistoryEntry.SETTINGS, "Пароль сброшен кодом восстановления")
+                        onUnlocked()
+                    }
+                    StopStore.Check.Wrong -> msg = "Неверный пароль или код"
+                    is StopStore.Check.Wait -> msg = "Слишком много попыток. Подождите ${(result.ms + 999) / 1000} с"
+                }
+                pw = ""
+            }) { Text(if (recovery) "Сбросить и снять блокировку" else "Снять блокировку") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
+    )
 }
 
 @Composable
