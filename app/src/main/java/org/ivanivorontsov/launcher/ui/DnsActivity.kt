@@ -31,7 +31,7 @@ class DnsActivity : ComponentActivity() {
                 OutlinedButton(onClick = { copyHost("family.adguard-dns.com") }, modifier = Modifier.fillMaxWidth()) { Text("Скопировать AdGuard Family DNS") }
                 OutlinedButton(onClick = { copyHost("dns.adguard-dns.com") }, modifier = Modifier.fillMaxWidth()) { Text("Скопировать AdGuard DNS") }
                 Button(onClick = {
-                    try { startActivity(Intent(if (Build.VERSION.SDK_INT >= 28) Settings.ACTION_PRIVATE_DNS_SETTINGS else Settings.ACTION_WIRELESS_SETTINGS)) }
+                    try { startActivity(Intent(if (Build.VERSION.SDK_INT >= 28) "android.settings.PRIVATE_DNS_SETTINGS" else Settings.ACTION_WIRELESS_SETTINGS)) }
                     catch (_: Exception) { startActivity(Intent(Settings.ACTION_SETTINGS)) }
                 }, modifier = Modifier.fillMaxWidth()) { Text("Открыть настройки Android") }
             }
