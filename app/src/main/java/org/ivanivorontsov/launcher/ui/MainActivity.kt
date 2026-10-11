@@ -155,18 +155,18 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val gate = visible
         val key = ui.returning?.key
         ui.scope.launch {
+            // Some realme UI builds do not deliver the focus callback promptly. Never let that
+            // callback or an OEM-specific sleep hold the Home gesture on wallpaper for a second.
             if (window.decorView.hasWindowFocus()) gate?.complete(Unit)
-            if (gate != null) kotlinx.coroutines.withTimeoutOrNull(900) { gate.await() }
-            // realme UI / ColorOS can briefly expose the home activity before the home surface
-            // has actually replaced the wallpaper. Starting here made the icon twitch while the
-            // return overlay had no final target. Give Compose one short layout hand-off on those ROMs.
-            if (Device.oem == Device.Oem.REALME_OPPO_ONEPLUS) kotlinx.coroutines.delay(650)
+            if (gate != null) kotlinx.coroutines.withTimeoutOrNull(100) { gate.await() }
             val returnKey = ui.returning?.key
             if (returnKey != null) {
                 val theme = app.store.theme.value
                 val l = app.store.config.value.layoutFor(theme.id)
                 val candidates = listOfNotNull(returnKey, l.folderOf(returnKey), "t_$returnKey")
-                for (attempt in 0 until 18) {
+                // Use the last known icon bounds quickly; long polling made the flight start abruptly
+                // after the launcher had already appeared. The drawing code can use its launch-time fallback.
+                for (attempt in 0 until 3) {
                     val ready = candidates.any { k ->
                         val b = ui.iconBounds[k]?.bounds()
                         b != null && b.width >= 8f && b.height >= 8f && b.center.x >= 0f && b.center.y >= 0f
