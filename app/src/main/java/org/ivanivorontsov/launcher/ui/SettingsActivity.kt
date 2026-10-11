@@ -184,7 +184,6 @@ private fun MainScreen(go: (Screen) -> Unit) {
         item { NavRow("Все темы", "${Presets.all.size} готовых тем с живым предпросмотром") { go(Screen.THEMES) } }
         item { NavRow("Главный экран", "Перетаскивание и папки, эффекты перелистывания, новые приложения, анимация возврата к иконке") { go(Screen.HOME) } }
         item { NavRow("Стоп-экран", "Лимит экранного времени, расписание, запрещённые приложения, пароль") { ctx.startActivity(android.content.Intent(ctx, org.ivanivorontsov.launcher.stop.StopActivity::class.java)) } }
-        item { NavRow("DNS и защита сайтов", "Настройка системного Private DNS без отдельного VPN-приложения") { ctx.startActivity(android.content.Intent(ctx, DnsActivity::class.java)) } }
         item { NavRow("Свой стиль", "Шрифты, цвета, форма иконок, сетка, анимации, обои") { go(Screen.EDITOR) } }
         item { NavRow("Шрифты", "${org.ivanivorontsov.launcher.ui.FontCatalog.all.size} шрифтов с кириллицей, в том числе рукописные") { go(Screen.FONTS) } }
         item { NavRow("Системный шрифт и обои", "Что можно поменять во всём телефоне") { go(Screen.SYSTEM) } }
