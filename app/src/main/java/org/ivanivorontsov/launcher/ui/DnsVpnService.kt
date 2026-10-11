@@ -54,6 +54,7 @@ class DnsVpnService : VpnService() {
                 .addDnsServer(VIRTUAL_DNS)
                 .addRoute(VIRTUAL_DNS, 32)
             tun = builder.establish() ?: throw IllegalStateException("VPN permission was not granted")
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, true).putBoolean(KEY_ERROR, false).apply()
             val input = FileInputStream(tun!!.fileDescriptor)
             val output = FileOutputStream(tun!!.fileDescriptor)
             val packet = ByteArray(32767)
@@ -95,6 +96,7 @@ class DnsVpnService : VpnService() {
         } finally {
             try { tun?.close() } catch (_: Exception) {}
             tun = null
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, false).apply()
             running.set(false)
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -176,6 +178,7 @@ class DnsVpnService : VpnService() {
         const val EXTRA_FAMILY = "family_dns"
         const val PREFS = "uyut_dns"
         const val KEY_ERROR = "dns_error"
+        const val KEY_ENABLED = "enabled"
         private const val CHANNEL = "uyut_dns_vpn"
         private const val NOTIFICATION_ID = 7042
         private const val VIRTUAL_DNS = "10.111.0.1"
