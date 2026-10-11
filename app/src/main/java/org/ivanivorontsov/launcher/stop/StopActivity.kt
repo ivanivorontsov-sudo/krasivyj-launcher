@@ -129,42 +129,44 @@ private fun StopRoot(close: () -> Unit) {
                 Text("Разблокировано ✓", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
         }
-        when (page) {
-            Page.MAIN -> Box(Modifier.weight(1f).fillMaxWidth()) {
-                MainPage { page = it }
-                if (!editingUnlocked) {
-                    Box(
-                        Modifier.fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.76f))
-                            .clickable(
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                indication = null
-                            ) { }
-                    )
-                    Column(
-                        Modifier.align(Alignment.TopCenter).padding(24.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Настройки доступны для просмотра", style = MaterialTheme.typography.titleMedium)
-                        Text("Нажмите «Снять блокировку», введите пароль один раз — и до выхода из настроек любые изменения будут применяться без дополнительных подтверждений.", style = MaterialTheme.typography.bodyMedium)
-                        Button(onClick = { showPasswordPrompt = true }) { Text("Снять блокировку") }
-                    }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when (page) {
+                Page.MAIN -> MainPage { page = it }
+                Page.BLOCKED -> AppChecklist(
+                    info = "Отмеченные приложения исчезают с главного экрана, из меню, поиска, папок и дока. Если открыть их иначе (уведомление, «Недавние», другое приложение), Уют сразу вернёт на главный экран.",
+                    selected = { StopGuard.store.blocked }, protectedPkgs = StopGuard.protectedPackages(),
+                ) { pkg, on -> StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg } }
+                Page.ALLOWED -> AppChecklist(
+                    info = "Во время паузы (лимит исчерпан или по расписанию) остаются только эти приложения, телефон и SMS. Темы и оформление не меняются.",
+                    selected = { StopGuard.store.settings.whitelist }, protectedPkgs = emptySet(),
+                ) { pkg, on ->
+                    val old = StopGuard.store.settings
+                    val next = old.copy(whitelist = if (on) old.whitelist + pkg else old.whitelist - pkg)
+                    StopGuard.update { settings = next }
+                }
+                Page.HISTORY -> HistoryPage()
+            }
+            // One session lock covers every subpage, not only the main page. Without this
+            // full-area barrier the app lists remained editable while the password was locked.
+            if (!editingUnlocked) {
+                Box(
+                    Modifier.fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.82f))
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { }
+                )
+                Column(
+                    Modifier.align(Alignment.TopCenter).padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Настройки заблокированы", style = MaterialTheme.typography.titleMedium)
+                    Text("Нажмите «Снять блокировку», введите пароль один раз — и до выхода из настроек любые изменения будут применяться без дополнительных подтверждений.", style = MaterialTheme.typography.bodyMedium)
+                    Button(onClick = { showPasswordPrompt = true }) { Text("Снять блокировку") }
                 }
             }
-            Page.BLOCKED -> AppChecklist(
-                info = "Отмеченные приложения исчезают с главного экрана, из меню, поиска, папок и дока. Если открыть их иначе (уведомление, «Недавние», другое приложение), Уют сразу вернёт на главный экран.",
-                selected = { StopGuard.store.blocked }, protectedPkgs = StopGuard.protectedPackages(),
-            ) { pkg, on -> StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg } }
-            Page.ALLOWED -> AppChecklist(
-                info = "Во время паузы (лимит исчерпан или по расписанию) остаются только эти приложения, телефон и SMS. Темы и оформление не меняются.",
-                selected = { StopGuard.store.settings.whitelist }, protectedPkgs = emptySet(),
-            ) { pkg, on ->
-                val old = StopGuard.store.settings
-                val next = old.copy(whitelist = if (on) old.whitelist + pkg else old.whitelist - pkg)
-                StopGuard.update { settings = next }
-            }
-            Page.HISTORY -> HistoryPage()
         }
     }
     if (showPasswordPrompt) UnlockSettingsDialog(
