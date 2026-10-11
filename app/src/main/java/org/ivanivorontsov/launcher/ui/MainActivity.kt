@@ -155,14 +155,15 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val gate = visible
         val key = ui.returning?.key
         ui.scope.launch {
+            // onStop schedules a reset on the same scope; on fast realme/ColorOS task
+            // transitions that reset can race with onResume and leave progress already at 1.
+            // Reset here, in the animation coroutine, so every return starts at frame zero.
+            ui.returnProgress.snapTo(0f)
+            ui.homeZoom.snapTo(0f)
             if (window.decorView.hasWindowFocus()) gate?.complete(Unit)
-            // Start the in-launcher flight promptly. Waiting almost a second for focus plus
-            // another 650 ms on realme left only the wallpaper visible before the icon suddenly flew in.
-            // ReturnOverlay already has the launch-time icon rectangle as a stable fallback while Compose
-            // refreshes the live bounds, so we only allow a very short window hand-off here.
-            // Don't leave the wallpaper as the only visible content while waiting for OEM focus callbacks.
-            // ReturnOverlay has a launch-time rectangle fallback, so one frame is enough to hand off to Compose.
-            if (gate != null) kotlinx.coroutines.withTimeoutOrNull(16) { gate.await() }
+            // Do not wait for the OEM's focus callback: the overlay is already composed with
+            // the launch-time icon bounds fallback. The old focus hand-off left only wallpaper
+            // visible while ColorOS delayed the launcher surface.
             kotlinx.coroutines.coroutineScope {
                 launch {
                     ui.homeZoom.animateTo(
