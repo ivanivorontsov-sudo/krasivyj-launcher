@@ -39,12 +39,21 @@ class LockService : AccessibilityService() {
             return
         }
         val v = StopGuard.view.value
-        if (v.enabled && StopGuard.store.settings.strictMode && pkg in GUARDED_PKGS && SystemClock.uptimeMillis() > grantUntil) {
+        if (v.enabled && StopGuard.store.settings.strictMode && pkg in GUARDED_PKGS) {
             val now = SystemClock.uptimeMillis()
-            if (!isState && now - lastScan < 350) return
+            if (!isState && now - lastScan < 250) return
             lastScan = now
             val root = runCatching { rootInActiveWindow }.getOrNull() ?: return
-            if (isSensitive(root)) {
+
+            // Device Admin cannot veto deactivation by itself. In strict mode, immediately
+            // leave its management page, even during grace periods for other permissions.
+            if (isDeviceAdminManagement(root)) {
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                StopGuard.store.log(org.ivanivorontsov.launcher.stop.core.HistoryEntry.TAMPER, "Попытка открыть управление администратором устройства")
+                return
+            }
+
+            if (now > grantUntil && isSensitive(root)) {
                 performGlobalAction(GLOBAL_ACTION_BACK)
                 StopGuard.store.log(org.ivanivorontsov.launcher.stop.core.HistoryEntry.TAMPER, "Попытка открыть защищённую страницу настроек")
             }
@@ -56,6 +65,15 @@ class LockService : AccessibilityService() {
         var hit = false
         walk(root, 0) { t ->
             if (t.contains(label, ignoreCase = true) || t.contains("Стоп-экран", ignoreCase = true) || DEV_TITLES.any { t.equals(it, ignoreCase = true) }) hit = true
+            hit
+        }
+        return hit
+    }
+
+    private fun isDeviceAdminManagement(root: AccessibilityNodeInfo): Boolean {
+        var hit = false
+        walk(root, 0) { t ->
+            if (DEVICE_ADMIN_TITLES.any { t.contains(it, ignoreCase = true) }) hit = true
             hit
         }
         return hit
@@ -87,5 +105,10 @@ class LockService : AccessibilityService() {
             "com.oplus.securitypermission", "com.coloros.securitypermission",
         )
         val DEV_TITLES = listOf("Для разработчиков", "Параметры разработчика", "Developer options", "Режим разработчика")
+        val DEVICE_ADMIN_TITLES = listOf(
+            "Администраторы устройства", "Администратор устройства", "Администрирование устройства",
+            "Приложения-администраторы", "Управление администраторами", "Администраторы",
+            "Device admin apps", "Device administrators", "Device admin", "Manage device admins",
+        )
     }
 }
