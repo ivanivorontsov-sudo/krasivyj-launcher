@@ -22,3 +22,5 @@ app/build/
 /build.log
 /emu.log
 /screens/
+modules/*/build/
+.kotlin/

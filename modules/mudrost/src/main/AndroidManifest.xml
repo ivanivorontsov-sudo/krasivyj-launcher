@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="org.ivanivorontsov.mudrost.MainActivity"
+            android:exported="true"
+            android:label="@string/mod_mudrost_name"
+            android:icon="@mipmap/mod_mudrost_icon"
+            android:theme="@style/Theme.Mudrost"
+            android:taskAffinity="org.ivanivorontsov.launcher.mod.mudrost"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+    </application>
+</manifest>

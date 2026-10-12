@@ -137,7 +137,7 @@ class SettingsActivity : ComponentActivity() {
 }
 
 private enum class Screen(val title: String) {
-    MAIN("Уют"), HOME("Главный экран"), THEMES("Темы"), EDITOR("Свой стиль"), FONTS("Шрифты"), GESTURES("Жесты"), HIDDEN("Скрытые приложения"),
+    MAIN("СуперСмарт"), HOME("Главный экран"), THEMES("Темы"), EDITOR("Свой стиль"), FONTS("Шрифты"), GESTURES("Жесты"), HIDDEN("Скрытые приложения"),
     ICONS("Набор иконок"), LIVE("Живые плитки и разрешения"), DIGITS("Цифры поверх приложений"), SYSTEM("Системный шрифт и обои"), SMOOTH("Плавность и батарея"), ABOUT("О приложении")
 }
 
@@ -199,9 +199,9 @@ private fun MainScreen(go: (Screen) -> Unit) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item {
             Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)).padding(16.dp)) {
-                Text(if (isDefault) "Уют — ваш лаунчер ✓" else "Сделайте Уют лаунчером по умолчанию", style = MaterialTheme.typography.titleMedium)
-                Info(if (isDefault) "Ярлыки приложений, жесты и кнопка «Домой» работают." else "Тогда кнопка «Домой» откроет Уют, и заработают ярлыки приложений по долгому нажатию.")
-                if (!isDefault) Button(onClick = { Device.openDefaultLauncherChooser(ctx) }) { Text("Выбрать Уют") }
+                Text(if (isDefault) "СуперСмарт — ваш лаунчер ✓" else "Сделайте СуперСмарт лаунчером по умолчанию", style = MaterialTheme.typography.titleMedium)
+                Info(if (isDefault) "Ярлыки приложений, жесты и кнопка «Домой» работают." else "Тогда кнопка «Домой» откроет СуперСмарт, и заработают ярлыки приложений по долгому нажатию.")
+                if (!isDefault) Button(onClick = { Device.openDefaultLauncherChooser(ctx) }) { Text("Выбрать СуперСмарт") }
             }
         }
         item {
@@ -380,8 +380,8 @@ private fun GesturesScreen() {
         item { Section("Свайп вниз") { Chips(listOf(GestureAction.NOTIFICATIONS, GestureAction.DRAWER, GestureAction.SETTINGS, GestureAction.NONE), cfg.swipeDown, { it.title }) { v -> store.update { it.copy(swipeDown = v) } } } }
         item { Section("Двойное касание") { Chips(listOf(GestureAction.LOCK, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.doubleTap, { it.title }) { v -> store.update { it.copy(doubleTap = v) } } } }
         item { Section("Блокировка двойным касанием") {
-            Info(if (lockOn) "Служба включена ✓" else "Для блокировки экрана нужна служба спец. возможностей «Уют: блокировка экрана». Она ничего не читает с экрана и умеет только заблокировать телефон и открыть шторку.")
-            if (Build.VERSION.SDK_INT >= 33) Info("Android 13+: если переключатель серый — откройте «О приложении» Уют → ⋮ → «Разрешить ограниченные настройки».")
+            Info(if (lockOn) "Служба включена ✓" else "Для блокировки экрана нужна служба спец. возможностей «СуперСмарт: блокировка экрана». Она ничего не читает с экрана и умеет только заблокировать телефон и открыть шторку.")
+            if (Build.VERSION.SDK_INT >= 33) Info("Android 13+: если переключатель серый — откройте «О приложении» СуперСмарт → ⋮ → «Разрешить ограниченные настройки».")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { Device.openAccessibilitySettings(ctx) }) { Text("Спец. возможности") }
                 OutlinedButton(onClick = { Device.openAppDetails(ctx) }) { Text("О приложении") }
@@ -440,7 +440,7 @@ private fun LiveScreen() {
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Счётчики уведомлений на плитках") {
-            Info(if (notif) "Включено ✓ (хранится только число уведомлений, текст не читается и не сохраняется)" else "Необязательно. Дайте Уют доступ к уведомлениям, чтобы плитки и иконки показывали число новых.")
+            Info(if (notif) "Включено ✓ (хранится только число уведомлений, текст не читается и не сохраняется)" else "Необязательно. Дайте СуперСмарт доступ к уведомлениям, чтобы плитки и иконки показывали число новых.")
             Button(onClick = { Device.openNotificationAccess(ctx) }) { Text(if (notif) "Настройки доступа" else "Разрешить") }
             @Suppress("UNUSED_EXPRESSION") NotificationCounter
         } }
@@ -504,7 +504,7 @@ private fun DigitsScreen() {
         item { Section("Что показывать") {
             Chips(DigitMode.entries, cfg.digitMode, { it.title }) { v -> store.update { it.copy(digitMode = v) } }
             Info(when (cfg.digitMode) {
-                DigitMode.APP -> "Сколько это приложение на экране в текущий заход: мм:сс, после часа — ч:мм:сс. Считается, пока включена служба специальных возможностей Уюта (та же, что для «Стоп-экрана»)."
+                DigitMode.APP -> "Сколько это приложение на экране в текущий заход: мм:сс, после часа — ч:мм:сс. Считается, пока включена служба специальных возможностей СуперСмарта (та же, что для «Стоп-экрана»)."
                 DigitMode.CLOCK -> "Текущее время, с секундами."
                 DigitMode.TODAY -> "Сколько сегодня экран был включён, пока цифры включены. В полночь счётчик обнуляется."
             })
@@ -551,7 +551,7 @@ private fun SystemScreen() {
     val scope = rememberCoroutineScope()
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Честно о системном шрифте") {
-            Info("Android не даёт обычным приложениям менять шрифт всей системы — для этого нужен root или фирменный магазин тем производителя. Поэтому Уют меняет шрифты везде, где рисует сам: часы, подписи, меню, виджеты и плитки.")
+            Info("Android не даёт обычным приложениям менять шрифт всей системы — для этого нужен root или фирменный магазин тем производителя. Поэтому СуперСмарт меняет шрифты везде, где рисует сам: часы, подписи, меню, виджеты и плитки.")
             Info("Кнопка ниже откроет экран шрифтов вашего телефона (${Device.oemName()}), если производитель его сделал; иначе — настройки экрана.")
             Button(onClick = { if (!Device.openSystemFontSettings(ctx)) Toast.makeText(ctx, "Не нашёл настройки шрифта", Toast.LENGTH_SHORT).show() }) { Text("Открыть настройки шрифта телефона") }
         } }
@@ -617,8 +617,8 @@ private fun HomeScreenSettings() {
         item { Section("Возврат на главный экран") {
             SwitchRow("Анимация «приложение сворачивается в иконку»", cfg.returnAnimation) { v -> store.update { it.copy(returnAnimation = v) } }
             SwitchRow("Жест «домой» прилетает в иконку (Android 11+)", cfg.gestureContract) { v -> store.update { it.copy(gestureContract = v) } }
-            Info("Окно чужого приложения сторонний лаунчер анимировать не может — это делает система. Уют сообщает системе, где лежит иконка (так же, как Lawnchair), и сам дорисовывает «сворачивание» карточки в иконку. На части прошивок (в том числе ColorOS / realme UI) система этот сигнал игнорирует — тогда работает только анимация Уюта.")
-            Info("realme UI / ColorOS с жестами: примерно секунду после жеста «Домой» система показывает только обои — так у всех сторонних лаунчеров (Nova, Lawnchair, Niagara, Smart Launcher), это не исправить без root. Уют начинает «сворачивание» ровно в момент, когда система его показала. С кнопочной навигацией задержки нет.")
+            Info("Окно чужого приложения сторонний лаунчер анимировать не может — это делает система. СуперСмарт сообщает системе, где лежит иконка (так же, как Lawnchair), и сам дорисовывает «сворачивание» карточки в иконку. На части прошивок (в том числе ColorOS / realme UI) система этот сигнал игнорирует — тогда работает только анимация СуперСмарта.")
+            Info("realme UI / ColorOS с жестами: примерно секунду после жеста «Домой» система показывает только обои — так у всех сторонних лаунчеров (Nova, Lawnchair, Niagara, Smart Launcher), это не исправить без root. СуперСмарт начинает «сворачивание» ровно в момент, когда система его показала. С кнопочной навигацией задержки нет.")
         } }
     }
 }
@@ -688,21 +688,21 @@ private fun SmoothScreen() {
                 },
             )
             SwitchRow("Максимальная частота (до $maxHz Гц)", cfg.highRefreshRate) { v -> store.update { it.copy(highRefreshRate = v) } }
-            Info("Все анимации считаются по времени, а не по кадрам: на 60, 90, 120 и 144 Гц они одинаковые по длительности, просто плавнее. Уют просит самый высокий режим для текущего разрешения и не меняет разрешение.")
-            Info("realme и ColorOS часто держат сторонние приложения на 60 Гц, даже если экран умеет 144. Если жест «Домой» всё равно дёргается: Настройки телефона → Экран → Частота обновления → высокая частота для приложений — добавьте Уют. Фактический режим пишется в logcat, тег UyutHz. Пять нажатий на строку «Сейчас» показывают его тостом.")
+            Info("Все анимации считаются по времени, а не по кадрам: на 60, 90, 120 и 144 Гц они одинаковые по длительности, просто плавнее. СуперСмарт просит самый высокий режим для текущего разрешения и не меняет разрешение.")
+            Info("realme и ColorOS часто держат сторонние приложения на 60 Гц, даже если экран умеет 144. Если жест «Домой» всё равно дёргается: Настройки телефона → Экран → Частота обновления → высокая частота для приложений — добавьте СуперСмарт. Фактический режим пишется в logcat, тег UyutHz. Пять нажатий на строку «Сейчас» показывают его тостом.")
         } }
-        item { Section("Анимации") { Info(if (anim) "Системные анимации включены ✓" else "В настройках телефона отключены анимации — Уют работает без анимаций и не тратит на них энергию.") } }
+        item { Section("Анимации") { Info(if (anim) "Системные анимации включены ✓" else "В настройках телефона отключены анимации — СуперСмарт работает без анимаций и не тратит на них энергию.") } }
         item { Section("Фоновая работа") {
-            Info(if (ignoring) "Уют исключён из оптимизации батареи ✓" else "Чтобы система не выгружала лаунчер (и он не «перезапускался» при возврате домой), исключите его из оптимизации батареи.")
-            if (!ignoring) Button(onClick = { Device.requestIgnoreBatteryOptimizations(ctx) }) { Text("Не выгружать Уют") }
+            Info(if (ignoring) "СуперСмарт исключён из оптимизации батареи ✓" else "Чтобы система не выгружала лаунчер (и он не «перезапускался» при возврате домой), исключите его из оптимизации батареи.")
+            if (!ignoring) Button(onClick = { Device.requestIgnoreBatteryOptimizations(ctx) }) { Text("Не выгружать СуперСмарт") }
             if (Device.oem == Device.Oem.REALME_OPPO_ONEPLUS) {
-                Info("realme / ColorOS: дополнительно откройте «Настройки → Приложения → Уют → Использование батареи» и разрешите фоновую активность; в «Недавних» потяните карточку Уюта вниз, чтобы закрепить её замком.")
-                Info("На realme UI системная анимация сторонних лаунчеров может начинаться с задержкой или идти на 60 Гц. Добавьте Уют в список приложений с высокой частотой обновления (Экран → Частота обновления). Уют дополнительно рисует собственную анимацию после системного перехода.")
+                Info("realme / ColorOS: дополнительно откройте «Настройки → Приложения → СуперСмарт → Использование батареи» и разрешите фоновую активность; в «Недавних» потяните карточку СуперСмарта вниз, чтобы закрепить её замком.")
+                Info("На realme UI системная анимация сторонних лаунчеров может начинаться с задержкой или идти на 60 Гц. Добавьте СуперСмарт в список приложений с высокой частотой обновления (Экран → Частота обновления). СуперСмарт дополнительно рисует собственную анимацию после системного перехода.")
             }
-            if (Device.oem == Device.Oem.XIAOMI) Info("Xiaomi: «Безопасность → Приложения → Уют → Автозапуск» и «Контроль активности → Нет ограничений».")
-            if (Device.oem == Device.Oem.SAMSUNG) Info("Samsung: «Батарея → Ограничения фонового использования → Никогда не переводить в спящий режим» → добавьте Уют.")
-            if (Device.oem == Device.Oem.HUAWEI_HONOR) Info("Huawei/Honor: «Батарея → Запуск приложений → Уют → Управлять вручную» и включите все переключатели.")
-            OutlinedButton(onClick = { Device.openAppDetails(ctx) }) { Text("О приложении Уют") }
+            if (Device.oem == Device.Oem.XIAOMI) Info("Xiaomi: «Безопасность → Приложения → СуперСмарт → Автозапуск» и «Контроль активности → Нет ограничений».")
+            if (Device.oem == Device.Oem.SAMSUNG) Info("Samsung: «Батарея → Ограничения фонового использования → Никогда не переводить в спящий режим» → добавьте СуперСмарт.")
+            if (Device.oem == Device.Oem.HUAWEI_HONOR) Info("Huawei/Honor: «Батарея → Запуск приложений → СуперСмарт → Управлять вручную» и включите все переключатели.")
+            OutlinedButton(onClick = { Device.openAppDetails(ctx) }) { Text("О приложении СуперСмарт") }
         } }
     }
 }
@@ -714,7 +714,7 @@ private fun AboutScreen() {
     val ofl = remember { try { ctx.assets.open("OFL.txt").bufferedReader().readText() } catch (_: Exception) { "" } }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 0.dp, 16.dp, 40.dp)) {
         item {
-            Text("Уют ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleLarge)
+            Text("СуперСмарт ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleLarge)
             Info("Без интернета (нет разрешения INTERNET), без рекламы и трекеров. Все данные — на телефоне.")
             Info("Идеи взяты из лучших лаунчеров: быстрый поиск и плавность Kvaesitso и Olauncher, алфавит-«волна» Niagara, формы иконок и шрифты Lawnchair, живые плитки SquareHome/Launcher 10. Темы «Купертино» и «Плитки» — оригинальные работы по мотивам классических раскладок; логотипы, иконки, обои и фирменные шрифты Apple и Microsoft не используются.")
             Text("Шрифты", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))

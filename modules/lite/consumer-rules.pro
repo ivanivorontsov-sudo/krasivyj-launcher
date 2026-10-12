@@ -1,0 +1,3 @@
+-keepclassmembers class ru.vorontsov.reader.** { @android.webkit.JavascriptInterface <methods>; }
+-keep class ru.vorontsov.reader.** { *; }
+-keep class ru.zametki.notes.** { *; }

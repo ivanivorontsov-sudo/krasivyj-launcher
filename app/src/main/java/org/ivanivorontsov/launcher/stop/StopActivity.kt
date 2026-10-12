@@ -167,7 +167,7 @@ private fun StopRoot(close: () -> Unit) {
                 when (page) {
                     Page.MAIN -> MainPage { page = it }
                     Page.BLOCKED -> AppChecklist(
-                        info = "Отмеченные приложения исчезают с главного экрана, из меню, поиска, папок и дока. Если открыть их иначе (уведомление, «Недавние», другое приложение), Уют сразу вернёт на главный экран.",
+                        info = "Отмеченные приложения исчезают с главного экрана, из меню, поиска, папок и дока. Если открыть их иначе (уведомление, «Недавние», другое приложение), СуперСмарт сразу вернёт на главный экран.",
                         selected = { StopGuard.store.blocked }, protectedPkgs = StopGuard.protectedPackages(),
                     ) { pkg, on -> StopGuard.update { blocked = if (on) blocked + pkg else blocked - pkg } }
                     Page.ALLOWED -> AppChecklist(
@@ -343,7 +343,7 @@ private fun MainPage(go: (Page) -> Unit) {
             Row(Modifier.fillMaxWidth().clickable { go(Page.ALLOWED) }.padding(vertical = 10.dp)) { Text("Разрешено во время паузы: ${s.whitelist.size}", style = MaterialTheme.typography.bodyLarge) }
         } }
         item { Section("DNS и защита сайтов") {
-            Info("Уют создаёт локальный DNS-only VPN, как приложения-переключатели DNS. Обычный интернет-трафик не идёт через VPN; DNS-запросы идут к выбранному AdGuard DNS.")
+            Info("СуперСмарт создаёт локальный DNS-only VPN, как приложения-переключатели DNS. Обычный интернет-трафик не идёт через VPN; DNS-запросы идут к выбранному AdGuard DNS.")
             Info(if (dnsEnabled) "DNS включён. Значок VPN Android должен быть виден в строке состояния." else "DNS выключен.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(enabled = !dnsEnabled, onClick = { connectDns(false) }) { Text("AdGuard DNS") }
@@ -377,7 +377,7 @@ private fun MainPage(go: (Page) -> Unit) {
                 LockService.grantUntil = SystemClock.uptimeMillis() + 120_000L
                 runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
             }
-            Info(if (a11y) "Служба спец. возможностей Уюта включена ✓ — запрещённое приложение, открытое из уведомления или «Недавних», сразу закрывается."
+            Info(if (a11y) "Служба спец. возможностей СуперСмарта включена ✓ — запрещённое приложение, открытое из уведомления или «Недавних», сразу закрывается."
                  else "Без службы специальных возможностей запрещённые приложения только скрыты: перехват открытия не работает.")
             Button(onClick = {
                 LockService.grantUntil = SystemClock.uptimeMillis() + 120_000L
@@ -391,8 +391,8 @@ private fun MainPage(go: (Page) -> Unit) {
                 LockService.grantUntil = SystemClock.uptimeMillis() + 120_000L
                 runCatching { ctx.startActivity(Intent("android.settings.HOME_SETTINGS")) }
             }) { Text("Выбрать лаунчер по умолчанию") }
-            Info(if (adminActive) "Администратор устройства включён ✓. Перед удалением Уюта Android попросит сначала отключить администратора."
-                 else "Администратор устройства добавляет системное подтверждение перед удалением Уюта. Это дополнительный барьер, а не замена пароля и строгого режима.")
+            Info(if (adminActive) "Администратор устройства включён ✓. Перед удалением СуперСмарта Android попросит сначала отключить администратора."
+                 else "Администратор устройства добавляет системное подтверждение перед удалением СуперСмарта. Это дополнительный барьер, а не замена пароля и строгого режима.")
             if (!adminActive) {
                 Button(onClick = {
                     val component = android.content.ComponentName(ctx, StopAdminReceiver::class.java)
@@ -412,8 +412,8 @@ private fun MainPage(go: (Page) -> Unit) {
             SwitchRow("Строгий режим", s.strictMode) { v ->
                 changeSettings(s.copy(strictMode = v), if (v) "Включить строгий режим" else "Отключить строгий режим")
             }
-            Info("Закрывает страницы настроек, через которые можно отключить защиту: «О приложении» Уюта, спец. возможности, выбор лаунчера по умолчанию, «Для разработчиков».")
-            Info("Уют должен быть лаунчером по умолчанию: тогда «Домой» всегда ведёт в Уют и никаких окон блокировки не появляется.")
+            Info("Закрывает страницы настроек, через которые можно отключить защиту: «О приложении» СуперСмарта, спец. возможности, выбор лаунчера по умолчанию, «Для разработчиков».")
+            Info("СуперСмарт должен быть лаунчером по умолчанию: тогда «Домой» всегда ведёт в СуперСмарт и никаких окон блокировки не появляется.")
         } }
         item { Section("Пароль") {
             Info(if (store.hasPassword) "🔑 Пароль задан: без него нельзя менять настройки и выходить из паузы. Статистика и история открыты без пароля." else "Пароль не задан — раздел открыт всем. Пусть пароль задаст другой человек.")
@@ -529,7 +529,7 @@ private fun AppChecklist(info: String, selected: () -> Set<String>, protectedPkg
                 Checkbox(a.pkg in sel, { on -> if (!locked) { onToggle(a.pkg, on); sel = selected() } }, enabled = !locked)
                 Column(Modifier.weight(1f)) {
                     Text(a.label, style = MaterialTheme.typography.bodyLarge)
-                    if (locked) Text("телефон, SMS и сам Уют не запрещаются", style = MaterialTheme.typography.bodySmall)
+                    if (locked) Text("телефон, SMS и сам СуперСмарт не запрещаются", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

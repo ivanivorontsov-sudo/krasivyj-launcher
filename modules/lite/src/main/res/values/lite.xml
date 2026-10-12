@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mod_reader_name">Читалка</string>
+    <string name="mod_notes_name">Заметки</string>
+    <color name="reader_ic_bg">#6B4F2E</color>
+    <style name="ReaderTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:colorAccent">#8A6A3C</item>
+        <item name="android:colorPrimary">#8A6A3C</item>
+    </style>
+</resources>

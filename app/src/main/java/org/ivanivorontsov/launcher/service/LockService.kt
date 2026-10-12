@@ -69,7 +69,7 @@ class LockService : AccessibilityService() {
     }
 
     private fun isSensitive(root: AccessibilityNodeInfo): Boolean {
-        val label = runCatching { getString(applicationInfo.labelRes) }.getOrDefault("Уют")
+        val label = runCatching { getString(applicationInfo.labelRes) }.getOrDefault("СуперСмарт")
         var hit = false
         walk(root, 0) { t ->
             if (t.contains(label, ignoreCase = true) || t.contains("Стоп-экран", ignoreCase = true) || DEV_TITLES.any { t.equals(it, ignoreCase = true) }) hit = true

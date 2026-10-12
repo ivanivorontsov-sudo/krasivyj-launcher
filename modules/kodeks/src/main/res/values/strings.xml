@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mod_kodeks_name">Кодекс жизни</string>
+    <string name="channel_tips">Советы кодекса</string>
+    <string name="channel_tips_desc">Ежедневные подсказки из кодекса</string>
+    <string name="channel_review">Пересмотр норм</string>
+    <string name="channel_review_desc">Ежемесячное напоминание пересмотреть нормы и меры</string>
+</resources>

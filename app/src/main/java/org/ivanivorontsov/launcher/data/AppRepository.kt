@@ -129,7 +129,8 @@ class AppRepository(private val context: Context, private val store: Store) {
         for (user in userManager.userProfiles) {
             val acts: List<LauncherActivityInfo> = try { launcherApps.getActivityList(null, user) } catch (_: Exception) { emptyList() }
             for (a in acts) {
-                if (a.componentName.packageName == context.packageName && user == me) continue
+                // СуперСмарт: own activities are hidden except the built-in modules (and their hub).
+                if (a.componentName.packageName == context.packageName && user == me && a.componentName.className.endsWith(".SettingsActivity")) continue
                 val key = keyFor(a.componentName, user)
                 val orig = a.label?.toString()?.trim().orEmpty().ifEmpty { a.componentName.packageName }
                 val label = renamed[key] ?: orig
@@ -156,7 +157,7 @@ class AppRepository(private val context: Context, private val store: Store) {
             store.update { c ->
                 val (next, fresh) = c.prune(keys).registerInstalled(installed) { k ->
                     val a = byKey[k]
-                    a != null && !a.system && !(a.isWork && a.pkg in personalPkgs)
+                    a != null && !a.system && !(a.isWork && a.pkg in personalPkgs) && a.pkg != context.packageName
                 }
                 added = fresh; next
             }

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Читалка</title>
+<link id="readercss" rel="stylesheet" href="reader.css">
+</head>
+<body>
+<div id="loading"><div class="spin"></div><div>Открываю книгу…</div></div>
+<main id="content" lang="ru"></main>
+
+<div id="topbar" class="bar">
+  <button id="bToc" class="ib" title="Содержание"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h11"/></svg></button>
+  <div id="bTitle"><div id="tTitle"></div><div id="tAuthor"></div></div>
+  <button id="bSet" class="ib" title="Настройки"><svg viewBox="0 0 24 24"><path d="M3 19 9 5l6 14M5.2 14h7.6M15 19l3.5-8 3.5 8M16 16.5h5"/></svg></button>
+  <button id="bLib" class="ib" title="Книги"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+</div>
+<div id="botbar" class="bar">
+  <div id="chap"></div>
+  <div class="row"><input id="slider" type="range" min="0" max="1000" value="0"><span id="pct">0%</span></div>
+</div>
+
+<div id="shade"></div>
+<aside id="tocPanel" class="panel left">
+  <div class="ph">Содержание</div>
+  <div id="tocList"></div>
+</aside>
+<aside id="setPanel" class="panel bottom">
+  <div class="ph">Оформление</div>
+  <div class="srow"><span>Тема</span>
+    <div class="seg" id="themes">
+      <button data-t="light" class="sw light">Светлая</button>
+      <button data-t="sepia" class="sw sepia">Сепия</button>
+      <button data-t="dark" class="sw dark">Тёмная</button>
+    </div></div>
+  <div class="srow"><span>Размер текста</span>
+    <div class="seg"><button id="fMinus">A−</button><span id="fVal">100%</span><button id="fPlus">A+</button></div></div>
+  <div class="srow"><span>Шрифт</span>
+    <div class="seg" id="fonts">
+      <button data-f="book">Книжный</button>
+      <button data-f="serif">С засечками</button>
+      <button data-f="sans">Без засечек</button>
+    </div></div>
+  <div class="srow"><span>Межстрочный</span>
+    <div class="seg" id="lhs">
+      <button data-l="0">Как в книге</button>
+      <button data-l="1.35">1.35</button>
+      <button data-l="1.6">1.6</button>
+      <button data-l="1.85">1.85</button>
+    </div></div>
+  <div class="srow"><span>Листать кнопками громкости</span>
+    <label class="tg"><input type="checkbox" id="vol"><i></i></label></div>
+</aside>
+<aside id="libPanel" class="panel bottom">
+  <div class="ph">Книги</div>
+  <button class="li" id="openFile"><b>Открыть файл…</b><small>EPUB или FB2 с телефона</small></button>
+  <button class="li" id="openBundled"><b>Нереальная реальность</b><small>Иван Игоревич Воронцов · встроенная книга</small></button>
+  <div id="recent"></div>
+</aside>
+<script src="reader.js"></script>
+</body>
+</html>

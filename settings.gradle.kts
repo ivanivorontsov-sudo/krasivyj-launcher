@@ -14,3 +14,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "KrasivyjLauncher"
 include(":app")
+// СуперСмарт modules (former standalone apps)
+include(":modules:mudrost-engine", ":modules:mudrost", ":modules:kodeks", ":modules:boec", ":modules:lite")

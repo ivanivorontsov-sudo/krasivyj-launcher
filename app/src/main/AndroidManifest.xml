@@ -78,6 +78,20 @@
             </intent-filter>
         </activity>
 
+        <!-- СуперСмарт: hub of the built-in modules (former standalone apps). -->
+        <activity
+            android:name=".ui.ModulesActivity"
+            android:exported="true"
+            android:label="@string/modules_label"
+            android:icon="@mipmap/ic_launcher"
+            android:theme="@style/Theme.Launcher.Settings"
+            android:taskAffinity="org.ivanivorontsov.launcher.modules">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".service.NotificationCounter"
             android:exported="true"

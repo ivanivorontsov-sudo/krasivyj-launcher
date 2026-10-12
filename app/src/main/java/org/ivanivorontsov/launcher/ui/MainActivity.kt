@@ -367,7 +367,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             GestureAction.NOTIFICATIONS -> if (!Device.expandNotifications(this)) Toast.makeText(this, "Шторку открыть не удалось", Toast.LENGTH_SHORT).show()
             GestureAction.SEARCH -> ui.drawer.open()
             GestureAction.LOCK -> if (!LockService.lock()) {
-                Toast.makeText(this, "Включите «Уют: блокировка экрана» в Спец. возможностях", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Включите «СуперСмарт: блокировка экрана» в Спец. возможностях", Toast.LENGTH_LONG).show()
                 Device.openAccessibilitySettings(this)
             }
             GestureAction.SETTINGS -> openSettings()
@@ -389,8 +389,9 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             e += MenuEntry("Плитка: календарь") { pinSpecialTile(TileKind.CALENDAR) }
         } else e += MenuEntry("Добавить виджет") { addWidget() }
         e += MenuEntry("Обои телефона") { Device.openWallpaperPicker(this) }
+        e += MenuEntry("Модули СуперСмарт") { startActivity(Intent(this, ModulesActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         e += MenuEntry("Настройки лаунчера") { openSettings() }
-        ui.menu = MenuState(anchor, title = "Уют", entries = e)
+        ui.menu = MenuState(anchor, title = "СуперСмарт", entries = e)
     }
 
     override fun pinSpecialTile(kind: TileKind) {

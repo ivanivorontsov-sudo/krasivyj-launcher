@@ -14,8 +14,8 @@ val ksProps = Properties().apply {
 }
 fun signingValue(key: String, env: String): String? = System.getenv(env) ?: ksProps.getProperty(key)
 
-val appVersionCode = (System.getenv("VERSION_CODE") ?: "159").toInt()
-val appVersionName = System.getenv("VERSION_NAME") ?: "1.0.59"
+val appVersionCode = (System.getenv("VERSION_CODE") ?: "160").toInt()
+val appVersionName = System.getenv("VERSION_NAME") ?: "1.1.0"
 
 android {
     namespace = "org.ivanivorontsov.launcher"
@@ -28,6 +28,11 @@ android {
         versionCode = appVersionCode
         versionName = appVersionName
         resourceConfigurations += listOf("ru", "en")
+        // СуперСмарт: «Мудрость» ships ONNX Runtime native libs — phones only (+x86_64 for emulator tests).
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            if (project.hasProperty("withX86")) abiFilters += "x86_64"
+        }
     }
 
     signingConfigs {
@@ -76,7 +81,9 @@ android {
         resources {
             excludes += listOf("/META-INF/{AL2.0,LGPL2.1}", "/META-INF/*.version", "DebugProbesKt.bin", "kotlin-tooling-metadata.json", "/kotlin/**")
         }
+        jniLibs { useLegacyPackaging = true }
     }
+    androidResources { noCompress += listOf("onnx", "bin") }
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
@@ -111,6 +118,11 @@ dependencies {
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // СуперСмарт modules
+    implementation(project(":modules:mudrost"))
+    implementation(project(":modules:kodeks"))
+    implementation(project(":modules:boec"))
+    implementation(project(":modules:lite"))
     debugImplementation("androidx.metrics:metrics-performance:1.0.0-beta01")
 
     testImplementation("junit:junit:4.13.2")

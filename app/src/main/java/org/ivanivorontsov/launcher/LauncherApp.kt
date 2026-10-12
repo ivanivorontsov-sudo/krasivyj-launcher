@@ -22,6 +22,8 @@ class LauncherApp : Application() {
         apps.onPackageGone = { icons.forgetPackage(it) }
         org.ivanivorontsov.launcher.stop.StopGuard.init(this)
         org.ivanivorontsov.launcher.ui.DigitOverlay.attach(this, store)
+        // СуперСмарт: «Боец поневоле» module state + channels (its alarm receivers also self-init).
+        runCatching { org.ivanivorontsov.boec.data.Store.init(this); org.ivanivorontsov.boec.alarm.Notifier.createChannels(this) }
     }
 
     override fun onTrimMemory(level: Int) {

@@ -48,7 +48,7 @@ class DnsVpnService : VpnService() {
         val resolver = if (family) "94.140.14.15" else "94.140.14.14"
         try {
             val builder = Builder()
-                .setSession(if (family) "Уют · AdGuard Family DNS" else "Уют · AdGuard DNS")
+                .setSession(if (family) "СуперСмарт · AdGuard Family DNS" else "СуперСмарт · AdGuard DNS")
                 .setMtu(1500)
                 .addAddress(VIRTUAL_DNS, 32)
                 .addDnsServer(VIRTUAL_DNS)
@@ -125,13 +125,13 @@ class DnsVpnService : VpnService() {
     private fun notification(family: Boolean): Notification {
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) {
-            manager.createNotificationChannel(NotificationChannel(CHANNEL, "Уют · DNS", NotificationManager.IMPORTANCE_LOW))
+            manager.createNotificationChannel(NotificationChannel(CHANNEL, "СуперСмарт · DNS", NotificationManager.IMPORTANCE_LOW))
         }
         val stop = PendingIntent.getService(this, 1, Intent(this, DnsVpnService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL) else @Suppress("DEPRECATION") Notification.Builder(this)
         return builder.setSmallIcon(android.R.drawable.stat_sys_warning)
-            .setContentTitle("Уют · DNS включён")
+            .setContentTitle("СуперСмарт · DNS включён")
             .setContentText(if (family) "AdGuard Family · фильтр сайтов" else "AdGuard DNS · стандартный")
             .setOngoing(true)
             .addAction(Notification.Action.Builder(null, "Выключить DNS", stop).build())
