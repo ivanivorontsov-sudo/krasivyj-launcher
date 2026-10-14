@@ -107,7 +107,8 @@ fun Modifier.launcherItemVisibility(ui: UiState?, id: String): Modifier =
     if (ui == null) this else this.graphicsLayer {
         alpha = when {
             ui.drag.hides(id) -> 0f
-            ui.returning?.key == id && ui.returnProgress.value < 0.97f -> 0f
+            ui.returning?.key == id && ui.returnStyle.card && ui.returnProgress.value < 0.97f -> 0f
+            ui.returning?.key == id && ui.returnStyle == org.ivanivorontsov.launcher.core.ReturnStyle.CONTRACT -> ui.returnProgress.value.coerceIn(0f, 1f)
             else -> 1f
         }
         val p = if (ui.popKey == id) ui.pop.value else 0f

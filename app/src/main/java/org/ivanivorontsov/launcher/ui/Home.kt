@@ -227,9 +227,26 @@ fun LauncherRoot(ui: UiState) {
                 // 1.2: while an app folds back into its icon, the grid zooms in from 94 % (like Pixel).
                 // That zoom is not the enter fade: enter stays at 1 when coming back from an app.
                 val z = ui.homeZoom.value
-                val s = (1f - 0.06f * p) * (0.94f + 0.06f * z) * (0.92f + 0.08f * e)
+                val st = ui.returnStyle
+                val zs = when (st) {
+                    org.ivanivorontsov.launcher.core.ReturnStyle.ZOOM -> 0.86f + 0.14f * z
+                    org.ivanivorontsov.launcher.core.ReturnStyle.ICON, org.ivanivorontsov.launcher.core.ReturnStyle.SPRING -> 0.94f + 0.06f * z
+                    org.ivanivorontsov.launcher.core.ReturnStyle.FADE -> 0.98f + 0.02f * z
+                    else -> 1f
+                }
+                val s = (1f - 0.06f * p) * zs * (0.92f + 0.08f * e)
                 scaleX = s; scaleY = s
-                alpha = (1f - p) * e
+                when (st) {
+                    org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_UP -> translationY = size.height * 0.10f * (1f - z)
+                    org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_SIDE -> translationX = -size.width * 0.12f * (1f - z)
+                    else -> {}
+                }
+                val za = when (st) {
+                    org.ivanivorontsov.launcher.core.ReturnStyle.FADE, org.ivanivorontsov.launcher.core.ReturnStyle.ZOOM,
+                    org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_UP, org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_SIDE -> (0.15f + 0.85f * z).coerceIn(0f, 1f)
+                    else -> 1f
+                }
+                alpha = (1f - p) * e * za
             }
             Box(homeModifier.homeGestures(ui, config, hPx.toFloat(), spec.layout != HomeLayout.TILES)) {
                 when (spec.layout) {
@@ -394,7 +411,7 @@ fun GridHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, wal
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
             val effect = LocalPageEffect.current
-            HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, key = { it }) { page ->
+            HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.5f)), beyondViewportPageCount = 1, key = { it }) { page ->
                 val fx = remember(effect, pager, page) { PageFx(effect, pager, page) }
                 Box(Modifier.fillMaxSize().pageEffect(effect, pager, page, itemsDoIt = page > 0)) {
                     if (page == 0) WidgetsPage(ui)
@@ -551,7 +568,7 @@ fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, 
     host.shown = favKeys
     androidx.compose.runtime.DisposableEffect(host) { ui.drag.host = host; onDispose { if (ui.drag.host === host) ui.drag.host = null } }
     val effect = LocalPageEffect.current
-    HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
+    HorizontalPager(pager, Modifier.fillMaxSize(), flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.5f)), beyondViewportPageCount = 1) { page ->
       Box(Modifier.fillMaxSize().pageEffect(effect, pager, page)) {
         if (page == 0) WidgetsPage(ui)
         else if (page == 1) Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 30.dp)

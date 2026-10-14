@@ -6,7 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.layout
 import org.ivanivorontsov.launcher.core.PageEffect
 import kotlin.math.PI
 import kotlin.math.abs
@@ -46,17 +46,30 @@ fun Modifier.pageEffect(effect: PageEffect, pager: PagerState, page: Int, itemsD
     if (effect == PageEffect.WAVE) return this
     // Pages nearer to the centre draw on top (cube/stack/cylinder back faces).
     return this.zIndexFor(pager, page).graphicsLayer {
-        val o = (page - pager.position()).coerceIn(-1.5f, 1.5f)
-        pageLayer(effect, o)
+        val raw = page - pager.position()
+        // 1.3.4: only the current page and the incoming neighbour may draw. Pages kept composed by the
+        // pager (or a far page such as the first one) are fully hidden, so nothing ghosts on top.
+        if (abs(raw) >= 1f) { alpha = 0f; return@graphicsLayer }
+        pageLayer(effect, raw)
     }
 }
 
+/**
+ * 1.3.2: z-order from the *continuous* scroll position, read only in the placement phase. Before, it used
+ * pager.currentPage, which is an integer that flips at the half-way point: when swiping back the incoming
+ * (lower-index) page sat under the current one and then popped on top mid-swipe — the "поддёргивание".
+ * Reading currentPage also recomposed the page on every flip.
+ */
 private fun Modifier.zIndexFor(pager: PagerState, page: Int): Modifier =
-    this.then(Modifier.zIndex(-abs(page - pager.currentPage).toFloat()))
+    this.then(Modifier.layout { m, c ->
+        val p = m.measure(c)
+        layout(p.width, p.height) { p.place(0, 0, zIndex = -abs(page - pager.position())) }
+    })
 
 private fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
     val a = abs(o)
-    cameraDistance = 14f * density
+    // Camera far enough that a 90-180° turn never clips the near edge on a tall 144 Hz panel.
+    cameraDistance = 24f * density
     when (effect) {
         PageEffect.CUBE -> {
             transformOrigin = TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
@@ -66,7 +79,9 @@ private fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
         PageEffect.FLIP -> {
             translationX = -o * size.width
             rotationY = 180f * o.coerceIn(-1f, 1f)
-            alpha = if (a > 0.5f) 0f else 1f
+            // Edge-on at |o| = 0.5; hide only the back face (no hard pop before that).
+            alpha = if (a >= 0.5f) 0f else 1f
+            shadowElevation = 0f
         }
         PageEffect.ROTATE -> {
             transformOrigin = TransformOrigin(0.5f, 1.6f)
@@ -102,6 +117,8 @@ private fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
 fun GraphicsLayerScope.itemPageLayer(fx: PageFx, cx: Float, cy: Float, w: Float, h: Float) {
     val pos = fx.pager.position()
     val o = fx.page - pos
+    // 1.3.4: a page that is not the current one or its direct neighbour never draws.
+    if (abs(o) >= 1f) { alpha = 0f; return }
     when (fx.effect) {
         PageEffect.CYLINDER -> {
             val e = bend(pos)
@@ -118,16 +135,14 @@ fun GraphicsLayerScope.itemPageLayer(fx: PageFx, cx: Float, cy: Float, w: Float,
             val p = d / (d - z)                          // perspective
             translationX = sx * p - x
             val deg = theta * 180f / PI.toFloat()
-            cameraDistance = 12f * density
+            cameraDistance = 24f * density
             if (abs(theta) <= PI.toFloat() / 2f) {
                 scaleX = p; scaleY = p
                 rotationY = deg
             } else {
-                // Back of the cylinder: seen from behind → mirrored (negative scale, not a >90° rotation, which
-                // the renderer may cull), turned by the remaining angle, smaller and translucent like in the photo.
-                scaleX = -p; scaleY = p
-                rotationY = deg - 180f * kotlin.math.sign(deg)
-                alpha = 0.6f
+                // 1.3.4: back faces are no longer drawn — they landed behind the current page's icons and
+                // showed up as doubled, ghosted labels.
+                alpha = 0f
             }
         }
         PageEffect.WAVE -> {
@@ -135,7 +150,10 @@ fun GraphicsLayerScope.itemPageLayer(fx: PageFx, cx: Float, cy: Float, w: Float,
             if (e <= 0.001f) return
             val x = cx + o * w
             val amp = 26f * density
-            translationY = amp * e * sin(2f * PI.toFloat() * (x / w) + PI.toFloat() * pos)
+            // Phase from the signed swipe progress (continuous, symmetric for forward/back) — the old
+            // absolute "PI * pos" term made the wave jump between page pairs.
+            val frac = pos - kotlin.math.floor(pos)
+            translationY = amp * e * sin(2f * PI.toFloat() * (x / w) - 2f * PI.toFloat() * frac)
             val s = 1f - 0.08f * e * (0.5f + 0.5f * cos(2f * PI.toFloat() * x / w))
             scaleX = s; scaleY = s
         }

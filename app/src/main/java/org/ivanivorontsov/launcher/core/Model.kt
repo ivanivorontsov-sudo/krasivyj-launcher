@@ -68,8 +68,15 @@ data class LauncherConfig(
     val knownApps: Set<String> = emptySet(),
     /** Answer the system's "gesture navigation contract" so swipe-home flies into our icon. */
     val gestureContract: Boolean = true,
+    /** 1.3.3: launcher-only "landing" (card shrinks into the icon); ignores GestureNavContract, which ColorOS breaks. */
+    val ownLanding: Boolean = true,
     /** Play the in-launcher "return into icon" animation when coming back home. */
     val returnAnimation: Boolean = true,
+    /** 1.3: animation styles for Home and Back (both gesture and 3-button navigation). */
+    val homeAnim: HomeAnim = HomeAnim.ICON,
+    val backAnim: BackAnim = BackAnim.SAME,
+    /** 1.3: 0.6 (slow) .. 1.6 (fast); 1 = default. */
+    val animSpeed: Float = 1f,
     /** Show every launchable app on home pages instead of a separate app drawer. */
     val allAppsOnHome: Boolean = false,
     /** 1.2: page-turn effect per theme id (absent = the theme's default, see [pageEffectFor]). */

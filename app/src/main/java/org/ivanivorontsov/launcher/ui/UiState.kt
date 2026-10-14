@@ -96,6 +96,8 @@ class UiState(val scope: CoroutineScope) {
     val returnProgress = Animatable(1f)
     /** 0..1 while the "fold into icon" plays: the icon grid zooms in from 94 % (Pixel-like). */
     val homeZoom = Animatable(1f)
+    /** 1.3: which style the current return uses (decides the grid transform and whether the card is drawn). */
+    var returnStyle by mutableStateOf(org.ivanivorontsov.launcher.core.ReturnStyle.ICON)
     /** Icon that gets a small "landing" pop (after the system flew the window into it). */
     var popKey by mutableStateOf<String?>(null)
     val pop = Animatable(0f)

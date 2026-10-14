@@ -48,7 +48,65 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     private var displayRefresh: DisplayManager.DisplayListener? = null
     /** System close animation owns the first frames; our in-window flight starts after it. */
     private var returnArmed = false
+    /** 1.3: a HOME intent arrived since onStop → the user pressed/swiped Home; otherwise it was Back. */
+    private var homeIntentSinceStop = false
+    /** 1.3.1: app key whose icon rect we gave to the system through GestureNavContract (null = not asked). */
+    private var contractKey: String? = null
+    private fun fromBackGuess() = !homeIntentSinceStop
+    private val contractFinish = android.os.Messenger(android.os.Handler(android.os.Looper.getMainLooper()) { m ->
+        // The system says its fly-into-icon animation is over: reveal the real icon.
+        if (m.what == 0) revealContractIcon()
+        true
+    })
+
+    private fun revealContractIcon() {
+        if (ui.returnStyle != org.ivanivorontsov.launcher.core.ReturnStyle.CONTRACT || ui.returning == null) return
+        returnArmed = true
+        ui.scope.launch {
+            ui.returnProgress.animateTo(1f, tween((140 / app.store.config.value.animSpeed.coerceIn(0.4f, 2f)).toInt(), easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+            ui.returning = null
+            contractKey = null
+        }
+    }
     private var resumeUptime = 0L
+
+    /**
+     * 1.3.5: unlock animation. Before, the home "enter" animation was one-shot per activity
+     * (ui.hasAnimatedIn), so it only replayed when Android had killed/recreated the launcher —
+     * i.e. after the phone had stayed locked for a long time. Now every screen-off arms it and
+     * every unlock (ACTION_USER_PRESENT, or resume with the keyguard gone) plays it again.
+     */
+    private var unlockArmed = false
+    private var stoppedByScreenOff = false
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: android.content.Context, i: Intent) {
+            when (i.action) {
+                Intent.ACTION_SCREEN_OFF -> armUnlock()
+                Intent.ACTION_USER_PRESENT -> playUnlock()
+            }
+        }
+    }
+    private fun homeOnTop() = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED) || stoppedByScreenOff
+    private fun armUnlock() {
+        if (!homeOnTop() || ui.launchedApp || ui.returning != null) return
+        unlockArmed = true
+        // Screen is off: hiding the grid now is invisible and avoids a full-grid first frame.
+        if (Device.animationsEnabled()) ui.scope.launch { ui.enter.snapTo(0f) }
+    }
+    private fun keyguardLocked(): Boolean =
+        (getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked
+    private fun playUnlock() {
+        if (!unlockArmed) return
+        if (keyguardLocked()) return
+        unlockArmed = false
+        ui.hasAnimatedIn = true
+        ui.scope.launch {
+            if (ui.animations && Device.animationsEnabled()) {
+                ui.enter.snapTo(0f)
+                ui.enter.animateTo(1f, MotionSpecs.enter(app.store.theme.value.motion, true))
+            } else ui.enter.snapTo(1f)
+        }
+    }
     private var pendingWidgetId = -1
     private var pendingWidgetInfo: AppWidgetProviderInfo? = null
 
@@ -70,6 +128,9 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             CompositionLocalProvider(LocalActions provides this) { LauncherRoot(ui) }
         }
         handleGestureContract(intent)
+        androidx.core.content.ContextCompat.registerReceiver(this, screenReceiver, android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT)
+        }, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         lifecycleScope.launch {
             app.apps.autoAdded.collect { keys ->
                 if (keys.isEmpty()) return@collect
@@ -126,6 +187,23 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     override fun onResume() {
         super.onResume()
         resumeUptime = SystemClock.uptimeMillis()
+        stoppedByScreenOff = false
+        // No secure lock screen (or USER_PRESENT missed by the OEM): play on resume / focus.
+        if (unlockArmed) window.decorView.post { playUnlock() }
+        ui.returning?.let { r ->
+            val cfg = app.store.config.value
+            val style = org.ivanivorontsov.launcher.core.resolveReturn(cfg.homeAnim, cfg.backAnim, fromBack = !homeIntentSinceStop)
+            ui.returnStyle = style
+            if (contractKey != null && contractKey == r.key && !fromBackGuess()) {
+                // 1.3.1: the system already flies the window into our icon — draw nothing on top.
+                ui.returnStyle = org.ivanivorontsov.launcher.core.ReturnStyle.CONTRACT
+                ui.scope.launch { ui.homeZoom.snapTo(1f) }
+            } else if (style == org.ivanivorontsov.launcher.core.ReturnStyle.NONE) {
+                // "Системная": nothing of ours on top of the system transition.
+                ui.returning = null
+                ui.scope.launch { ui.homeZoom.snapTo(1f); ui.returnProgress.snapTo(1f) }
+            }
+        }
         val comingHome = ui.returning != null
         // Cached mode id only: ColorOS drops a third-party launcher to 60 Hz for the
         // swipe-home transition unless this window has already asked for the high mode.
@@ -145,7 +223,10 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             if (window.decorView.hasWindowFocus()) visible?.complete(Unit)
             // onEnterAnimationComplete starts the in-window flight. If ColorOS never
             // sends it, start after the system transition would have finished.
-            window.decorView.postDelayed({ beginReturnFlight() }, 450)
+            // 1.3: the old code only retried after 450 ms when the first callback came within the
+            // 80 ms guard, which was the visible "home appears, then pauses, then animates" stutter.
+            window.decorView.postDelayed({ beginReturnFlight() }, 90)
+            window.decorView.postDelayed({ beginReturnFlight() }, 260)
         } else ui.scope.launch { if (ui.turnstile.value != 0f) ui.turnstile.snapTo(0f) }
         ui.launchedApp = false
         if (comingHome) window.decorView.postDelayed({
@@ -161,6 +242,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     override fun onStop() {
         super.onStop()
+        stoppedByScreenOff = !ui.launchedApp && !(getSystemService(POWER_SERVICE) as android.os.PowerManager).isInteractive
         try { WidgetHostHolder.host(this).stopListening() } catch (_: Exception) {}
         resumeUptime = 0L
         Device.unregisterDisplayRefresh(this, displayRefresh)
@@ -173,7 +255,12 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             System.currentTimeMillis() - rec.time < 6 * 60 * 60_000L) {
             ui.returning = ReturnAnim(rec.key, app.icons.color(rec.key), rec.bounds, folderId = rec.folderId)
             returnArmed = false
+            // 1.3: pre-shrink the grid while invisible. Before, it was drawn at 100 % on the first
+            // revealed frame and then jumped to 94 % when the flight started — a one-frame "twitch".
+            ui.scope.launch { ui.homeZoom.snapTo(0f) }
         }
+        homeIntentSinceStop = false
+        contractKey = null
         visible = kotlinx.coroutines.CompletableDeferred()
     }
 
@@ -191,6 +278,11 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     }
 
     private fun playReturn() {
+        if (ui.returnStyle == org.ivanivorontsov.launcher.core.ReturnStyle.CONTRACT) {
+            // Older systems never send the finish callback: reveal once our window is visible.
+            window.decorView.postDelayed({ revealContractIcon() }, 120)
+            return
+        }
         val gate = visible
         val key = ui.returning?.key
         ui.scope.launch {
@@ -203,21 +295,25 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             // Do not wait for the OEM's focus callback: the overlay is already composed with
             // the launch-time icon bounds fallback. The old focus hand-off left only wallpaper
             // visible while ColorOS delayed the launcher surface.
+            val speed = app.store.config.value.animSpeed
+            val st = ui.returnStyle
+            val (damp, stiff) = when (st) {
+                org.ivanivorontsov.launcher.core.ReturnStyle.SPRING -> 0.70f to 340f
+                org.ivanivorontsov.launcher.core.ReturnStyle.FADE -> 1f to 420f
+                org.ivanivorontsov.launcher.core.ReturnStyle.ZOOM -> 0.90f to 300f
+                org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_UP, org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_SIDE -> 0.92f to 320f
+                else -> 0.84f to 270f
+            }
+            val k = org.ivanivorontsov.launcher.core.speedStiffness(stiff, speed)
             kotlinx.coroutines.coroutineScope {
                 launch {
-                    ui.homeZoom.animateTo(
-                        1f,
-                        spring(dampingRatio = 0.88f, stiffness = 270f, visibilityThreshold = 0.001f)
-                    )
+                    ui.homeZoom.animateTo(1f, spring(dampingRatio = maxOf(damp, 0.8f), stiffness = k, visibilityThreshold = 0.001f))
                 }
-                // Soft, continuous spring: the screen card and home grid settle together into the icon.
-                ui.returnProgress.animateTo(
-                    1f,
-                    spring(dampingRatio = 0.84f, stiffness = 270f, visibilityThreshold = 0.001f)
-                )
+                if (st.card) ui.returnProgress.animateTo(1f, spring(dampingRatio = damp, stiffness = k, visibilityThreshold = 0.001f))
+                else ui.returnProgress.snapTo(1f)
             }
             ui.returning = null
-            if (key != null) playPop(key)
+            // 1.3.1: no landing "pop" — the scale bump at the end read as a twitch.
         }
     }
 
@@ -234,6 +330,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && unlockArmed) playUnlock()
         if (hasFocus) visible?.complete(Unit)
     }
 
@@ -241,6 +338,11 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         super.onEnterAnimationComplete()
         visible?.complete(Unit)
         beginReturnFlight()
+    }
+
+    override fun onDestroy() {
+        try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
+        super.onDestroy()
     }
 
     override fun onPause() {
@@ -252,6 +354,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
+            homeIntentSinceStop = true
             // Ask for 144 Hz before the system starts compositing this window.
             applyRefreshRate(app.store.config.value.highRefreshRate)
             // homePresses only closes overlays or scrolls to the main page. It must not
@@ -280,33 +383,60 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val extras = intent?.getBundleExtra(EXTRA_GESTURE_CONTRACT) ?: return
         intent.removeExtra(EXTRA_GESTURE_CONTRACT)
         if (!app.store.config.value.gestureContract) return
+        // 1.3.3: on ColorOS replying to the contract means the system skips its close animation and we
+        // draw nothing either. With our own landing on, never reply: our card always plays.
+        if (app.store.config.value.ownLanding) return
         @Suppress("DEPRECATION") val cn = extras.getParcelable<android.content.ComponentName>(Intent.EXTRA_COMPONENT_NAME)
         @Suppress("DEPRECATION") val cb = extras.getParcelable<android.os.Message>(EXTRA_REMOTE_CALLBACK) ?: return
         val replyTo = cb.replyTo ?: return
-        // No UserManager lookup before the reply: that binder call stalls the system animation.
+        // Same matching as Launcher3/Lawnchair getFirstMatchForAppClose: the launched item first,
+        // then any visible icon of the same package (the closing activity is often not the
+        // launcher activity, so an exact component match failed and we sent a fake centre rect).
+        val pkg = cn?.packageName
         val recent = ui.lastLaunch?.takeIf { System.currentTimeMillis() - it.time < 6 * 60 * 60_000L }
-        val prefix = cn?.flattenToShortString()
-        val match = recent != null && (prefix == null || recent.key.substringBefore('#') == prefix)
-        val known = if (match && recent.folderId != null) {
-            ui.openFolder = recent.folderId
-            ui.folderIconBounds[recent.key]?.bounds()?.takeIf { it.width >= 8f && it.height >= 8f } ?: recent.bounds
-        } else if (match) {
-            ui.iconBounds[recent.key]?.bounds()?.takeIf { it.width >= 8f && it.height >= 8f } ?: recent.bounds
-        } else null
-        val r = known?.takeIf { it.width >= 8f && it.height >= 8f } ?: run {
-            val w = window.decorView.width.toFloat()
-            val h = window.decorView.height.toFloat()
-            if (w < 8f || h < 8f) Rect(0f, 0f, 1f, 1f) else Rect(w / 2f - 48f, h / 2f - 48f, w / 2f + 48f, h / 2f + 48f)
+        val screenW = window.decorView.width.toFloat(); val screenH = window.decorView.height.toFloat()
+        fun ok(r: Rect?) = r != null && r.width >= 8f && r.height >= 8f && r.left >= 0f && r.top >= 0f && r.right <= screenW + 1f && r.bottom <= screenH + 1f
+        var key: String? = null
+        var rect: Rect? = null
+        if (recent != null && (pkg == null || recent.key.substringBefore('/') == pkg)) {
+            val r = if (recent.folderId != null) {
+                ui.openFolder = recent.folderId
+                ui.folderIconBounds[recent.key]?.bounds()?.takeIf(::ok) ?: ui.iconBounds[recent.folderId]?.bounds()?.takeIf(::ok)
+            } else ui.iconBounds[recent.key]?.bounds()?.takeIf(::ok) ?: ui.iconBounds["t_" + recent.key]?.bounds()?.takeIf(::ok)
+            if (r != null) { key = recent.key; rect = r } else if (ok(recent.bounds)) { key = recent.key; rect = recent.bounds }
         }
+        if (rect == null && pkg != null) {
+            for ((k, ref) in ui.iconBounds) {
+                val ak = k.removePrefix("t_")
+                if (ak.substringBefore('/') != pkg) continue
+                val r = ref.bounds()?.takeIf(::ok) ?: continue
+                key = ak; rect = r; break
+            }
+        }
+        // No icon on screen: do not reply, so the system plays its own default close
+        // (a fake rectangle made the window shrink into a meaningless spot).
+        val r = rect ?: return
         val loc = IntArray(2)
         window.decorView.getLocationOnScreen(loc)
         val data = Bundle()
         data.putParcelable(EXTRA_ICON_POSITION, android.graphics.RectF(r.left + loc[0], r.top + loc[1], r.right + loc[0], r.bottom + loc[1]))
         data.putParcelable(EXTRA_ICON_SURFACE, null)
+        data.putParcelable(EXTRA_ON_FINISH_CALLBACK, android.os.Message.obtain().apply { what = 0; this.replyTo = contractFinish })
         val msg = android.os.Message.obtain()
         msg.copyFrom(cb)
         msg.data = data
-        try { replyTo.send(msg) } catch (_: Exception) {}
+        try {
+            replyTo.send(msg)
+            contractKey = key
+            // Hide the target icon right away: the incoming window lands on an empty slot,
+            // then the real icon fades in (no scale/translation jump).
+            if (key != null && ui.returning?.key != key) {
+                ui.returning = ReturnAnim(key, app.icons.color(key), r)
+            }
+            ui.returnStyle = org.ivanivorontsov.launcher.core.ReturnStyle.CONTRACT
+            ui.scope.launch { ui.returnProgress.snapTo(0f); ui.homeZoom.snapTo(1f) }
+            returnArmed = false
+        } catch (_: Exception) {}
     }
 
     private companion object {
@@ -314,6 +444,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         const val EXTRA_ICON_POSITION = "gesture_nav_contract_icon_position"
         const val EXTRA_ICON_SURFACE = "gesture_nav_contract_surface_control"
         const val EXTRA_REMOTE_CALLBACK = "android.intent.extra.REMOTE_CALLBACK"
+        const val EXTRA_ON_FINISH_CALLBACK = "gesture_nav_contract_finish_callback"
     }
 
     // ---------------- LauncherActions ----------------

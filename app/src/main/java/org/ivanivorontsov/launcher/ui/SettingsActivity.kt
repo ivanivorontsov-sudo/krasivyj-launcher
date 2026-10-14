@@ -99,9 +99,24 @@ import org.ivanivorontsov.launcher.service.NotificationCounter
 import java.io.File
 
 class SettingsActivity : ComponentActivity() {
+    private fun closeAnim(): Pair<Int, Int>? = when (LauncherApp.instance.store.config.value.backAnim) {
+        org.ivanivorontsov.launcher.core.BackAnim.SYSTEM -> null
+        org.ivanivorontsov.launcher.core.BackAnim.SLIDE -> org.ivanivorontsov.launcher.R.anim.uyut_back_enter_slide to org.ivanivorontsov.launcher.R.anim.uyut_back_exit_slide
+        org.ivanivorontsov.launcher.core.BackAnim.FADE -> org.ivanivorontsov.launcher.R.anim.uyut_back_enter_fade to org.ivanivorontsov.launcher.R.anim.uyut_back_exit_fade
+        else -> org.ivanivorontsov.launcher.R.anim.uyut_back_enter_zoom to org.ivanivorontsov.launcher.R.anim.uyut_back_exit_zoom
+    }
+
+    override fun finish() {
+        super.finish()
+        @Suppress("DEPRECATION")
+        if (Build.VERSION.SDK_INT < 34) closeAnim()?.let { (enter, exit) -> overridePendingTransition(enter, exit) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
+        // 1.3: Back out of settings uses the chosen «Назад» style (gesture and button alike).
+        if (Build.VERSION.SDK_INT >= 34) closeAnim()?.let { (enter, exit) -> overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, enter, exit) }
         val start = intent.getStringExtra("section")
         setContent {
             val spec by LauncherApp.instance.store.theme.collectAsStateCompat()
@@ -614,8 +629,18 @@ private fun HomeScreenSettings() {
             Info(if (own) "У темы «${spec.name}» своя расстановка — у каждой темы она хранится отдельно." else "Тема «${spec.name}» пока использует общую расстановку. Как только вы что-то передвинете, у неё появится своя.")
             if (own) OutlinedButton(onClick = { store.update { it.resetLayout(spec.id) } }) { Text("Сбросить расстановку этой темы") }
         } }
+        item { Section("Анимации «Домой» и «Назад»") {
+            Info("Работают и с жестами, и с кнопками навигации. «Домой» — свайп вверх от нижнего края или кнопка ○, «Назад» — свайп от края экрана или кнопка ◁.")
+            Text("Домой (сворачивание приложения)", style = MaterialTheme.typography.titleSmall)
+            Chips(org.ivanivorontsov.launcher.core.HomeAnim.entries, cfg.homeAnim, { it.title }) { v -> store.update { it.copy(homeAnim = v, returnAnimation = true) } }
+            Text("Назад", style = MaterialTheme.typography.titleSmall)
+            Chips(org.ivanivorontsov.launcher.core.BackAnim.entries, cfg.backAnim, { it.title }) { v -> store.update { it.copy(backAnim = v, returnAnimation = true) } }
+            Labeled("Скорость: ${"%.1f".format(cfg.animSpeed)}×") { Slider(cfg.animSpeed, { v -> store.update { it.copy(animSpeed = (v * 10).toInt() / 10f) } }, valueRange = 0.6f..1.6f, steps = 9) }
+            Info("realme 15 5G (экран 144 Гц): для самых плавных кадров включите в Настройках телефона → Экран → Частота обновления «Высокая», а здесь, в разделе экрана, — «Максимальная частота». Если хочется ещё мягче — «Пружина» и скорость 0,8×.")
+        } }
         item { Section("Возврат на главный экран") {
             SwitchRow("Анимация «приложение сворачивается в иконку»", cfg.returnAnimation) { v -> store.update { it.copy(returnAnimation = v) } }
+            SwitchRow("Своя анимация приземления в иконку (рекомендуется для realme/ColorOS)", cfg.ownLanding) { v -> store.update { it.copy(ownLanding = v, returnAnimation = if (v) true else it.returnAnimation) } }
             SwitchRow("Жест «домой» прилетает в иконку (Android 11+)", cfg.gestureContract) { v -> store.update { it.copy(gestureContract = v) } }
             Info("Окно чужого приложения сторонний лаунчер анимировать не может — это делает система. СуперСмарт сообщает системе, где лежит иконка (так же, как Lawnchair), и сам дорисовывает «сворачивание» карточки в иконку. На части прошивок (в том числе ColorOS / realme UI) система этот сигнал игнорирует — тогда работает только анимация СуперСмарта.")
             Info("realme UI / ColorOS с жестами: примерно секунду после жеста «Домой» система показывает только обои — так у всех сторонних лаунчеров (Nova, Lawnchair, Niagara, Smart Launcher), это не исправить без root. СуперСмарт начинает «сворачивание» ровно в момент, когда система его показала. С кнопочной навигацией задержки нет.")

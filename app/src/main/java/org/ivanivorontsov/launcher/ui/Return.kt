@@ -30,6 +30,7 @@ import kotlin.math.roundToInt
 @Composable
 fun ReturnOverlay(ui: UiState, layout: ScreenLayout) {
     val r = ui.returning ?: return
+    if (!ui.returnStyle.card) return
     val app = LocalAppsByKey.current[r.key]
     val spec = LocalSpec.current; val colors = LocalColors.current
     val density = LocalDensity.current
@@ -70,7 +71,7 @@ fun ReturnOverlay(ui: UiState, layout: ScreenLayout) {
             null -> null
         } ?: return@Canvas
         // The card begins slightly inset (like an app window that has started to shrink) — no full-screen pop.
-        val startRect = Rect(size.width * 0.04f, size.height * 0.03f, size.width * 0.96f, size.height * 0.97f)
+        val startRect = Rect(size.width * 0.02f, size.height * 0.015f, size.width * 0.98f, size.height * 0.985f)
         val rect = Rect(
             lerp(startRect.topLeft, end.topLeft, e),
             Size(startRect.width + (end.width - startRect.width) * e, startRect.height + (end.height - startRect.height) * e),

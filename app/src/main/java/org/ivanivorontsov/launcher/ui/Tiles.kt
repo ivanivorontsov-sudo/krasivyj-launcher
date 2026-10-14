@@ -319,8 +319,8 @@ private fun TileView(
                 rotationY = local * -85f
                 transformOrigin = TransformOrigin(-ax.value / aw.value.coerceAtLeast(1f), 0.5f)
                 cameraDistance = 18f * density.density
-                val returning = ui.returning?.let { it.key == tile.appKey && ui.returnProgress.value < 0.97f } == true
-                alpha = (1f - local * local) * when { returning -> 0f; ghost -> 0.35f; dragged -> 0.92f; editing == null -> 1f; selected -> 1f; else -> 0.6f }
+                val returning = ui.returning?.let { it.key == tile.appKey && ui.returnStyle.card && ui.returnProgress.value < 0.97f } == true
+                alpha = (1f - local * local) * when { ui.returning?.key == tile.appKey && ui.returnStyle == org.ivanivorontsov.launcher.core.ReturnStyle.CONTRACT -> ui.returnProgress.value.coerceIn(0f, 1f); returning -> 0f; ghost -> 0.35f; dragged -> 0.92f; editing == null -> 1f; selected -> 1f; else -> 0.6f }
                 val lift = if (dragged) 1f + 0.05f * d.lift.value else 1f
                 val s = lift * when { editing == null || dragged -> 1f; selected -> 1.04f; else -> 0.94f }
                 scaleX = s; scaleY = s

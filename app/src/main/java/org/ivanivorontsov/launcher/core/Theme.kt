@@ -18,6 +18,15 @@ import kotlinx.serialization.json.Json
 @Serializable enum class Overlay(val title: String) { NONE("Нет"), SCANLINES("Строки ЭЛТ"), GRAIN("Зерно бумаги"), VIGNETTE("Виньетка") }
 @Serializable enum class TextCase(val title: String) { AS_IS("Как есть"), LOWER("строчные"), UPPER("ПРОПИСНЫЕ") }
 /** Page-turn effects of the home screen (1.2). */
+/** 1.3: how home appears after leaving an app (Home gesture / Home button). */
+@Serializable enum class HomeAnim(val title: String, val card: Boolean) {
+    SYSTEM("Системная", false), ICON("Сворачивание в иконку", true), SPRING("Пружина (как iOS)", true),
+    ZOOM("Приближение", false), SLIDE("Выезд снизу", false), FADE("Растворение", false)
+}
+/** 1.3: how home appears after Back closes an app, and how Уют's own screens close on Back. */
+@Serializable enum class BackAnim(val title: String) {
+    SYSTEM("Системная"), SAME("Как «Домой»"), ZOOM("Приближение"), SLIDE("Сдвиг вбок"), FADE("Растворение"), SPRING("Пружина (как iOS)")
+}
 @Serializable enum class PageEffect(val title: String) {
     NONE("Без эффекта"), CYLINDER("Цилиндр (карусель)"), CUBE("Куб"), FLIP("Переворот"), ROTATE("Поворот"),
     ZOOM("Приближение"), STACK("Стопка"), WAVE("Волна")
