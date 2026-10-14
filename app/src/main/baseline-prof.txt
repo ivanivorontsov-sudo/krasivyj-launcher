@@ -6,3 +6,12 @@ HSPLandroidx/compose/ui/**->**(**)**
 HSPLandroidx/compose/foundation/**->**(**)**
 HSPLandroidx/compose/animation/**->**(**)**
 HSPLkotlinx/serialization/json/**->**(**)**
+HSPLorg/ivanivorontsov/launcher/ui/ReturnKt;->**(**)**
+Lorg/ivanivorontsov/launcher/ui/ReturnKt;
+HSPLorg/ivanivorontsov/launcher/ui/AnimPreviewKt;->**(**)**
+HSPLorg/ivanivorontsov/launcher/ui/CommonKt;->unlockLocal(FF)F
+HSPLorg/ivanivorontsov/launcher/ui/MainActivity;->**(**)**
+HSPLorg/ivanivorontsov/launcher/core/ReturnStyleKt;->**(**)**
+HSPLandroidx/compose/animation/core/Animatable;->**(**)**
+HSPLandroidx/compose/animation/core/TweenSpec;->**(**)**
+HSPLandroidx/compose/ui/graphics/drawscope/CanvasDrawScope;->**(**)**

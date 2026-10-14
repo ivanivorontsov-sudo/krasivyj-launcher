@@ -234,8 +234,17 @@ fun LauncherRoot(ui: UiState) {
                     org.ivanivorontsov.launcher.core.ReturnStyle.FADE -> 0.98f + 0.02f * z
                     else -> 1f
                 }
-                val s = (1f - 0.06f * p) * zs * (0.92f + 0.08f * e)
+                val raw = ui.enter.value
+                val us = ui.unlockStyle
+                val es = when (us) {
+                    null -> 0.92f + 0.08f * e
+                    org.ivanivorontsov.launcher.core.UnlockAnim.FADE -> 0.97f + 0.03f * e
+                    org.ivanivorontsov.launcher.core.UnlockAnim.SPRING -> 0.82f + 0.18f * raw
+                    else -> 1f
+                }
+                val s = (1f - 0.06f * p) * zs * es
                 scaleX = s; scaleY = s
+                if (us == org.ivanivorontsov.launcher.core.UnlockAnim.RISE) translationY = size.height * 0.14f * (1f - e)
                 when (st) {
                     org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_UP -> translationY = size.height * 0.10f * (1f - z)
                     org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_SIDE -> translationX = -size.width * 0.12f * (1f - z)
@@ -246,7 +255,12 @@ fun LauncherRoot(ui: UiState) {
                     org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_UP, org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_SIDE -> (0.15f + 0.85f * z).coerceIn(0f, 1f)
                     else -> 1f
                 }
-                alpha = (1f - p) * e * za
+                val ea = when (us) {
+                    org.ivanivorontsov.launcher.core.UnlockAnim.WAVE, org.ivanivorontsov.launcher.core.UnlockAnim.STAGGER -> (e * 4f).coerceAtMost(1f)
+                    org.ivanivorontsov.launcher.core.UnlockAnim.SPRING -> (e * 2.5f).coerceAtMost(1f)
+                    else -> e
+                }
+                alpha = (1f - p) * ea * za
             }
             Box(homeModifier.homeGestures(ui, config, hPx.toFloat(), spec.layout != HomeLayout.TILES)) {
                 when (spec.layout) {
@@ -260,6 +274,7 @@ fun LauncherRoot(ui: UiState) {
             OverlayEffect(spec.overlay)
             FolderOverlay(ui, layout)
             ReturnOverlay(ui, layout)
+            ReturnWarmUp()
             MenuOverlay(ui)
             DragLayer(ui)
             StopBanner(ui, stop)

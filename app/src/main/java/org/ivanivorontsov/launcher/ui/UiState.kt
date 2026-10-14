@@ -94,6 +94,12 @@ class UiState(val scope: CoroutineScope) {
     var lastLaunch: LaunchRecord? = null
     var returning by mutableStateOf<ReturnAnim?>(null)
     val returnProgress = Animatable(1f)
+    /** 1.3.6: 0..1 after the card has landed (ripples, drop bounce). */
+    val returnTail = Animatable(0f)
+    /** 1.3.6: style of the current [enter] when it is an unlock replay (null = cold-start fade). */
+    var unlockStyle: org.ivanivorontsov.launcher.core.UnlockAnim? = null
+    /** 1.3.6: per-icon start delay 0..1 for wave / stagger unlock, filled once when the unlock starts. */
+    val unlockDelay = HashMap<String, Float>()
     /** 0..1 while the "fold into icon" plays: the icon grid zooms in from 94 % (Pixel-like). */
     val homeZoom = Animatable(1f)
     /** 1.3: which style the current return uses (decides the grid transform and whether the card is drawn). */

@@ -113,6 +113,17 @@ fun Modifier.launcherItemVisibility(ui: UiState?, id: String): Modifier =
         }
         val p = if (ui.popKey == id) ui.pop.value else 0f
         if (p != 0f) { val s = 1f + 0.12f * p; scaleX = s; scaleY = s }
+        // 1.3.6: per-icon unlock wave / stagger (only while the unlock replay runs).
+        val us = ui.unlockStyle
+        if (us != null && (us == org.ivanivorontsov.launcher.core.UnlockAnim.WAVE || us == org.ivanivorontsov.launcher.core.UnlockAnim.STAGGER)) {
+            val e = ui.enter.value
+            if (e < 1f) {
+                val l = unlockLocal(e, ui.unlockDelay[id] ?: 0f)
+                alpha *= l
+                if (us == org.ivanivorontsov.launcher.core.UnlockAnim.WAVE) { val s = 0.55f + 0.45f * l; scaleX = s; scaleY = s }
+                else translationY = (1f - l) * 28.dp.toPx()
+            }
+        }
     }
 
 /** Remembers an element's position so app-open animations can start from the exact icon. */
@@ -193,7 +204,8 @@ fun AppCell(
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.trackBounds(iconRef)) {
+        // 1.3.6: inside an open folder the icon also hides while the card lands on it (no double icon).
+        Box(Modifier.trackBounds(iconRef).then(if (source == DragSource.FOLDER) Modifier.launcherItemVisibility(ui, app.key) else Modifier)) {
             AppIcon(app, iconSize, pixelated = spec.motion == Motion.PIXEL_STEP)
             if (badge > 0) Badge(badge, Modifier.align(Alignment.TopEnd).padding(0.dp))
         }
@@ -274,3 +286,9 @@ fun rememberToggle(initial: Boolean = false) = remember { mutableStateOf(initial
 
 @Composable
 fun OnceEffect(key: Any?, block: suspend () -> Unit) = LaunchedEffect(key) { block() }
+
+/** 1.3.6: local progress of one icon in a wave/stagger unlock; [delay] 0..1. Fast-out ease. */
+fun unlockLocal(e: Float, delay: Float): Float {
+    val x = ((e - delay * 0.55f) / 0.45f).coerceIn(0f, 1f)
+    return 1f - (1f - x) * (1f - x) * (1f - x)
+}

@@ -71,6 +71,8 @@ val LocalAnimations = compositionLocalOf { true }
 /** Motion language per theme. All specs are time/physics based, so they look identical at 60…144 Hz. */
 object MotionSpecs {
     val iosEase: Easing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
+    /** 1.3.6: emphasized decelerate (Material 3): most of the motion happens in the first third. */
+    val fastOut: Easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
     val turnstileEase: Easing = CubicBezierEasing(0.1f, 0.9f, 0.2f, 1f)   // fast-out exponential feel
     val stepEase = Easing { f -> (kotlin.math.floor(f * 6f) / 6f).coerceAtMost(1f) }
 

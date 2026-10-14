@@ -31,7 +31,10 @@ class LauncherApp : Application() {
         // 1.0 trimmed at TRIM_MEMORY_BACKGROUND, i.e. every time an app was opened → icons reloaded on the way home.
         // Keep them unless the system is really short of memory (the disk cache makes a reload cheap anyway).
         @Suppress("DEPRECATION")
-        if (level >= TRIM_MEMORY_COMPLETE || level == TRIM_MEMORY_RUNNING_CRITICAL) icons.trim()
+        // 1.3.6: heavy apps push the launcher to TRIM_MEMORY_COMPLETE while it waits in the background; trimming
+        // then made the very next return reload icons mid-animation (the "heavy app" freeze). Only trim when
+        // the launcher itself is running critically low; never on UI_HIDDEN / BACKGROUND / MODERATE / COMPLETE.
+        if (level == TRIM_MEMORY_RUNNING_CRITICAL) icons.trim()
     }
 
     companion object {

@@ -77,6 +77,12 @@ data class LauncherConfig(
     val backAnim: BackAnim = BackAnim.SAME,
     /** 1.3: 0.6 (slow) .. 1.6 (fast); 1 = default. */
     val animSpeed: Float = 1f,
+    /** 1.3.6: duration of the return-to-home animation in ms (150..1000). Replaces [animSpeed]. */
+    val returnDurationMs: Int = 300,
+    /** 1.3.6: unlock animation of the home screen. */
+    val unlockAnim: UnlockAnim = UnlockAnim.FADE,
+    /** 1.3.6: follow the system auto-rotate (true) or keep the launcher in portrait (false). */
+    val autoRotate: Boolean = true,
     /** Show every launchable app on home pages instead of a separate app drawer. */
     val allAppsOnHome: Boolean = false,
     /** 1.2: page-turn effect per theme id (absent = the theme's default, see [pageEffectFor]). */

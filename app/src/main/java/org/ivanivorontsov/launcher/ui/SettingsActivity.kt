@@ -635,8 +635,19 @@ private fun HomeScreenSettings() {
             Chips(org.ivanivorontsov.launcher.core.HomeAnim.entries, cfg.homeAnim, { it.title }) { v -> store.update { it.copy(homeAnim = v, returnAnimation = true) } }
             Text("Назад", style = MaterialTheme.typography.titleSmall)
             Chips(org.ivanivorontsov.launcher.core.BackAnim.entries, cfg.backAnim, { it.title }) { v -> store.update { it.copy(backAnim = v, returnAnimation = true) } }
-            Labeled("Скорость: ${"%.1f".format(cfg.animSpeed)}×") { Slider(cfg.animSpeed, { v -> store.update { it.copy(animSpeed = (v * 10).toInt() / 10f) } }, valueRange = 0.6f..1.6f, steps = 9) }
-            Info("realme 15 5G (экран 144 Гц): для самых плавных кадров включите в Настройках телефона → Экран → Частота обновления «Высокая», а здесь, в разделе экрана, — «Максимальная частота». Если хочется ещё мягче — «Пружина» и скорость 0,8×.")
+            ReturnPreview(cfg.homeAnim, cfg.returnDurationMs, Modifier.padding(top = 8.dp))
+            Labeled("Длительность: ${"%.2f".format(cfg.returnDurationMs / 1000f)} с (меньше — быстрее)") {
+                Slider(cfg.returnDurationMs.toFloat(), { v -> store.update { it.copy(returnDurationMs = ((v / 10).toInt() * 10).coerceIn(150, 1000)) } }, valueRange = 150f..1000f)
+            }
+            Info("realme 15 5G (экран 144 Гц): для самых плавных кадров включите в Настройках телефона → Экран → Частота обновления «Высокая», а здесь, в разделе экрана, — «Максимальная частота». Если хочется ещё мягче — «Пружина» и длительность 0,4 с; быстрее всего — 0,15–0,2 с.")
+        } }
+        item { Section("Анимация при разблокировке") {
+            Chips(org.ivanivorontsov.launcher.core.UnlockAnim.entries, cfg.unlockAnim, { it.title }) { v -> store.update { it.copy(unlockAnim = v) } }
+            UnlockPreview(cfg.unlockAnim, Modifier.padding(top = 8.dp))
+        } }
+        item { Section("Поворот экрана") {
+            SwitchRow("Автоповорот лаунчера", cfg.autoRotate) { v -> store.update { it.copy(autoRotate = v) } }
+            Info("Выключено — главный экран всегда вертикальный. Включено — следует системному автоповороту.")
         } }
         item { Section("Возврат на главный экран") {
             SwitchRow("Анимация «приложение сворачивается в иконку»", cfg.returnAnimation) { v -> store.update { it.copy(returnAnimation = v) } }

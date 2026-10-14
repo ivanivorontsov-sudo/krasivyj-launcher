@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         if (ui.returnStyle != org.ivanivorontsov.launcher.core.ReturnStyle.CONTRACT || ui.returning == null) return
         returnArmed = true
         ui.scope.launch {
-            ui.returnProgress.animateTo(1f, tween((140 / app.store.config.value.animSpeed.coerceIn(0.4f, 2f)).toInt(), easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+            ui.returnProgress.animateTo(1f, tween((app.store.config.value.returnDurationMs / 2).coerceIn(70, 300), easing = androidx.compose.animation.core.LinearOutSlowInEasing))
             ui.returning = null
             contractKey = null
         }
@@ -100,11 +100,41 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         if (keyguardLocked()) return
         unlockArmed = false
         ui.hasAnimatedIn = true
+        val style = app.store.config.value.unlockAnim
+        if (!ui.animations || !Device.animationsEnabled() || style == org.ivanivorontsov.launcher.core.UnlockAnim.NONE) {
+            ui.unlockStyle = null
+            ui.scope.launch { ui.enter.snapTo(1f) }
+            return
+        }
+        prepareUnlockDelays(style)
+        ui.unlockStyle = style
         ui.scope.launch {
-            if (ui.animations && Device.animationsEnabled()) {
-                ui.enter.snapTo(0f)
-                ui.enter.animateTo(1f, MotionSpecs.enter(app.store.theme.value.motion, true))
-            } else ui.enter.snapTo(1f)
+            ui.enter.snapTo(0f)
+            when (style) {
+                org.ivanivorontsov.launcher.core.UnlockAnim.SPRING ->
+                    ui.enter.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 380f, visibilityThreshold = 0.001f))
+                org.ivanivorontsov.launcher.core.UnlockAnim.WAVE, org.ivanivorontsov.launcher.core.UnlockAnim.STAGGER ->
+                    ui.enter.animateTo(1f, tween(520, easing = androidx.compose.animation.core.LinearEasing))
+                else -> ui.enter.animateTo(1f, tween(300, easing = MotionSpecs.fastOut))
+            }
+            ui.unlockStyle = null
+        }
+    }
+
+    /** Snapshot icon positions once (not per frame): delay = distance from centre (wave) or reading order (stagger). */
+    private fun prepareUnlockDelays(style: org.ivanivorontsov.launcher.core.UnlockAnim) {
+        ui.unlockDelay.clear()
+        val v = window.decorView
+        val cx = v.width / 2f; val cy = v.height / 2f
+        val pts = ui.iconBounds.mapNotNull { (k, ref) -> ref.bounds()?.let { k to it.center } }
+        if (pts.isEmpty()) return
+        if (style == org.ivanivorontsov.launcher.core.UnlockAnim.WAVE) {
+            val maxD = pts.maxOf { kotlin.math.hypot(it.second.x - cx, it.second.y - cy) }.coerceAtLeast(1f)
+            for ((k, c) in pts) ui.unlockDelay[k] = kotlin.math.hypot(c.x - cx, c.y - cy) / maxD
+        } else {
+            val sorted = pts.sortedWith(compareBy({ (it.second.y / 40f).toInt() }, { it.second.x }))
+            val n = (sorted.size - 1).coerceAtLeast(1)
+            sorted.forEachIndexed { i, (k, _) -> ui.unlockDelay[k] = i.toFloat() / n }
         }
     }
     private var pendingWidgetId = -1
@@ -128,6 +158,14 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             CompositionLocalProvider(LocalActions provides this) { LauncherRoot(ui) }
         }
         handleGestureContract(intent)
+        // 1.3.6: «Автоповорот лаунчера» — applied immediately whenever the setting changes.
+        lifecycleScope.launch {
+            app.store.config.collect { c ->
+                val want = if (c.autoRotate) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER
+                    else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                if (requestedOrientation != want) requestedOrientation = want
+            }
+        }
         androidx.core.content.ContextCompat.registerReceiver(this, screenReceiver, android.content.IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT)
         }, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -225,15 +263,21 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             // sends it, start after the system transition would have finished.
             // 1.3: the old code only retried after 450 ms when the first callback came within the
             // 80 ms guard, which was the visible "home appears, then pauses, then animates" stutter.
-            window.decorView.postDelayed({ beginReturnFlight() }, 90)
-            window.decorView.postDelayed({ beginReturnFlight() }, 260)
+            // 1.3.6: shorter fallbacks (was 90 / 260 ms) — that wait was added on top of the user's duration.
+            window.decorView.postDelayed({ beginReturnFlight() }, 50)
+            window.decorView.postDelayed({ beginReturnFlight() }, 180)
         } else ui.scope.launch { if (ui.turnstile.value != 0f) ui.turnstile.snapTo(0f) }
         ui.launchedApp = false
-        if (comingHome) window.decorView.postDelayed({
-            ui.resumed = true
-            app.live.refreshNow()
-            DigitOverlay.poke(this)
-        }, 450)
+        // 1.3.6: live tiles / widgets refresh only after the flight has landed (at 450 ms it fired mid-flight
+        // and recomposed the whole grid → the visible hitch).
+        if (comingHome) {
+            val cfgMs = app.store.config.value.returnDurationMs
+            window.decorView.postDelayed({
+                ui.resumed = true
+                app.live.refreshNow()
+                DigitOverlay.poke(this)
+            }, (cfgMs + 200L).coerceAtLeast(350L))
+        }
         else {
             window.decorView.post { window.decorView.post { app.live.refreshNow() } }
             DigitOverlay.poke(this)
@@ -258,6 +302,14 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             // 1.3: pre-shrink the grid while invisible. Before, it was drawn at 100 % on the first
             // revealed frame and then jumped to 94 % when the flight started — a one-frame "twitch".
             ui.scope.launch { ui.homeZoom.snapTo(0f) }
+            // 1.3.6: pre-warm the icon the card lands on, off the main thread, while the app is closing.
+            // Before, a cache miss loaded it during the first frames of the flight (icon popped in late).
+            val spec = app.store.theme.value
+            val info = app.apps.apps.value.firstOrNull { it.key == rec.key }
+            if (info != null) lifecycleScope.launch {
+                val px = (spec.iconSizeDp * resources.displayMetrics.density).let { kotlin.math.round(it).toInt() }
+                app.icons.load(org.ivanivorontsov.launcher.data.IconCache.Req(info, spec.iconShape, px))
+            }
         }
         homeIntentSinceStop = false
         contractKey = null
@@ -271,9 +323,9 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
      */
     private fun beginReturnFlight() {
         if (ui.returning == null || returnArmed || resumeUptime == 0L) return
-        if (SystemClock.uptimeMillis() - resumeUptime < 80) return
+        if (SystemClock.uptimeMillis() - resumeUptime < 40) return
         returnArmed = true
-        ui.resumed = true
+        // 1.3.6: ui.resumed is not flipped here any more: it restarted live tiles during the flight.
         playReturn()
     }
 
@@ -295,23 +347,23 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             // Do not wait for the OEM's focus callback: the overlay is already composed with
             // the launch-time icon bounds fallback. The old focus hand-off left only wallpaper
             // visible while ColorOS delayed the launcher surface.
-            val speed = app.store.config.value.animSpeed
+            // 1.3.6: the setting is a real duration (150..1000 ms). Before it was a 0.6..1.6× speed factor on
+            // springs with a 0.001 threshold, so "0.6" was the SLOWEST setting and the springs crawled for
+            // another ~200 ms below visible change. Now: fast-out tweens, springs only for "Пружина".
+            val ms = app.store.config.value.returnDurationMs.coerceIn(150, 1000)
             val st = ui.returnStyle
-            val (damp, stiff) = when (st) {
-                org.ivanivorontsov.launcher.core.ReturnStyle.SPRING -> 0.70f to 340f
-                org.ivanivorontsov.launcher.core.ReturnStyle.FADE -> 1f to 420f
-                org.ivanivorontsov.launcher.core.ReturnStyle.ZOOM -> 0.90f to 300f
-                org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_UP, org.ivanivorontsov.launcher.core.ReturnStyle.SLIDE_SIDE -> 0.92f to 320f
-                else -> 0.84f to 270f
-            }
-            val k = org.ivanivorontsov.launcher.core.speedStiffness(stiff, speed)
+            ui.returnTail.snapTo(0f)
             kotlinx.coroutines.coroutineScope {
-                launch {
-                    ui.homeZoom.animateTo(1f, spring(dampingRatio = maxOf(damp, 0.8f), stiffness = k, visibilityThreshold = 0.001f))
+                launch { ui.homeZoom.animateTo(1f, tween(ms, easing = MotionSpecs.fastOut)) }
+                when {
+                    !st.card -> ui.returnProgress.snapTo(1f)
+                    st == org.ivanivorontsov.launcher.core.ReturnStyle.SPRING ->
+                        ui.returnProgress.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = org.ivanivorontsov.launcher.core.stiffnessFor(ms, 0.72f), visibilityThreshold = 0.01f))
+                    else -> ui.returnProgress.animateTo(1f, tween(ms, easing = MotionSpecs.fastOut))
                 }
-                if (st.card) ui.returnProgress.animateTo(1f, spring(dampingRatio = damp, stiffness = k, visibilityThreshold = 0.001f))
-                else ui.returnProgress.snapTo(1f)
             }
+            if (st == org.ivanivorontsov.launcher.core.ReturnStyle.RINGS || st == org.ivanivorontsov.launcher.core.ReturnStyle.DROP)
+                ui.returnTail.animateTo(1f, tween((ms * 1.2f).toInt().coerceIn(220, 700), easing = androidx.compose.animation.core.LinearOutSlowInEasing))
             ui.returning = null
             // 1.3.1: no landing "pop" — the scale bump at the end read as a twitch.
         }

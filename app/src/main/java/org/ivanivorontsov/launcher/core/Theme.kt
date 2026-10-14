@@ -20,8 +20,15 @@ import kotlinx.serialization.json.Json
 /** Page-turn effects of the home screen (1.2). */
 /** 1.3: how home appears after leaving an app (Home gesture / Home button). */
 @Serializable enum class HomeAnim(val title: String, val card: Boolean) {
-    SYSTEM("Системная", false), ICON("Сворачивание в иконку", true), SPRING("Пружина (как iOS)", true),
-    ZOOM("Приближение", false), SLIDE("Выезд снизу", false), FADE("Растворение", false)
+    SYSTEM("Системная", false), ICON("Классическая (в иконку)", true), SPRING("Пружина (как iOS)", true),
+    ZOOM("Приближение", false), SLIDE("Выезд снизу", false), FADE("Растворение", false),
+    /** 1.3.6 */
+    SPIN("Вращение при приземлении", true), RINGS("Круги на воде", true), DROP("Капля", true), COMET("Комета со шлейфом", true)
+}
+/** 1.3.6: how the home screen appears after the phone is unlocked. */
+@Serializable enum class UnlockAnim(val title: String) {
+    FADE("Плавное появление"), RISE("Вылет снизу"), WAVE("Волна из центра"), SPRING("Пружина (масштаб)"),
+    STAGGER("Рассыпание по очереди"), NONE("Без анимации")
 }
 /** 1.3: how home appears after Back closes an app, and how Уют's own screens close on Back. */
 @Serializable enum class BackAnim(val title: String) {
