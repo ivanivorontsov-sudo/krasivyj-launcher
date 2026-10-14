@@ -17,6 +17,10 @@ data class TileItem(val id: String, val kind: TileKind = TileKind.APP, val appKe
 @Serializable
 data class WidgetItem(val widgetId: Int, val heightDp: Int = 180)
 
+/** 1.3.8: one time zone of the clock widget. Empty [zoneId] = the phone's current zone. */
+@Serializable
+data class ClockZone(val zoneId: String = "", val label: String = "")
+
 @Serializable enum class GestureAction(val title: String) {
     NONE("Ничего"), DRAWER("Меню приложений"), NOTIFICATIONS("Шторка уведомлений"), SEARCH("Поиск"),
     LOCK("Заблокировать экран"), SETTINGS("Настройки лаунчера"), WIDGETS("Виджеты")
@@ -88,6 +92,9 @@ data class LauncherConfig(
     val diagNoLive: Boolean = false,
     val diagNoWidgets: Boolean = false,
     val diagNoAnim: Boolean = false,
+    /** 1.3.8: how many times the clock widget shows (1..3) and the zone + caption of each. */
+    val clockZoneCount: Int = 1,
+    val clockZones: List<ClockZone> = emptyList(),
     /** 1.3.6: unlock animation of the home screen. */
     val unlockAnim: UnlockAnim = UnlockAnim.FADE,
     /** 1.3.6: follow the system auto-rotate (true) or keep the launcher in portrait (false). */
@@ -107,6 +114,9 @@ data class LauncherConfig(
     val digitAlpha: Float = 1f,
     val digitOutline: Boolean = true,
 ) {
+    fun zone(i: Int): ClockZone = clockZones.getOrNull(i) ?: ClockZone()
+    fun zonesShown(): List<ClockZone> = (0 until clockZoneCount.coerceIn(1, 3)).map { zone(it) }
+
     fun baseLayout(): ScreenLayout = base ?: ScreenLayout(home = home, dock = dock, tiles = tiles, favorites = minimalFavorites)
 
     /** Moves legacy 1.0 fields into [base]. */

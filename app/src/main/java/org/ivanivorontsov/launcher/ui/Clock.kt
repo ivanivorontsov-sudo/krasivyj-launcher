@@ -51,6 +51,12 @@ fun ClockHeader(modifier: Modifier = Modifier, styleOverride: ClockStyle? = null
     val t = nowMinute()
     val alarm = remember(t) { LauncherApp.instance.live.nextAlarm() }
     val style = styleOverride ?: spec.clockStyle
+    val cfg by LauncherApp.instance.store.config.collectAsStateCompat()
+    val zones = cfg.zonesShown()
+    val main = zones[0]
+    val extra = zones.drop(1)
+    fun timeText(t: Long) = timeIn(t, main)
+    fun dateText(t: Long): String = (if (extra.isNotEmpty()) zoneCaption(main) + " · " else "") + org.ivanivorontsov.launcher.ui.dateText(t)
     val c = colors.onWallpaper
     val tap = Modifier.pressFeedback(onClick = { Device.openClock(ctx) }, onLongClick = null, tiltOverride = false)
     if (style == ClockStyle.NONE) return
@@ -63,16 +69,19 @@ fun ClockHeader(modifier: Modifier = Modifier, styleOverride: ClockStyle? = null
             ClockStyle.BIG -> Column(Modifier.then(tap).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(timeText(t), style = labelStyle(c, 76.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight)))
                 Text(spec.withCase(dateText(t)) + (alarm?.let { "  ·  ⏰ $it" } ?: ""), style = labelStyle(c, 15.sp).copy(fontFamily = fonts.heading))
+                ExtraZonesRow(extra, t)
             }
             ClockStyle.STACKED -> Column(Modifier.then(tap).padding(horizontal = 28.dp)) {
                 val (h, m) = timeText(t).split(":")
                 Text(h, style = labelStyle(c, 92.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight), lineHeight = 88.sp))
                 Text(m, style = labelStyle(colors.accent, 92.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight), lineHeight = 88.sp))
                 Text(spec.withCase(dateText(t)), style = labelStyle(c, 16.sp).copy(fontFamily = fonts.heading))
+                ExtraZonesRow(extra, t, start = true)
             }
             ClockStyle.SCRIPT -> Column(Modifier.then(tap).padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(timeText(t), style = labelStyle(c, 84.sp).copy(fontFamily = fonts.clock))
                 Text(dateText(t), style = labelStyle(c, 24.sp).copy(fontFamily = fonts.heading))
+                ExtraZonesRow(extra, t)
             }
             ClockStyle.TERMINAL -> Column(Modifier.then(tap).padding(horizontal = 22.dp)) {
                 val blink = rememberInfiniteTransition(label = "cursor")
@@ -80,16 +89,18 @@ fun ClockHeader(modifier: Modifier = Modifier, styleOverride: ClockStyle? = null
                 Text("ivan@uyut:~$ date", style = labelStyle(c.copy(alpha = 0.7f), 14.sp).copy(fontFamily = fonts.body))
                 Text(timeText(t), style = labelStyle(c, 64.sp).copy(fontFamily = fonts.clock))
                 Text(dateText(t).lowercase() + (alarm?.let { "  [будильник $it]" } ?: ""), style = labelStyle(c, 14.sp).copy(fontFamily = fonts.body))
+                ExtraZonesRow(extra, t, start = true)
                 Row { Text("ivan@uyut:~$ ", style = labelStyle(c, 14.sp).copy(fontFamily = fonts.body)); Text("█", style = labelStyle(c, 14.sp), modifier = Modifier.alpha(a)) }
             }
-            ClockStyle.CARD -> Box(Modifier.padding(horizontal = 22.dp).fillMaxWidth().height(156.dp).glass(spec.cornerDp.dp, colors, 0.14f).then(tap).padding(18.dp)) {
+            ClockStyle.CARD -> Box(Modifier.padding(horizontal = 22.dp).fillMaxWidth().height(if (extra.isEmpty()) 156.dp else 226.dp).glass(spec.cornerDp.dp, colors, 0.14f).then(tap).padding(18.dp)) {
                 Column(Modifier.align(Alignment.TopStart)) {
                     Text(dayOfWeek(t).uppercase(), style = labelStyle(colors.accent.copy(alpha = 1f), 13.sp).copy(fontFamily = fonts.heading, fontWeight = FontWeight.SemiBold))
                     Text(dayNumber(t), style = labelStyle(c, 40.sp).copy(fontFamily = fonts.heading, fontWeight = FontWeight.Light))
                 }
-                Column(Modifier.align(Alignment.BottomEnd), horizontalAlignment = Alignment.End) {
+                if (extra.isNotEmpty()) ExtraZonesRow(extra, t, Modifier.align(Alignment.BottomStart), start = true)
+                Column(Modifier.align(if (extra.isEmpty()) Alignment.BottomEnd else Alignment.TopEnd), horizontalAlignment = Alignment.End) {
                     Text(timeText(t), style = labelStyle(c, 54.sp).copy(fontFamily = fonts.clock, fontWeight = FontWeight(spec.clockWeight)), textAlign = TextAlign.End)
-                    Text(alarm?.let { "Будильник $it" } ?: monthText(t), style = labelStyle(c.copy(alpha = 0.8f), 13.sp))
+                    Text(alarm?.let { "Будильник $it" } ?: ((if (extra.isNotEmpty()) zoneCaption(main) + " · " else "") + monthText(t)), style = labelStyle(c.copy(alpha = 0.8f), 13.sp))
                 }
             }
         }

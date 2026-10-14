@@ -35,6 +35,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -86,8 +87,11 @@ fun WidgetsPage(ui: UiState) {
             } else Text("Показывать ближайшее событие — нажмите", style = labelStyle(colors.onWallpaper, 15.sp), modifier = Modifier.clickable { actions.requestCalendar() })
         }
         Spacer(Modifier.height(12.dp))
-        config.widgets.forEachIndexed { i, w ->
-            WidgetCell(w, i, config.widgets.size, ui.widgetEdit)
+        if (config.diagNoWidgets && config.widgets.isNotEmpty()) {
+            Card { Text("Виджеты Android скрыты («Упрощённый дом» в настройках)", style = labelStyle(colors.onWallpaper, 14.sp)) }
+            Spacer(Modifier.height(12.dp))
+        } else config.widgets.forEachIndexed { i, w ->
+            key(w.widgetId) { WidgetCell(w, i, config.widgets.size, ui.widgetEdit) }
             Spacer(Modifier.height(12.dp))
         }
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -163,12 +167,15 @@ fun WidgetPicker(onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val colors = LocalColors.current; val fonts = LocalFonts.current
     val actions = LocalActions.current as? WidgetBinder
-    val providers by produceState(emptyList<AppWidgetProviderInfo>()) {
+    val groups by produceState<List<Pair<String, List<AppWidgetProviderInfo>>>?>(null) {
         value = withContext(Dispatchers.IO) {
             val awm = AppWidgetManager.getInstance(ctx)
             val um = ctx.getSystemService(UserManager::class.java)
+            val pm = ctx.packageManager
+            fun app(p: AppWidgetProviderInfo) = try { pm.getApplicationLabel(pm.getApplicationInfo(p.provider.packageName, 0)).toString() } catch (_: Exception) { p.provider.packageName }
             um.userProfiles.flatMap { awm.getInstalledProvidersForProfile(it) }
-                .sortedWith(compareBy({ it.provider.packageName }, { it.loadLabel(ctx.packageManager) }))
+                .groupBy { app(it) }.toSortedMap(String.CASE_INSENSITIVE_ORDER)
+                .map { (a, l) -> a to l.sortedBy { it.loadLabel(pm) } }
         }
     }
     androidx.activity.compose.BackHandler { onDismiss() }
@@ -177,7 +184,13 @@ fun WidgetPicker(onDismiss: () -> Unit) {
             Text("Виджеты", color = colors.onSurface, fontFamily = fonts.heading, fontSize = 26.sp, modifier = Modifier.weight(1f))
             Text("Закрыть", color = colors.accent, modifier = Modifier.clickable { onDismiss() }.padding(8.dp))
         }
+        if (groups == null) Text("Загружаю список виджетов…", color = colors.onSurface.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
+        else if (groups!!.isEmpty()) Text("На телефоне нет приложений с виджетами", color = colors.onSurface, modifier = Modifier.padding(16.dp))
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
+          groups.orEmpty().forEach { (appName, providers) ->
+            item(key = "h:$appName") {
+                Text(appName, color = colors.accent, fontFamily = fonts.heading, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
+            }
             items(providers, key = { it.provider.flattenToString() + it.profile.hashCode() }) { p ->
                 val preview by produceState<ImageBitmap?>(null, p.provider) {
                     value = withContext(Dispatchers.IO) {
@@ -198,11 +211,11 @@ fun WidgetPicker(onDismiss: () -> Unit) {
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(p.loadLabel(ctx.packageManager), color = colors.onSurface, fontFamily = fonts.body, fontSize = 16.sp, maxLines = 2)
-                        val app = try { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(p.provider.packageName, 0)).toString() } catch (_: Exception) { p.provider.packageName }
-                        Text(app + "  ·  " + cells(p.minWidth, ctx) + "×" + cells(p.minHeight, ctx), color = colors.onSurface.copy(alpha = 0.6f), fontSize = 13.sp)
+                        Text("размер " + cells(p.minWidth, ctx) + "×" + cells(p.minHeight, ctx), color = colors.onSurface.copy(alpha = 0.6f), fontSize = 13.sp)
                     }
                 }
             }
+          }
         }
     }
 }

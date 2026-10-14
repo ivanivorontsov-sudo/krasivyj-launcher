@@ -149,6 +149,11 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT), SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT))
         super.onCreate(savedInstanceState)
+        savedInstanceState?.let { b ->
+            pendingWidgetId = b.getInt("pendingWidgetId", -1)
+            @Suppress("DEPRECATION") pendingWidgetInfo = b.getParcelable("pendingWidgetInfo")
+        }
+        if (savedInstanceState == null) window.decorView.postDelayed({ cleanupOrphanWidgets() }, 3000)
         if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
         // Animations need a MonotonicFrameClock: AndroidUiDispatcher.Main carries the Choreographer-backed one.
         ui = UiState(kotlinx.coroutines.CoroutineScope(lifecycleScope.coroutineContext + androidx.compose.ui.platform.AndroidUiDispatcher.Main))
@@ -675,6 +680,21 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val id = pendingWidgetId
         app.store.update { it.copy(widgets = it.widgets + WidgetItem(id, hDp)) }
         pendingWidgetId = -1; pendingWidgetInfo = null
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt("pendingWidgetId", pendingWidgetId)
+        pendingWidgetInfo?.let { outState.putParcelable("pendingWidgetInfo", it) }
+    }
+
+    /** 1.3.8: ids left allocated by a crash / cancelled bind are released, so the host never leaks. */
+    private fun cleanupOrphanWidgets() {
+        try {
+            val host = WidgetHostHolder.host(this)
+            val keep = app.store.config.value.widgets.map { it.widgetId }.toSet() + pendingWidgetId
+            host.appWidgetIds.filter { it !in keep }.forEach { host.deleteAppWidgetId(it) }
+        } catch (_: Exception) {}
     }
 
     private fun dropPendingWidget() {

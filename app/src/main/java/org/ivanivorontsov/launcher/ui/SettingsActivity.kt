@@ -644,6 +644,20 @@ private fun HomeScreenSettings() {
             }
             Info("realme 15 5G (экран 144 Гц): для самых плавных кадров включите в Настройках телефона → Экран → Частота обновления «Высокая», а здесь, в разделе экрана, — «Максимальная частота». Если хочется ещё мягче — «Пружина» и длительность 0,4 с; быстрее всего — 0,15–0,2 с.")
         } }
+        item { Section("Часы: часовые пояса") {
+            Info("Сколько времён показывать в виджете часов. Первое — главное, остальные — строкой под ним.")
+            Chips(listOf(1, 2, 3), cfg.clockZoneCount.coerceIn(1, 3), { "$it" }) { v -> store.update { it.copy(clockZoneCount = v) } }
+            var editing by remember { mutableIntStateOf(-1) }
+            (0 until cfg.clockZoneCount.coerceIn(1, 3)).forEach { i ->
+                val z = cfg.zone(i)
+                NavRow("Время ${i + 1}: " + zoneCaption(z), (if (z.zoneId.isBlank()) "Текущий пояс телефона" else z.zoneId) + " · " + utcOffset(System.currentTimeMillis(), z) + " — нажмите, чтобы изменить") { editing = i }
+            }
+            if (editing >= 0) ZoneDialog(cfg.zone(editing), onDismiss = { editing = -1 }) { nz ->
+                val i = editing
+                store.update { c -> val l = (0 until maxOf(3, c.clockZones.size)).map { c.zone(it) }.toMutableList(); l[i] = nz; c.copy(clockZones = l) }
+                editing = -1
+            }
+        } }
         item { Section("Диагностика фризов") {
             Info("Включите «Счётчик кадров», сверните тяжёлое приложение домой 5–10 раз и нажмите «Скопировать отчёт» — пришлите текст разработчику. Переключатели ниже по одному отключают подозреваемых: включайте по одному и сравнивайте, пропал ли фриз.")
             SwitchRow("Счётчик кадров после возврата домой", cfg.frameMeter) { v -> store.update { it.copy(frameMeter = v) } }
@@ -789,4 +803,30 @@ private fun AboutScreen() {
         }
     }
     @Suppress("UNUSED_EXPRESSION") FontWeight
+}
+
+@Composable
+private fun ZoneDialog(cur: org.ivanivorontsov.launcher.core.ClockZone, onDismiss: () -> Unit, onPick: (org.ivanivorontsov.launcher.core.ClockZone) -> Unit) {
+    var q by remember { mutableStateOf("") }
+    var label by remember { mutableStateOf(cur.label) }
+    var zone by remember { mutableStateOf(cur.zoneId) }
+    val found = remember(q) { Cities.search(q) }
+    AlertDialog(onDismissRequest = onDismiss,
+        title = { Text("Часовой пояс") },
+        text = { Column {
+            androidx.compose.material3.OutlinedTextField(q, { q = it }, label = { Text("Поиск города") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            LazyColumn(Modifier.fillMaxWidth().height(260.dp)) {
+                item { Text("Текущий пояс телефона", Modifier.fillMaxWidth().clickable { zone = ""; label = "" }.padding(vertical = 10.dp),
+                    fontWeight = if (zone.isBlank()) FontWeight.Bold else FontWeight.Normal) }
+                items(found, key = { it.first }) { (city, z) ->
+                    val sel = zone == z && (label.isBlank() || label == city)
+                    Text(city + "  ·  " + utcOffset(System.currentTimeMillis(), org.ivanivorontsov.launcher.core.ClockZone(z)),
+                        Modifier.fillMaxWidth().clickable { zone = z; label = city }.padding(vertical = 10.dp),
+                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal, color = if (sel) MaterialTheme.colorScheme.primary else Color.Unspecified)
+                }
+            }
+            androidx.compose.material3.OutlinedTextField(label, { label = it.take(24) }, label = { Text("Подпись (город)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        } },
+        confirmButton = { TextButton(onClick = { onPick(org.ivanivorontsov.launcher.core.ClockZone(zone, label.trim())) }) { Text("Готово") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } })
 }
