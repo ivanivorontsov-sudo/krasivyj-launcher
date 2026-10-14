@@ -25,6 +25,10 @@ import kotlinx.serialization.json.Json
     /** 1.3.6 */
     SPIN("Вращение при приземлении", true), RINGS("Круги на воде", true), DROP("Капля", true), COMET("Комета со шлейфом", true)
 }
+/** 1.3.7: effect played on the real icon after returning home (also when the system draws the close itself, e.g. realme Home). */
+@Serializable enum class IconFx(val title: String) {
+    RINGS("Круги на воде"), SPIN("Вращение"), SPRING("Пружинка"), NONE("Без эффекта")
+}
 /** 1.3.6: how the home screen appears after the phone is unlocked. */
 @Serializable enum class UnlockAnim(val title: String) {
     FADE("Плавное появление"), RISE("Вылет снизу"), WAVE("Волна из центра"), SPRING("Пружина (масштаб)"),

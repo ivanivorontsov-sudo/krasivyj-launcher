@@ -161,7 +161,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         // 1.3.6: «Автоповорот лаунчера» — applied immediately whenever the setting changes.
         lifecycleScope.launch {
             app.store.config.collect { c ->
-                val want = if (c.autoRotate) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER
+                val want = if (c.autoRotate) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                     else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 if (requestedOrientation != want) requestedOrientation = want
             }
@@ -183,7 +183,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
                 val lightBars = !t.dark
                 c.isAppearanceLightStatusBars = lightBars; c.isAppearanceLightNavigationBars = lightBars
                 // Hide the system wallpaper window when the theme paints its own (saves composition work).
-                if (t.wallpaper == org.ivanivorontsov.launcher.core.WallpaperStyle.SYSTEM && t.layout != HomeLayout.TILES) window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                if (t.wallpaper == org.ivanivorontsov.launcher.core.WallpaperStyle.SYSTEM && t.layout != HomeLayout.TILES && !app.store.config.value.diagNoWallpaper) window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
                 WallpaperApplier.onTheme(this@MainActivity, t)
             }
@@ -194,11 +194,12 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             combine(snapshotFlow { ui.drawer.progress > 0.5f }, app.store.theme) { open, t -> open && t.blur && t.wallpaper == org.ivanivorontsov.launcher.core.WallpaperStyle.SYSTEM }
                 .distinctUntilChanged().collect { on -> setBlurBehind(on) }
         }
-        JankMonitor.attach(this)
+        lifecycleScope.launch { app.store.config.collect { JankMonitor.setEnabled(this@MainActivity, it.frameMeter) } }
     }
 
     private fun setBlurBehind(on: Boolean) {
         if (Build.VERSION.SDK_INT < 31) return
+        if (on && app.store.config.value.diagNoBlur) return
         try {
             if (!windowManager.isCrossWindowBlurEnabled) return
             val lp = window.attributes
@@ -210,7 +211,10 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     override fun onStart() {
         super.onStart()
-        try { WidgetHostHolder.host(this).startListening() } catch (_: Exception) {}
+        // 1.3.7: coming back from an app, widget updates would land during the system close animation.
+        if (app.store.config.value.diagNoWidgets) {}
+        else if (ui.launchedApp) window.decorView.postDelayed({ if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) try { WidgetHostHolder.host(this).startListening() } catch (_: Exception) {} }, 450)
+        else try { WidgetHostHolder.host(this).startListening() } catch (_: Exception) {}
         if (displayRefresh == null) {
             displayRefresh = Device.registerDisplayRefresh(this) { app.store.config.value.highRefreshRate }
         }
@@ -228,6 +232,13 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         stoppedByScreenOff = false
         // No secure lock screen (or USER_PRESENT missed by the OEM): play on resume / focus.
         if (unlockArmed) window.decorView.post { playUnlock() }
+        // 1.3.7: true for every return from an app, also with «Системная» (before, that path cleared
+        // `returning` first and then ran the full non-return resume work during the system close → hitch).
+        val backFromApp = ui.returning != null || ui.launchedApp
+        if (backFromApp) JankMonitor.begin(if (homeIntentSinceStop) "Домой" else "Назад")
+        val fromHome = homeIntentSinceStop
+        val fxKey = ui.returning?.let { fxTargetFor(it.key, it.folderId) }
+        var fxNow = false
         ui.returning?.let { r ->
             val cfg = app.store.config.value
             val style = org.ivanivorontsov.launcher.core.resolveReturn(cfg.homeAnim, cfg.backAnim, fromBack = !homeIntentSinceStop)
@@ -240,9 +251,13 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
                 // "Системная": nothing of ours on top of the system transition.
                 ui.returning = null
                 ui.scope.launch { ui.homeZoom.snapTo(1f); ui.returnProgress.snapTo(1f) }
+                fxNow = true
             }
+            if (ui.returnStyle == org.ivanivorontsov.launcher.core.ReturnStyle.CONTRACT || !ui.returnStyle.card) fxNow = true
         }
-        val comingHome = ui.returning != null
+        // Home gesture on realme/ColorOS: the system draws its own close; ours plays on the real icon on the first frame.
+        if (fxNow && fxKey != null && !app.store.config.value.diagNoAnim) android.view.Choreographer.getInstance().postFrameCallback { playIconFx(fxKey) }
+        val comingHome = backFromApp
         // Cached mode id only: ColorOS drops a third-party launcher to 60 Hz for the
         // swipe-home transition unless this window has already asked for the high mode.
         applyRefreshRate(app.store.config.value.highRefreshRate)
@@ -254,7 +269,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         // Live tiles pause while we are stopped. This flag is not an animation key:
         // the home grid must stay composed, and `enter` / hasAnimatedIn are not reset here.
         // While the system close animation is running, leave tiles paused.
-        if (!comingHome) ui.resumed = true
+        if (!comingHome && !app.store.config.value.diagNoLive) ui.resumed = true
         val anim = Device.animationsEnabled()
         if (ui.animations != anim) ui.animations = anim
         if (comingHome) {
@@ -273,10 +288,12 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         if (comingHome) {
             val cfgMs = app.store.config.value.returnDurationMs
             window.decorView.postDelayed({
-                ui.resumed = true
-                app.live.refreshNow()
+                if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) return@postDelayed
+                JankMonitor.mark("deferred", "theme+tiles+overlay")
+                if (app.store.refreshThemeFromPreferences()) app.icons.clear()
+                if (!app.store.config.value.diagNoLive) { ui.resumed = true; app.live.refreshNow() }
                 DigitOverlay.poke(this)
-            }, (cfgMs + 200L).coerceAtLeast(350L))
+            }, (cfgMs + 200L).coerceAtLeast(480L))
         }
         else {
             window.decorView.post { window.decorView.post { app.live.refreshNow() } }
@@ -295,7 +312,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         // system is still animating the closing app. Snapping to 0 here drew a full-screen
         // card on the first revealed frame and stuttered that transition.
         val rec = ui.lastLaunch
-        if (ui.launchedApp && rec != null && Device.animationsEnabled() && app.store.config.value.returnAnimation &&
+        if (ui.launchedApp && rec != null && Device.animationsEnabled() && app.store.config.value.returnAnimation && !app.store.config.value.diagNoAnim &&
             System.currentTimeMillis() - rec.time < 6 * 60 * 60_000L) {
             ui.returning = ReturnAnim(rec.key, app.icons.color(rec.key), rec.bounds, folderId = rec.folderId)
             returnArmed = false
@@ -354,18 +371,52 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             val st = ui.returnStyle
             ui.returnTail.snapTo(0f)
             kotlinx.coroutines.coroutineScope {
-                launch { ui.homeZoom.animateTo(1f, tween(ms, easing = MotionSpecs.fastOut)) }
+                launch {
+                    if (st == org.ivanivorontsov.launcher.core.ReturnStyle.SPRING) ui.homeZoom.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = org.ivanivorontsov.launcher.core.springStiffness(ms), visibilityThreshold = 0.002f))
+                    else ui.homeZoom.animateTo(1f, tween(ms, easing = MotionSpecs.fastOut))
+                }
                 when {
                     !st.card -> ui.returnProgress.snapTo(1f)
                     st == org.ivanivorontsov.launcher.core.ReturnStyle.SPRING ->
-                        ui.returnProgress.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = org.ivanivorontsov.launcher.core.stiffnessFor(ms, 0.72f), visibilityThreshold = 0.01f))
+                        ui.returnProgress.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = org.ivanivorontsov.launcher.core.springStiffness(ms), visibilityThreshold = 0.005f))
                     else -> ui.returnProgress.animateTo(1f, tween(ms, easing = MotionSpecs.fastOut))
                 }
             }
             if (st == org.ivanivorontsov.launcher.core.ReturnStyle.RINGS || st == org.ivanivorontsov.launcher.core.ReturnStyle.DROP)
-                ui.returnTail.animateTo(1f, tween((ms * 1.2f).toInt().coerceIn(220, 700), easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+                ui.returnTail.animateTo(1f, tween((ms * 1.2f).toInt().coerceIn(380, 700), easing = androidx.compose.animation.core.LinearOutSlowInEasing))
             ui.returning = null
+            // 1.3.7: landed card styles keep playing on the real icon for ~300+ ms, whatever the duration.
+            val k = key
+            if (k != null) when (st) {
+                org.ivanivorontsov.launcher.core.ReturnStyle.SPIN -> playIconFx(fxTargetFor(k, ui.lastLaunch?.folderId), org.ivanivorontsov.launcher.core.IconFx.SPIN)
+                org.ivanivorontsov.launcher.core.ReturnStyle.SPRING -> playIconFx(fxTargetFor(k, ui.lastLaunch?.folderId), org.ivanivorontsov.launcher.core.IconFx.SPRING)
+                else -> {}
+            }
             // 1.3.1: no landing "pop" — the scale bump at the end read as a twitch.
+        }
+    }
+
+    /** App key when its icon is visible (grid or open folder), else the folder holding it. */
+    private fun fxTargetFor(key: String, folderId: String?): String =
+        if (folderId == null || ui.openFolder == folderId || ui.folderIconBounds[key] != null) key else folderId
+
+    /** 1.3.7: after-return effect on the real icon; fixed lengths so it stays visible at the 0.15 s setting. */
+    private fun playIconFx(key: String, forced: org.ivanivorontsov.launcher.core.IconFx? = null) {
+        val fx = forced ?: app.store.config.value.homeIconFx
+        if (fx == org.ivanivorontsov.launcher.core.IconFx.NONE || !Device.animationsEnabled()) return
+        JankMonitor.mark("anim", "iconFx " + fx.name)
+        ui.scope.launch {
+            ui.iconFxStyle = fx
+            ui.iconFx.snapTo(0f)
+            ui.iconFxKey = key
+            when (fx) {
+                org.ivanivorontsov.launcher.core.IconFx.SPRING ->
+                    ui.iconFx.animateTo(1f, spring(dampingRatio = 0.32f, stiffness = 520f, visibilityThreshold = 0.004f))
+                org.ivanivorontsov.launcher.core.IconFx.SPIN ->
+                    ui.iconFx.animateTo(1f, tween(460, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                else -> ui.iconFx.animateTo(1f, tween(700, easing = androidx.compose.animation.core.LinearEasing))
+            }
+            if (ui.iconFxKey == key) ui.iconFxKey = null
         }
     }
 

@@ -52,10 +52,10 @@ fun ReturnPreview(anim: HomeAnim, durationMs: Int, modifier: Modifier = Modifier
             t.snapTo(0f); tail.snapTo(0f); delay(350)
             when {
                 !style.card -> t.snapTo(1f)
-                style == ReturnStyle.SPRING -> t.animateTo(1f, spring(0.72f, stiffnessFor(durationMs, 0.72f), 0.01f))
+                style == ReturnStyle.SPRING -> t.animateTo(1f, spring(0.5f, org.ivanivorontsov.launcher.core.springStiffness(durationMs), 0.005f))
                 else -> t.animateTo(1f, tween(durationMs, easing = MotionSpecs.fastOut))
             }
-            if (style == ReturnStyle.RINGS || style == ReturnStyle.DROP) tail.animateTo(1f, tween((durationMs * 1.2f).toInt().coerceIn(220, 700), easing = LinearOutSlowInEasing))
+            if (style == ReturnStyle.RINGS || style == ReturnStyle.DROP) tail.animateTo(1f, tween((durationMs * 1.2f).toInt().coerceIn(380, 700), easing = LinearOutSlowInEasing))
             delay(900)
         }
     }

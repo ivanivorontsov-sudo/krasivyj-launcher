@@ -104,7 +104,19 @@ fun RegisterFolderIcon(ui: UiState?, id: String, ref: BoundsRef) {
 
 /** Hidden while dragged (its slot is the placeholder) and while the return animation lands on it. */
 fun Modifier.launcherItemVisibility(ui: UiState?, id: String): Modifier =
-    if (ui == null) this else this.graphicsLayer {
+    if (ui == null) this else this.drawBehind {
+        // 1.3.7: ripples around the icon after returning home (only the target icon reads the progress).
+        if (ui.iconFxKey == id && ui.iconFxStyle == org.ivanivorontsov.launcher.core.IconFx.RINGS) {
+            val v = ui.iconFx.value.coerceIn(0f, 1f)
+            val r0 = size.minDimension * 0.42f
+            for (i in 0 until 3) {
+                val k = ((v - i * 0.18f) / 0.64f).coerceIn(0f, 1f)
+                if (k <= 0f || k >= 1f) continue
+                drawCircle(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.75f * (1f - k)), radius = r0 * (1f + 1.3f * k),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5.dp.toPx() * (1f - 0.6f * k)))
+            }
+        }
+    }.graphicsLayer {
         alpha = when {
             ui.drag.hides(id) -> 0f
             ui.returning?.key == id && ui.returnStyle.card && ui.returnProgress.value < 0.97f -> 0f
@@ -113,6 +125,15 @@ fun Modifier.launcherItemVisibility(ui: UiState?, id: String): Modifier =
         }
         val p = if (ui.popKey == id) ui.pop.value else 0f
         if (p != 0f) { val s = 1f + 0.12f * p; scaleX = s; scaleY = s }
+        if (ui.iconFxKey == id) {
+            val v = ui.iconFx.value
+            when (ui.iconFxStyle) {
+                org.ivanivorontsov.launcher.core.IconFx.SPIN -> { rotationZ = 360f * v; val s = 1f + 0.10f * kotlin.math.sin(v.coerceIn(0f, 1f) * Math.PI).toFloat(); scaleX = s; scaleY = s }
+                org.ivanivorontsov.launcher.core.IconFx.SPRING -> { val s = 0.72f + 0.28f * v; scaleX = s; scaleY = s }
+                org.ivanivorontsov.launcher.core.IconFx.RINGS -> { val s = 1f - 0.08f * kotlin.math.sin(v.coerceIn(0f, 0.3f) / 0.3f * Math.PI).toFloat(); scaleX = s; scaleY = s }
+                else -> {}
+            }
+        }
         // 1.3.6: per-icon unlock wave / stagger (only while the unlock replay runs).
         val us = ui.unlockStyle
         if (us != null && (us == org.ivanivorontsov.launcher.core.UnlockAnim.WAVE || us == org.ivanivorontsov.launcher.core.UnlockAnim.STAGGER)) {

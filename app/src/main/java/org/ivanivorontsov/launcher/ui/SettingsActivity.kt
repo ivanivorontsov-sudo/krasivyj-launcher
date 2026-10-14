@@ -635,11 +635,31 @@ private fun HomeScreenSettings() {
             Chips(org.ivanivorontsov.launcher.core.HomeAnim.entries, cfg.homeAnim, { it.title }) { v -> store.update { it.copy(homeAnim = v, returnAnimation = true) } }
             Text("Назад", style = MaterialTheme.typography.titleSmall)
             Chips(org.ivanivorontsov.launcher.core.BackAnim.entries, cfg.backAnim, { it.title }) { v -> store.update { it.copy(backAnim = v, returnAnimation = true) } }
+            Text("Эффект на значке после возврата домой", style = MaterialTheme.typography.titleSmall)
+            Chips(org.ivanivorontsov.launcher.core.IconFx.entries, cfg.homeIconFx, { it.title }) { v -> store.update { it.copy(homeIconFx = v) } }
+            Info("Играет на значке закрытого приложения (или на его папке) сразу после того, как телефон свернул приложение. На realme/ColorOS жест «Домой» всегда рисует системное сворачивание — этот эффект доигрывает после него.")
             ReturnPreview(cfg.homeAnim, cfg.returnDurationMs, Modifier.padding(top = 8.dp))
             Labeled("Длительность: ${"%.2f".format(cfg.returnDurationMs / 1000f)} с (меньше — быстрее)") {
                 Slider(cfg.returnDurationMs.toFloat(), { v -> store.update { it.copy(returnDurationMs = ((v / 10).toInt() * 10).coerceIn(150, 1000)) } }, valueRange = 150f..1000f)
             }
             Info("realme 15 5G (экран 144 Гц): для самых плавных кадров включите в Настройках телефона → Экран → Частота обновления «Высокая», а здесь, в разделе экрана, — «Максимальная частота». Если хочется ещё мягче — «Пружина» и длительность 0,4 с; быстрее всего — 0,15–0,2 с.")
+        } }
+        item { Section("Диагностика фризов") {
+            Info("Включите «Счётчик кадров», сверните тяжёлое приложение домой 5–10 раз и нажмите «Скопировать отчёт» — пришлите текст разработчику. Переключатели ниже по одному отключают подозреваемых: включайте по одному и сравнивайте, пропал ли фриз.")
+            SwitchRow("Счётчик кадров после возврата домой", cfg.frameMeter) { v -> store.update { it.copy(frameMeter = v) } }
+            SwitchRow("Упрощённый дом: без обоев (сплошной фон)", cfg.diagNoWallpaper) { v -> store.update { it.copy(diagNoWallpaper = v) } }
+            SwitchRow("Упрощённый дом: без размытия", cfg.diagNoBlur) { v -> store.update { it.copy(diagNoBlur = v) } }
+            SwitchRow("Упрощённый дом: без живых плиток", cfg.diagNoLive) { v -> store.update { it.copy(diagNoLive = v) } }
+            SwitchRow("Упрощённый дом: без виджетов", cfg.diagNoWidgets) { v -> store.update { it.copy(diagNoWidgets = v) } }
+            SwitchRow("Упрощённый дом: без анимаций возврата", cfg.diagNoAnim) { v -> store.update { it.copy(diagNoAnim = v) } }
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            OutlinedButton(onClick = {
+                val extra = "Настройки: home=${cfg.homeAnim} back=${cfg.backAnim} длит=${cfg.returnDurationMs} эффект=${cfg.homeIconFx} тема=${spec.id} обои=${spec.wallpaper} блюр=${spec.blur} " +
+                    "диаг: обои=${cfg.diagNoWallpaper} блюр=${cfg.diagNoBlur} плитки=${cfg.diagNoLive} виджеты=${cfg.diagNoWidgets} аним=${cfg.diagNoAnim}"
+                val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("СуперСмарт отчёт", org.ivanivorontsov.launcher.JankMonitor.report(extra)))
+                android.widget.Toast.makeText(ctx, "Отчёт скопирован", android.widget.Toast.LENGTH_SHORT).show()
+            }) { Text("Скопировать отчёт") }
         } }
         item { Section("Анимация при разблокировке") {
             Chips(org.ivanivorontsov.launcher.core.UnlockAnim.entries, cfg.unlockAnim, { it.title }) { v -> store.update { it.copy(unlockAnim = v) } }

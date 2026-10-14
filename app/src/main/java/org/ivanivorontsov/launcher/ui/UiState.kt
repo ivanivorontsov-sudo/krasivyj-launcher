@@ -106,6 +106,10 @@ class UiState(val scope: CoroutineScope) {
     var returnStyle by mutableStateOf(org.ivanivorontsov.launcher.core.ReturnStyle.ICON)
     /** Icon that gets a small "landing" pop (after the system flew the window into it). */
     var popKey by mutableStateOf<String?>(null)
+    /** 1.3.7: icon (app key or folder id) currently playing the after-return effect, its style and progress. */
+    var iconFxKey by mutableStateOf<String?>(null)
+    var iconFxStyle = org.ivanivorontsov.launcher.core.IconFx.RINGS
+    val iconFx = Animatable(0f)
     val pop = Animatable(0f)
     var hint by mutableStateOf<String?>(null)
     /** Haptic tick when a folder target lights up (set by the root). */

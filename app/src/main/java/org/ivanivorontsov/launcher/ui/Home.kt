@@ -165,8 +165,9 @@ private fun loadPhoto(ctx: android.content.Context, uri: Uri, w: Int, h: Int): B
 @Composable
 fun LauncherRoot(ui: UiState) {
     val app = LauncherApp.instance
-    val spec by app.store.theme.collectAsStateCompat()
+    val spec0 by app.store.theme.collectAsStateCompat()
     val config by app.store.config.collectAsStateCompat()
+    val spec = if (config.diagNoBlur && spec0.blur) remember(spec0) { spec0.copy(blur = false) } else spec0
     val allApps by app.apps.apps.collectAsStateCompat()
     // «Стоп-экран»: forbidden apps simply do not exist for the launcher (home, dock, folders, drawer, search, tiles).
     val stop by org.ivanivorontsov.launcher.stop.StopGuard.view.collectAsStateCompat()
@@ -188,12 +189,12 @@ fun LauncherRoot(ui: UiState) {
         val density = LocalDensity.current
         BoxWithConstraints(Modifier.fillMaxSize().dragTracker(ui)) {
             val wPx = with(density) { maxWidth.roundToPx() }; val hPx = with(density) { maxHeight.roundToPx() }
-            val wall = rememberWallpaper(spec, wPx, hPx, config.tileBackgroundUri)
+            val wall = if (config.diagNoWallpaper) null else rememberWallpaper(spec, wPx, hPx, config.tileBackgroundUri)
             val colors = LocalColors.current
 
             // Background: code-drawn wallpaper, or the phone wallpaper shows through the transparent window.
             if (wall != null && !wall.tall) Image(wall.full, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            else if (wall?.tall == true || spec.layout == HomeLayout.TILES) Box(Modifier.fillMaxSize().background(colors.background))
+            else if (wall?.tall == true || spec.layout == HomeLayout.TILES || config.diagNoWallpaper) Box(Modifier.fillMaxSize().background(colors.background))
 
             // Icons of placed apps first (from the disk cache → instant), then everything else for the drawer.
             LaunchedEffect(apps, spec.iconShape, spec.iconSizeDp) {
@@ -274,6 +275,12 @@ fun LauncherRoot(ui: UiState) {
             OverlayEffect(spec.overlay)
             FolderOverlay(ui, layout)
             ReturnOverlay(ui, layout)
+            if (config.frameMeter) {
+                val sum = org.ivanivorontsov.launcher.JankMonitor.summary
+                if (sum.isNotEmpty()) androidx.compose.material3.Text(sum, color = Color.White, fontSize = 11.sp,
+                    modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 2.dp)
+                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 3.dp))
+            }
             ReturnWarmUp()
             MenuOverlay(ui)
             DragLayer(ui)

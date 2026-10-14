@@ -29,3 +29,6 @@ fun stiffnessFor(ms: Int, damping: Float): Float {
     val w = 4.6f / (damping.coerceIn(0.3f, 1f) * t)
     return w * w
 }
+
+/** 1.3.7: livelier "Пружина": low damping with a visible overshoot; never faster than ~260 ms so the bounce can be seen. */
+fun springStiffness(ms: Int): Float = stiffnessFor((ms * 1.4f).toInt().coerceAtLeast(260), 0.5f)

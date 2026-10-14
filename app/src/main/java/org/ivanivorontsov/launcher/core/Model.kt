@@ -79,6 +79,15 @@ data class LauncherConfig(
     val animSpeed: Float = 1f,
     /** 1.3.6: duration of the return-to-home animation in ms (150..1000). Replaces [animSpeed]. */
     val returnDurationMs: Int = 300,
+    /** 1.3.7: «Эффект на значке после возврата домой» (plays after the system close animation). */
+    val homeIconFx: IconFx = IconFx.RINGS,
+    /** 1.3.7: diagnostics — «Счётчик кадров» overlay and «упрощённый дом» switches (each disables one suspect). */
+    val frameMeter: Boolean = false,
+    val diagNoWallpaper: Boolean = false,
+    val diagNoBlur: Boolean = false,
+    val diagNoLive: Boolean = false,
+    val diagNoWidgets: Boolean = false,
+    val diagNoAnim: Boolean = false,
     /** 1.3.6: unlock animation of the home screen. */
     val unlockAnim: UnlockAnim = UnlockAnim.FADE,
     /** 1.3.6: follow the system auto-rotate (true) or keep the launcher in portrait (false). */

@@ -14,8 +14,8 @@ val ksProps = Properties().apply {
 }
 fun signingValue(key: String, env: String): String? = System.getenv(env) ?: ksProps.getProperty(key)
 
-val appVersionCode = (System.getenv("VERSION_CODE") ?: "1360").toInt()
-val appVersionName = System.getenv("VERSION_NAME") ?: "1.3.6"
+val appVersionCode = (System.getenv("VERSION_CODE") ?: "1370").toInt()
+val appVersionName = System.getenv("VERSION_NAME") ?: "1.3.7"
 
 android {
     namespace = "org.ivanivorontsov.launcher"
@@ -123,7 +123,7 @@ dependencies {
     implementation(project(":modules:kodeks"))
     implementation(project(":modules:boec"))
     implementation(project(":modules:lite"))
-    debugImplementation("androidx.metrics:metrics-performance:1.0.0-beta01")
+    implementation("androidx.metrics:metrics-performance:1.0.0-beta01")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.0.21")
