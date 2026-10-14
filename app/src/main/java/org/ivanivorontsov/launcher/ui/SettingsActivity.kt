@@ -226,13 +226,13 @@ private fun MainScreen(go: (Screen) -> Unit) {
         }
         item { NavRow("Все темы", "${Presets.all.size} готовых тем с живым предпросмотром") { go(Screen.THEMES) } }
         item { NavRow("Главный экран", "Перетаскивание и папки, эффекты перелистывания, новые приложения, анимация возврата к иконке") { go(Screen.HOME) } }
-        item { NavRow("Стоп-экран", "Лимит экранного времени, расписание, запрещённые приложения, пароль") { ctx.startActivity(android.content.Intent(ctx, org.ivanivorontsov.launcher.stop.StopActivity::class.java)) } }
+        if (!BuildConfig.PLAY) item { NavRow("Стоп-экран", "Лимит экранного времени, расписание, запрещённые приложения, пароль") { ctx.startActivity(android.content.Intent(ctx, org.ivanivorontsov.launcher.stop.StopActivity::class.java)) } }
         item { NavRow("Свой стиль", "Шрифты, цвета, форма иконок, сетка, анимации, обои") { go(Screen.EDITOR) } }
         item { NavRow("Шрифты", "${org.ivanivorontsov.launcher.ui.FontCatalog.all.size} шрифтов с кириллицей, в том числе рукописные") { go(Screen.FONTS) } }
         item { NavRow("Системный шрифт и обои", "Что можно поменять во всём телефоне") { go(Screen.SYSTEM) } }
-        item { NavRow("Жесты", "Свайпы, двойное касание для блокировки") { go(Screen.GESTURES) } }
+        item { NavRow("Жесты", if (BuildConfig.PLAY) "Свайпы и двойное касание" else "Свайпы, двойное касание для блокировки") { go(Screen.GESTURES) } }
         item { NavRow("Живые плитки и разрешения", "Фото, календарь, счётчики уведомлений") { go(Screen.LIVE) } }
-        item { NavRow("Цифры поверх приложений", "Крупный чёрный счётчик времени. Выключен, пока сами не включите") { go(Screen.DIGITS) } }
+        if (!BuildConfig.PLAY) item { NavRow("Цифры поверх приложений", "Крупный чёрный счётчик времени. Выключен, пока сами не включите") { go(Screen.DIGITS) } }
         item { NavRow("Скрытые приложения") { go(Screen.HIDDEN) } }
         item { NavRow("Набор иконок") { go(Screen.ICONS) } }
         item { NavRow("Плавность и батарея", "Частота экрана, фоновая работа (${Device.oemName()})") { go(Screen.SMOOTH) } }
@@ -393,8 +393,8 @@ private fun GesturesScreen() {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Свайп вверх") { Chips(listOf(GestureAction.DRAWER, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.swipeUp, { it.title }) { v -> store.update { it.copy(swipeUp = v) } } } }
         item { Section("Свайп вниз") { Chips(listOf(GestureAction.NOTIFICATIONS, GestureAction.DRAWER, GestureAction.SETTINGS, GestureAction.NONE), cfg.swipeDown, { it.title }) { v -> store.update { it.copy(swipeDown = v) } } } }
-        item { Section("Двойное касание") { Chips(listOf(GestureAction.LOCK, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.doubleTap, { it.title }) { v -> store.update { it.copy(doubleTap = v) } } } }
-        item { Section("Блокировка двойным касанием") {
+        item { Section("Двойное касание") { Chips(listOfNotNull(GestureAction.LOCK.takeUnless { BuildConfig.PLAY }, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.doubleTap, { it.title }) { v -> store.update { it.copy(doubleTap = v) } } } }
+        if (!BuildConfig.PLAY) item { Section("Блокировка двойным касанием") {
             Info(if (lockOn) "Служба включена ✓" else "Для блокировки экрана нужна служба спец. возможностей «СуперСмарт: блокировка экрана». Она ничего не читает с экрана и умеет только заблокировать телефон и открыть шторку.")
             if (Build.VERSION.SDK_INT >= 33) Info("Android 13+: если переключатель серый — откройте «О приложении» СуперСмарт → ⋮ → «Разрешить ограниченные настройки».")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -446,6 +446,7 @@ private fun LiveScreen() {
     val notif = remember(tick) { androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName) }
     val photoReq = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permTick++ }
     val calReq = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permTick++ }
+    val pickMany = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) { uris -> if (uris.isNotEmpty()) { live.setPickedPhotos(uris); permTick++ } }
     val scope = rememberCoroutineScope()
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         if (uri != null) scope.launch {
@@ -460,8 +461,13 @@ private fun LiveScreen() {
             @Suppress("UNUSED_EXPRESSION") NotificationCounter
         } }
         item { Section("Плитка «Фото»") {
+            if (BuildConfig.PLAY) {
+                Info(if (photos) "Выбрано фото: ${live.pickedPhotos().size} ✓ Фото не покидают телефон." else "Показывает выбранные вами фото с плавным приближением. Доступ ко всей галерее не нужен.")
+                Button(onClick = { pickMany.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text(if (photos) "Выбрать другие фото" else "Выбрать фото") }
+            } else {
             Info(if (photos) "Доступ к фото есть ✓ Фото не покидают телефон." else "Показывает ваши фото с плавным приближением. Разрешение спрашивается только для этой плитки.")
             if (!photos) Button(onClick = { photoReq.launch(live.photoPermissions()) }) { Text("Разрешить фото") }
+            }
         } }
         item { Section("Плитка «Календарь»") {
             Info(if (calendar) "Доступ к календарю есть ✓" else "Показывает ближайшее событие. Необязательно.")
@@ -764,7 +770,7 @@ private fun SmoothScreen() {
         item { Section("Анимации") { Info(if (anim) "Системные анимации включены ✓" else "В настройках телефона отключены анимации — СуперСмарт работает без анимаций и не тратит на них энергию.") } }
         item { Section("Фоновая работа") {
             Info(if (ignoring) "СуперСмарт исключён из оптимизации батареи ✓" else "Чтобы система не выгружала лаунчер (и он не «перезапускался» при возврате домой), исключите его из оптимизации батареи.")
-            if (!ignoring) Button(onClick = { Device.requestIgnoreBatteryOptimizations(ctx) }) { Text("Не выгружать СуперСмарт") }
+            if (!ignoring && !BuildConfig.PLAY) Button(onClick = { Device.requestIgnoreBatteryOptimizations(ctx) }) { Text("Не выгружать СуперСмарт") }
             if (Device.oem == Device.Oem.REALME_OPPO_ONEPLUS) {
                 Info("realme / ColorOS: дополнительно откройте «Настройки → Приложения → СуперСмарт → Использование батареи» и разрешите фоновую активность; в «Недавних» потяните карточку СуперСмарта вниз, чтобы закрепить её замком.")
                 Info("На realme UI системная анимация сторонних лаунчеров может начинаться с задержкой или идти на 60 Гц. Добавьте СуперСмарт в список приложений с высокой частотой обновления (Экран → Частота обновления). СуперСмарт дополнительно рисует собственную анимацию после системного перехода.")

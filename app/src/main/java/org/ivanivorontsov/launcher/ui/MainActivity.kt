@@ -596,7 +596,14 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     override fun addWidget() { ui.widgetPicker = true }
 
-    override fun requestPhotos() { photoPerms.launch(app.live.photoPermissions()) }
+    override fun requestPhotos() {
+        if (org.ivanivorontsov.launcher.BuildConfig.PLAY) pickPhotos.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        else photoPerms.launch(app.live.photoPermissions())
+    }
+    /** Play flavor: system Photo Picker (no READ_MEDIA_IMAGES); chosen photos are remembered with persistable grants. */
+    private val pickPhotos = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) { uris ->
+        if (uris.isNotEmpty()) { app.live.setPickedPhotos(uris); ui.permissionsVersion++ }
+    }
     override fun requestCalendar() { calendarPerm.launch(android.Manifest.permission.READ_CALENDAR) }
 
     override fun gesture(action: GestureAction) {
@@ -605,7 +612,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             GestureAction.DRAWER -> ui.drawer.open()
             GestureAction.NOTIFICATIONS -> if (!Device.expandNotifications(this)) Toast.makeText(this, "Шторку открыть не удалось", Toast.LENGTH_SHORT).show()
             GestureAction.SEARCH -> ui.drawer.open()
-            GestureAction.LOCK -> if (!LockService.lock()) {
+            GestureAction.LOCK -> if (org.ivanivorontsov.launcher.BuildConfig.PLAY) {} else if (!LockService.lock()) {
                 Toast.makeText(this, "Включите «СуперСмарт: блокировка экрана» в Спец. возможностях", Toast.LENGTH_LONG).show()
                 Device.openAccessibilitySettings(this)
             }

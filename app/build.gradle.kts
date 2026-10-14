@@ -50,6 +50,14 @@ android {
         }
     }
 
+    flavorDimensions += "dist"
+    productFlavors {
+        // Full APK (sideload): everything, incl. «Стоп-экран», screen lock, DNS filter, digit overlay.
+        create("full") { dimension = "dist"; buildConfigField("boolean", "PLAY", "false") }
+        // Google Play: same package, without Play-restricted parts (see src/play/AndroidManifest.xml).
+        create("play") { dimension = "dist"; buildConfigField("boolean", "PLAY", "true") }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true

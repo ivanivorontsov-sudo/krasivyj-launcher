@@ -38,7 +38,7 @@ object SuperModules {
         SuperModule("Читалка", "EPUB и FB2, ваша книга уже внутри", "ru.vorontsov.reader.MainActivity"),
         SuperModule("Заметки", "Простые быстрые заметки", "ru.zametki.notes.MainActivity"),
         SuperModule("Тихо", "Приватный браузер на GeckoView — открывается как отдельное приложение", null, "org.ivanivorontsov.tiho", "GNU GPL v3"),
-    )
+    ).filter { !org.ivanivorontsov.launcher.BuildConfig.PLAY || it.externalPkg == null }
 
     fun open(ctx: Context, m: SuperModule) {
         if (m.activity != null) {
@@ -83,7 +83,7 @@ private fun Hub() {
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
         }
         items(SuperModules.all) { m -> ModuleCard(m) { SuperModules.open(ctx, m) } }
-        item {
+        if (!org.ivanivorontsov.launcher.BuildConfig.PLAY) item {
             Text("Тихо распространяется по лицензии GNU GPL v3; исходный код: github.com/ivanivorontsov-sudo/tiho-browser. Стоп-экран встроен в сам лаунчер и здесь не дублируется.",
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
         }

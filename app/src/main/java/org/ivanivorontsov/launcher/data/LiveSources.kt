@@ -67,7 +67,17 @@ class LiveSources(private val context: Context) {
         else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
 
-    fun hasPhotoAccess(): Boolean = photoPermissions().any { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+    fun hasPhotoAccess(): Boolean =
+        if (org.ivanivorontsov.launcher.BuildConfig.PLAY) pickedPhotos().isNotEmpty()
+        else photoPermissions().any { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+
+    private val picks get() = context.getSharedPreferences("picked_photos", Context.MODE_PRIVATE)
+    fun pickedPhotos(): List<Uri> = picks.getString("uris", "").orEmpty().split('\n').filter { it.isNotBlank() }.map { Uri.parse(it) }
+    fun setPickedPhotos(uris: List<Uri>) {
+        uris.forEach { u -> try { context.contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {} }
+        picks.edit().putString("uris", uris.joinToString("\n")).apply()
+        photoListTime = 0L; photoUris = emptyList()
+    }
 
     private val thumbs = LruCache<String, ImageBitmap>(6)
     private var photoUris: List<Uri> = emptyList()
@@ -75,6 +85,7 @@ class LiveSources(private val context: Context) {
 
     suspend fun photos(): List<Uri> = withContext(Dispatchers.IO) {
         if (!hasPhotoAccess()) return@withContext emptyList()
+        if (org.ivanivorontsov.launcher.BuildConfig.PLAY) return@withContext pickedPhotos().shuffled()
         if (System.currentTimeMillis() - photoListTime < 10 * 60_000 && photoUris.isNotEmpty()) return@withContext photoUris
         val out = ArrayList<Uri>()
         try {
