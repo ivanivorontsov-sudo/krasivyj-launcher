@@ -14,17 +14,17 @@ val ksProps = Properties().apply {
 }
 fun signingValue(key: String, env: String): String? = System.getenv(env) ?: ksProps.getProperty(key)
 
-val appVersionCode = (System.getenv("VERSION_CODE") ?: "1380").toInt()
+val appVersionCode = (System.getenv("VERSION_CODE") ?: "1381").toInt()
 val appVersionName = System.getenv("VERSION_NAME") ?: "1.3.8"
 
 android {
     namespace = "org.ivanivorontsov.launcher"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "org.ivanivorontsov.launcher"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
         resourceConfigurations += listOf("ru", "en")
@@ -60,6 +60,7 @@ android {
 
     buildTypes {
         release {
+            ndk { debugSymbolLevel = "SYMBOL_TABLE" }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

@@ -74,6 +74,9 @@ public class MainActivity extends Activity {
     @Override // android.app.Activity
     protected void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        // Android 13+ with enableOnBackInvokedCallback (and always on targetSdk 36): onBackPressed() is not called.
+        if (android.os.Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+            android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, () -> { if (this.editing != null) closeEditor(); else finish(); });
         this.density = getResources().getDisplayMetrics().density;
         this.prefs = getSharedPreferences("mod_notes", 0);
         load();

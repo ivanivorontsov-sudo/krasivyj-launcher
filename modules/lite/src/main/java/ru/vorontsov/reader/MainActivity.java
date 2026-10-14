@@ -65,6 +65,11 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        if (android.os.Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+            android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, () -> {
+                if (web == null) { finish(); return; }
+                web.evaluateJavascript("window.handleBack?handleBack():false", v -> { if (!"true".equals(v)) finish(); });
+            });
         sp = getSharedPreferences("mod_reader", MODE_PRIVATE);
         requestHighRefresh();
         root = new FrameLayout(this);
