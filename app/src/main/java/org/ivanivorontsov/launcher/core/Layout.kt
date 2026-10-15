@@ -28,6 +28,10 @@ data class ScreenLayout(
     val folders: Map<String, Folder> = emptyMap(),
     val tiles: List<TileItem> = emptyList(),
     val favorites: List<String> = emptyList(),
+    /** 1.3.9: widgets placed on the home pages (keys are items of [home]), see HomeWidgets.kt. */
+    val widgets: Map<String, HomeWidget> = emptyMap(),
+    /** 1.3.9: the clock widget was placed once (afterwards the user may have removed it). */
+    val clockPlaced: Boolean = false,
 ) {
     fun folderOf(appKey: String): String? = folders.values.firstOrNull { appKey in it.apps }?.id
 
@@ -37,7 +41,7 @@ data class ScreenLayout(
     fun hasTileFor(appKey: String): Boolean = tiles.any { it.appKey == appKey }
 
     /** All app keys reachable from home/dock (folders expanded). */
-    fun placedApps(): List<String> = (dock + home).flatMap { if (isFolderId(it)) folders[it]?.apps.orEmpty() else listOf(it) }
+    fun placedApps(): List<String> = (dock + home).flatMap { if (isFolderId(it)) folders[it]?.apps.orEmpty() else if (isWidgetId(it)) emptyList() else listOf(it) }
 
     /**
      * Lifts [id] out of home/dock/folders. A folder left with a single app dissolves into that app in place.
@@ -76,7 +80,7 @@ data class ScreenLayout(
         val base = detach(id)
         return when (spot) {
             is DropSpot.Home -> base.copy(home = base.home.insertAt(spot.index, id))
-            is DropSpot.Dock -> if (base.dock.size >= maxDock) null else base.copy(dock = base.dock.insertAt(spot.index, id))
+            is DropSpot.Dock -> if (base.dock.size >= maxDock || isWidgetId(id)) null else base.copy(dock = base.dock.insertAt(spot.index, id))
             is DropSpot.Into -> base.mergeInto(id, spot.target, folderName)
             is DropSpot.Fav -> copy(favorites = (favorites - id).insertAt(spot.index, id))
             is DropSpot.Tile -> null
@@ -84,7 +88,7 @@ data class ScreenLayout(
     }
 
     private fun mergeInto(id: String, target: String, folderName: String): ScreenLayout? {
-        if (id == target || isFolderId(id)) return null
+        if (id == target || isFolderId(id) || isWidgetId(id) || isWidgetId(target)) return null
         if (isFolderId(target)) {
             val f = folders[target] ?: return null
             if (target !in home && target !in dock) return null
@@ -104,7 +108,8 @@ data class ScreenLayout(
 
     /** "Удалить с экрана": removes an app (from home, dock, folders, favourites, tiles) or a whole folder. */
     fun remove(id: String): ScreenLayout =
-        if (isFolderId(id)) copy(home = home - id, dock = dock - id, folders = folders - id)
+        if (isWidgetId(id)) copy(home = home - id, widgets = widgets - id)
+        else if (isFolderId(id)) copy(home = home - id, dock = dock - id, folders = folders - id)
         else detach(id).copy(favorites = favorites - id, tiles = tiles.filter { it.appKey != id })
 
     /** Replaces the folder by its apps, in place. */
@@ -132,7 +137,7 @@ data class ScreenLayout(
      * jump everything to the end.
      */
     fun groupHomeIntoFolders(folderName: (appKey: String) -> String): ScreenLayout {
-        if (home.none { !isFolderId(it) }) return this
+        if (home.none { !isFolderId(it) && !isWidgetId(it) }) return this
         val nameToId = LinkedHashMap<String, String>()
         for (id in home) {
             if (!isFolderId(id)) continue
@@ -141,7 +146,7 @@ data class ScreenLayout(
         }
         val looseByName = LinkedHashMap<String, MutableList<String>>()
         for (id in home) {
-            if (isFolderId(id)) continue
+            if (isFolderId(id) || isWidgetId(id)) continue
             val raw = folderName(id).trim().ifEmpty { "Прочее" }
             looseByName.getOrPut(raw) { ArrayList() }.add(id)
         }
@@ -174,7 +179,7 @@ data class ScreenLayout(
         val placedNew = HashSet<String>()
         val newHome = ArrayList<String>(home.size)
         for (id in home) {
-            if (isFolderId(id)) {
+            if (isFolderId(id) || isWidgetId(id)) {
                 newHome += id
                 continue
             }
@@ -238,6 +243,7 @@ data class ScreenLayout(
         val fs = LinkedHashMap<String, Folder>()
         fun clean(list: List<String>): List<String> = list.mapNotNull { id ->
             if (!seen.add(id)) return@mapNotNull null
+            if (isWidgetId(id)) return@mapNotNull if (id in widgets) id else null
             if (isFolderId(id)) {
                 val f = folders[id] ?: return@mapNotNull null
                 val apps = f.apps.filter { ok(it) && it !in seen }.distinct()
@@ -245,10 +251,10 @@ data class ScreenLayout(
                 when (apps.size) { 0 -> null; 1 -> apps[0]; else -> { fs[id] = f.copy(apps = apps); id } }
             } else if (ok(id)) id else null
         }
-        val d = clean(dock)
+        val d = clean(dock).filter { !isWidgetId(it) }
         val h = clean(home)
         return ScreenLayout(h, d, fs, tiles.filter { (it.kind != TileKind.APP || (it.appKey != null && ok(it.appKey))) }.distinctBy { it.id },
-            favorites.filter { ok(it) }.distinct())
+            favorites.filter { ok(it) && !isWidgetId(it) }.distinct(), widgets.filterKeys { it in h }, clockPlaced)
     }
 
     /** A newly installed app goes to the first free slot of every kind of home screen. */

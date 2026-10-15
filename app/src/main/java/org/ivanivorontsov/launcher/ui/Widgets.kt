@@ -95,9 +95,9 @@ fun WidgetsPage(ui: UiState) {
             Spacer(Modifier.height(12.dp))
         }
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            Pill("+ Виджет") { actions.addWidget() }
+            Pill("+ Виджет") { ui.widgetPickerToToday = true; actions.addWidget() }
             if (config.widgets.isNotEmpty()) Pill(if (ui.widgetEdit) "Готово" else "Изменить") { ui.widgetEdit = !ui.widgetEdit }
-            Pill("Настройки") { actions.openSettings() }
+            Pill("Убрать экран") { actions.openSettings("home") }
         }
         Spacer(Modifier.height(24.dp))
         @Suppress("UNUSED_EXPRESSION") ctx
@@ -163,7 +163,7 @@ private fun EditBtn(s: String, onClick: () -> Unit) {
 
 /** Own widget picker: providers from every profile, grouped by app, with previews (decoded off the main thread). */
 @Composable
-fun WidgetPicker(onDismiss: () -> Unit) {
+fun WidgetPicker(toToday: Boolean = false, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val colors = LocalColors.current; val fonts = LocalFonts.current
     val actions = LocalActions.current as? WidgetBinder
@@ -181,12 +181,30 @@ fun WidgetPicker(onDismiss: () -> Unit) {
     androidx.activity.compose.BackHandler { onDismiss() }
     Column(Modifier.fillMaxSize().background(colors.surface).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Виджеты", color = colors.onSurface, fontFamily = fonts.heading, fontSize = 26.sp, modifier = Modifier.weight(1f))
+            Text(if (toToday) "Виджеты: «Сегодня»" else "Виджеты на главный экран", color = colors.onSurface, fontFamily = fonts.heading, fontSize = 24.sp, modifier = Modifier.weight(1f))
             Text("Закрыть", color = colors.accent, modifier = Modifier.clickable { onDismiss() }.padding(8.dp))
         }
         if (groups == null) Text("Загружаю список виджетов…", color = colors.onSurface.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
         else if (groups!!.isEmpty()) Text("На телефоне нет приложений с виджетами", color = colors.onSurface, modifier = Modifier.padding(16.dp))
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
+          // 1.3.9: the launcher's own widgets first.
+          if (!toToday) {
+            item(key = "h:own") {
+                Text("СуперСмарт", color = colors.accent, fontFamily = fonts.heading, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
+            }
+            item(key = "own:clock") {
+                Row(Modifier.fillMaxWidth().clickable { actions?.addBuiltInClock(); onDismiss() }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(96.dp, 72.dp).clip(RoundedCornerShape(12.dp)).background(colors.onSurface.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
+                        Text(timeIn(nowMinute(), org.ivanivorontsov.launcher.core.ClockZone()), color = colors.onSurface, fontFamily = fonts.clock, fontSize = 26.sp)
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Часы", color = colors.onSurface, fontFamily = fonts.body, fontSize = 16.sp)
+                        Text("до 3 часовых поясов · размер меняется", color = colors.onSurface.copy(alpha = 0.6f), fontSize = 13.sp)
+                    }
+                }
+            }
+          }
           groups.orEmpty().forEach { (appName, providers) ->
             item(key = "h:$appName") {
                 Text(appName, color = colors.accent, fontFamily = fonts.heading, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
@@ -222,4 +240,10 @@ fun WidgetPicker(onDismiss: () -> Unit) {
 
 private fun cells(px: Int, ctx: Context): Int = ((px / ctx.resources.displayMetrics.density + 30) / 70).toInt().coerceAtLeast(1)
 
-interface WidgetBinder { fun bindWidget(info: AppWidgetProviderInfo) }
+interface WidgetBinder {
+    fun bindWidget(info: AppWidgetProviderInfo)
+    /** 1.3.9: built-in widgets (currently the clock) go straight onto the current home page. */
+    fun addBuiltInClock()
+    /** 1.3.9: opens the widget's own settings screen again («Настроить»). */
+    fun reconfigureWidget(appWidgetId: Int)
+}

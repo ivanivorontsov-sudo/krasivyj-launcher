@@ -66,6 +66,12 @@ class UiState(val scope: CoroutineScope) {
     /** 0 = icons not yet presented, 1 = settled. Stays at 1 after [hasAnimatedIn]. */
     val enter = Animatable(0f)
     var widgetEdit by mutableStateOf(false)
+    /** 1.3.9: home-page widget currently in edit mode (frame with resize handles), or null. */
+    var homeWidgetEdit by mutableStateOf<String?>(null)
+    /** 1.3.9: app page (0-based, without «Сегодня») shown now; set by the grid home, used to place new widgets. */
+    var currentAppPage: () -> Int = { 0 }
+    /** 1.3.9: true while the widget picker adds to «Сегодня» instead of the current home page. */
+    var widgetPickerToToday by mutableStateOf(false)
     var tileEdit by mutableStateOf<String?>(null)
     /** 0 = tiles in place, 1 = swung away (turnstile). */
     val turnstile = Animatable(0f)

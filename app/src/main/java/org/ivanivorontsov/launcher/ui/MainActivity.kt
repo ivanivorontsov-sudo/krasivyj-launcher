@@ -37,6 +37,9 @@ import org.ivanivorontsov.launcher.core.TileItem
 import org.ivanivorontsov.launcher.core.TileKind
 import org.ivanivorontsov.launcher.core.TileSize
 import org.ivanivorontsov.launcher.core.WidgetItem
+import org.ivanivorontsov.launcher.core.addWidget
+import org.ivanivorontsov.launcher.core.packPages
+import org.ivanivorontsov.launcher.core.withClockWidget
 import org.ivanivorontsov.launcher.data.AppInfo
 import org.ivanivorontsov.launcher.data.Device
 import org.ivanivorontsov.launcher.service.LockService
@@ -155,6 +158,8 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     }
     private var pendingWidgetId = -1
     private var pendingWidgetInfo: AppWidgetProviderInfo? = null
+    /** 1.3.9: where the widget being bound goes: home app page (0-based) or -1 = «Сегодня». */
+    private var pendingWidgetPage = -1
 
     private val photoPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { ui.permissionsVersion++ }
     private val calendarPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ui.permissionsVersion++ }
@@ -167,6 +172,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         super.onCreate(savedInstanceState)
         savedInstanceState?.let { b ->
             pendingWidgetId = b.getInt("pendingWidgetId", -1)
+            pendingWidgetPage = b.getInt("pendingWidgetPage", -1)
             @Suppress("DEPRECATION") pendingWidgetInfo = b.getParcelable("pendingWidgetInfo")
         }
         if (savedInstanceState == null) window.decorView.postDelayed({ cleanupOrphanWidgets() }, 3000)
@@ -680,7 +686,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             e += MenuEntry("Плитка: часы") { pinSpecialTile(TileKind.CLOCK) }
             e += MenuEntry("Плитка: фото") { pinSpecialTile(TileKind.PHOTOS) }
             e += MenuEntry("Плитка: календарь") { pinSpecialTile(TileKind.CALENDAR) }
-        } else e += MenuEntry("Добавить виджет") { addWidget() }
+        } else e += MenuEntry("Виджеты") { ui.widgetPickerToToday = false; addWidget() }
         e += MenuEntry("Обои телефона") { Device.openWallpaperPicker(this) }
         e += MenuEntry("Модули СуперСмарт") { startActivity(Intent(this, ModulesActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         e += MenuEntry("Настройки лаунчера") { openSettings() }
@@ -701,6 +707,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val host = WidgetHostHolder.host(this)
         val id = host.allocateAppWidgetId()
         pendingWidgetId = id; pendingWidgetInfo = info
+        pendingWidgetPage = if (ui.widgetPickerToToday || !homeWidgetsSupported()) -1 else ui.currentAppPage().coerceAtLeast(0)
         val awm = AppWidgetManager.getInstance(this)
         val ok = try { awm.bindAppWidgetIdIfAllowed(id, info.profile, info.provider, null) } catch (_: Exception) { false }
         if (ok) configureOrAdd()
@@ -732,13 +739,49 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val info = pendingWidgetInfo ?: return
         val hDp = (info.minHeight / resources.displayMetrics.density).toInt().coerceIn(90, 420)
         val id = pendingWidgetId
-        app.store.update { it.copy(widgets = it.widgets + WidgetItem(id, hDp)) }
-        pendingWidgetId = -1; pendingWidgetInfo = null
+        if (pendingWidgetPage >= 0) {
+            // 1.3.9: straight onto the home page the user was looking at, sized from the widget's minimum size.
+            val spec = app.store.theme.value
+            val d = resources.displayMetrics.density
+            val sx = org.ivanivorontsov.launcher.core.cellsFor((info.minWidth / d).toInt(), spec.columns)
+            val sy = org.ivanivorontsov.launcher.core.cellsFor((info.minHeight / d).toInt(), spec.rows)
+            placeOnHome(org.ivanivorontsov.launcher.core.HomeWidget(org.ivanivorontsov.launcher.core.systemWidgetKey(id), org.ivanivorontsov.launcher.core.HomeWidgetKind.SYSTEM, id, sx, sy), pendingWidgetPage)
+        } else app.store.update { it.copy(widgets = it.widgets + WidgetItem(id, hDp)) }
+        pendingWidgetId = -1; pendingWidgetInfo = null; pendingWidgetPage = -1
+    }
+
+    private fun homeWidgetsSupported() = app.store.theme.value.layout == HomeLayout.GRID
+
+    /** Adds [w] at the end of app page [page] (first free place that fits; a new page if it does not fit). */
+    private fun placeOnHome(w: org.ivanivorontsov.launcher.core.HomeWidget, page: Int) {
+        val spec = app.store.theme.value
+        app.store.update { c -> c.editLayout(spec.id) { l ->
+            val packed = l.withClockWidget(spec.columns).packPages(spec.columns, spec.rows)
+            val items = packed.page(page)
+            val at = items.maxOfOrNull { it.index + 1 } ?: packed.indexAt(page, 0, 0)
+            l.withClockWidget(spec.columns).addWidget(w, at)
+        } }
+        ui.homeWidgetEdit = w.id
+    }
+
+    override fun addBuiltInClock() {
+        val spec = app.store.theme.value
+        if (!homeWidgetsSupported()) { Toast.makeText(this, "Часы-виджет доступен в темах с сеткой иконок", Toast.LENGTH_SHORT).show(); return }
+        val l = app.store.config.value.layoutFor(spec.id)
+        if (org.ivanivorontsov.launcher.core.CLOCK_WIDGET in l.home) { Toast.makeText(this, "Часы уже на главном экране", Toast.LENGTH_SHORT).show(); return }
+        placeOnHome(org.ivanivorontsov.launcher.core.HomeWidget(org.ivanivorontsov.launcher.core.CLOCK_WIDGET, org.ivanivorontsov.launcher.core.HomeWidgetKind.CLOCK, spanX = spec.columns, spanY = 2), ui.currentAppPage().coerceAtLeast(0))
+    }
+
+    override fun reconfigureWidget(appWidgetId: Int) {
+        try { WidgetHostHolder.host(this).startAppWidgetConfigureActivityForResult(this, appWidgetId, 0, 78, null) } catch (_: Exception) {
+            Toast.makeText(this, "У этого виджета нет настроек", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt("pendingWidgetId", pendingWidgetId)
+        outState.putInt("pendingWidgetPage", pendingWidgetPage)
         pendingWidgetInfo?.let { outState.putParcelable("pendingWidgetInfo", it) }
     }
 
@@ -746,7 +789,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     private fun cleanupOrphanWidgets() {
         try {
             val host = WidgetHostHolder.host(this)
-            val keep = app.store.config.value.widgets.map { it.widgetId }.toSet() + pendingWidgetId
+            val keep = app.store.config.value.allAppWidgetIds() + pendingWidgetId
             host.appWidgetIds.filter { it !in keep }.forEach { host.deleteAppWidgetId(it) }
         } catch (_: Exception) {}
     }

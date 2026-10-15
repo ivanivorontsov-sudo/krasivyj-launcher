@@ -113,7 +113,23 @@ data class LauncherConfig(
     val digitSizeSp: Int = 72,
     val digitAlpha: Float = 1f,
     val digitOutline: Boolean = true,
+    /** 1.3.9: the separate «Сегодня» widgets page left of home (grid and minimal themes). */
+    val todayPage: Boolean = true,
 ) {
+    /** 1.3.9: system AppWidget ids that must stay bound: «Сегодня» widgets + widgets placed on any home layout. */
+    fun allAppWidgetIds(): Set<Int> = widgets.map { it.widgetId }.toSet() + (layouts.values + listOfNotNull(base)).flatMap { it.appWidgetIds() }
+
+    /**
+     * 1.3.9: turning «Сегодня» off. With [moveToHome] its Android widgets go to the end of [themeId]'s home pages
+     * (full width, height from the stored dp); otherwise they are dropped (the caller deletes the AppWidget ids).
+     */
+    fun disableTodayPage(themeId: String, cols: Int, rows: Int, moveToHome: Boolean): LauncherConfig {
+        val moved = if (!moveToHome || widgets.isEmpty()) this else editLayout(themeId) { l ->
+            widgets.fold(l) { acc, w -> acc.addWidget(HomeWidget(systemWidgetKey(w.widgetId), HomeWidgetKind.SYSTEM, w.widgetId, spanX = cols, spanY = cellsFor(w.heightDp, rows))) }
+        }
+        return moved.copy(todayPage = false, widgets = emptyList())
+    }
+
     fun zone(i: Int): ClockZone = clockZones.getOrNull(i) ?: ClockZone()
     fun zonesShown(): List<ClockZone> = (0 until clockZoneCount.coerceIn(1, 3)).map { zone(it) }
 

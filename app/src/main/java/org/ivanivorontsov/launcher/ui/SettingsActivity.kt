@@ -158,7 +158,7 @@ private enum class Screen(val title: String) {
 
 @Composable
 private fun SettingsRoot(start: String?, close: () -> Unit) {
-    var screen by remember { mutableStateOf(if (start == "themes") Screen.THEMES else Screen.MAIN) }
+    var screen by remember { mutableStateOf(when (start) { "themes" -> Screen.THEMES; "home" -> Screen.HOME; else -> Screen.MAIN }) }
     var fontTarget by remember { mutableStateOf("all") }
     var licText by remember { mutableStateOf<String?>(null) }
     val back: () -> Unit = {
@@ -631,6 +631,29 @@ private fun HomeScreenSettings() {
             Info("Включите, чтобы убрать отдельное меню приложений и разместить установленные приложения на страницах главного экрана. В теме «Плитки» они появятся плитками; в минималистичной теме — текстовым списком. Новые приложения тоже будут добавляться автоматически.")
             SortIntoFoldersButton(spec.id, installedApps)
         } }
+        item { Section("Виджеты и экран «Сегодня»") {
+            var ask by remember { mutableStateOf(false) }
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            SwitchRow("Экран «Сегодня» слева от главного", cfg.todayPage) { on ->
+                if (on) store.update { it.copy(todayPage = true) }
+                else if (cfg.widgets.isEmpty()) store.update { it.disableTodayPage(spec.id, spec.columns, spec.rows, moveToHome = false) }
+                else ask = true
+            }
+            Info("Виджеты Android и часы можно ставить прямо на страницы главного экрана: долгое нажатие на пустом месте → «Виджеты». Долгое нажатие на виджете — рамка: кружки меняют размер, сам виджет можно перетащить на другое место или страницу, там же «Удалить». Экран «Сегодня» можно совсем убрать.")
+            if (ask) AlertDialog(onDismissRequest = { ask = false },
+                title = { Text("Убрать экран «Сегодня»?") },
+                text = { Text("На нём ${cfg.widgets.size} виджет(ов). Перенести их на главный экран (в конец страниц) или удалить?") },
+                confirmButton = { TextButton(onClick = { ask = false; store.update { it.disableTodayPage(spec.id, spec.columns, spec.rows, moveToHome = true) } }) { Text("Перенести") } },
+                dismissButton = { Row {
+                    TextButton(onClick = { ask = false }) { Text("Отмена") }
+                    TextButton(onClick = {
+                        ask = false
+                        val ids = cfg.widgets.map { it.widgetId }
+                        store.update { it.disableTodayPage(spec.id, spec.columns, spec.rows, moveToHome = false) }
+                        ids.forEach { id -> try { WidgetHostHolder.host(ctx).deleteAppWidgetId(id) } catch (_: Exception) {} }
+                    }) { Text("Удалить") }
+                } })
+        } }
         item { Section("Новые приложения") {
             SwitchRow("Добавлять новые приложения на главный экран", cfg.autoAddNew) { v -> store.update { it.copy(autoAddNew = v) } }
             Info("Только что установленное приложение встаёт в первую свободную ячейку (в «Плитках» — маленькой плиткой). Обновления, системные приложения и копии из рабочего профиля не добавляются.")
@@ -826,7 +849,7 @@ private fun AboutScreen(openLicenses: () -> Unit) {
 }
 
 @Composable
-private fun ZoneDialog(cur: org.ivanivorontsov.launcher.core.ClockZone, onDismiss: () -> Unit, onPick: (org.ivanivorontsov.launcher.core.ClockZone) -> Unit) {
+internal fun ZoneDialog(cur: org.ivanivorontsov.launcher.core.ClockZone, onDismiss: () -> Unit, onPick: (org.ivanivorontsov.launcher.core.ClockZone) -> Unit) {
     var q by remember { mutableStateOf("") }
     var label by remember { mutableStateOf(cur.label) }
     var zone by remember { mutableStateOf(cur.zoneId) }

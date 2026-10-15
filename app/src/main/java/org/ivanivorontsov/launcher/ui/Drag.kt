@@ -223,8 +223,14 @@ fun UiState.endDrag(haptic: (() -> Unit)? = null) {
         haptic?.invoke()
         val app = item.app
         when (bar) {
-            BarTarget.REMOVE -> store.update { c ->
-                c.editLayout(themeId) { l -> if (item.source == DragSource.TILE) l.unpinTile(item.id) else l.remove(item.id) }
+            BarTarget.REMOVE -> {
+                store.update { c ->
+                    c.editLayout(themeId) { l -> if (item.source == DragSource.TILE) l.unpinTile(item.id) else l.remove(item.id) }
+                }
+                // 1.3.9: a system widget dropped on «Удалить с экрана» also releases its AppWidget id.
+                if (org.ivanivorontsov.launcher.core.isWidgetId(item.id)) item.id.removePrefix(org.ivanivorontsov.launcher.core.WIDGET_PREFIX).toIntOrNull()?.let { id ->
+                    try { WidgetHostHolder.host(LauncherApp.instance).deleteAppWidgetId(id) } catch (_: Exception) {}
+                }
             }
             BarTarget.INFO -> app?.let { actions?.appInfo(it, item.startBounds) }
             BarTarget.UNINSTALL -> app?.let { actions?.uninstall(it) }
@@ -445,7 +451,7 @@ fun DragLayer(ui: UiState) {
                 // A concave outline (cookie, pebble) makes the elevation renderer stall on
                 // every frame, so the drop animation never finishes and the icon stays floating.
                 // The bitmap is already masked; the shadow only needs a convex shape.
-                shape = if (item.asLabel) RoundedCornerShape(12.dp) else CircleShape
+                shape = if (item.asLabel || org.ivanivorontsov.launcher.core.isWidgetId(item.id)) RoundedCornerShape(12.dp) else CircleShape
                 clip = false
             }
     ) {
@@ -459,6 +465,14 @@ fun DragLayer(ui: UiState) {
                 if (f != null) FolderIcon(f, sizeDp)
             }
             item.app != null -> AppIcon(item.app, sizeDp)
+            // 1.3.9: a home widget being moved: a frosted card of its size with its name.
+            org.ivanivorontsov.launcher.core.isWidgetId(item.id) -> {
+                val hDp = with(density) { item.size.height.toDp() }
+                val label = if (item.id == org.ivanivorontsov.launcher.core.CLOCK_WIDGET) "Часы" else "Виджет"
+                Box(Modifier.size(sizeDp, hDp).background(colors.surface.copy(alpha = 0.55f), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                    Text(label, style = labelStyle(colors.onSurface, 15.sp).copy(shadow = null))
+                }
+            }
         }
     }
 }
