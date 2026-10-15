@@ -20,7 +20,7 @@ import kotlinx.serialization.json.Json
 /** Page-turn effects of the home screen (1.2). */
 /** 1.3: how home appears after leaving an app (Home gesture / Home button). */
 @Serializable enum class HomeAnim(val title: String, val card: Boolean) {
-    SYSTEM("Системная", false), ICON("Классическая (в иконку)", true), SPRING("Пружина (как iOS)", true),
+    SYSTEM("Системная", false), ICON("Классическая (в иконку)", true), SPRING("Пружина", true),
     ZOOM("Приближение", false), SLIDE("Выезд снизу", false), FADE("Растворение", false),
     /** 1.3.6 */
     SPIN("Вращение при приземлении", true), RINGS("Круги на воде", true), DROP("Капля", true), COMET("Комета со шлейфом", true)
@@ -36,11 +36,14 @@ import kotlinx.serialization.json.Json
 }
 /** 1.3: how home appears after Back closes an app, and how Уют's own screens close on Back. */
 @Serializable enum class BackAnim(val title: String) {
-    SYSTEM("Системная"), SAME("Как «Домой»"), ZOOM("Приближение"), SLIDE("Сдвиг вбок"), FADE("Растворение"), SPRING("Пружина (как iOS)")
+    SYSTEM("Системная"), SAME("Как «Домой»"), ZOOM("Приближение"), SLIDE("Сдвиг вбок"), FADE("Растворение"), SPRING("Пружина")
 }
 @Serializable enum class PageEffect(val title: String) {
-    NONE("Без эффекта"), CYLINDER("Цилиндр (карусель)"), CUBE("Куб"), FLIP("Переворот"), ROTATE("Поворот"),
-    ZOOM("Приближение"), STACK("Стопка"), WAVE("Волна")
+    NONE("Без эффекта"), CYLINDER("Цилиндр"), CUBE("Куб снаружи"), FLIP("Переворот"), ROTATE("Поворот"),
+    ZOOM("Масштаб: отдаление"), STACK("Стопка карт"), WAVE("Волна"),
+    /** 1.3.9: new page-turn effects (names are serialized by enum name, titles may change freely). */
+    CUBE_IN("Куб внутри"), CAROUSEL("Карусель 3D"), TILT("Наклон"), ZOOM_IN("Масштаб: наплыв"), DEPTH("Глубина"),
+    ACCORDION("Аккордеон"), SPIN("Вращение"), FADE("Затухание"), WHEEL("Колесо")
 }
 @Serializable enum class PageIndicator(val title: String) { DOTS("Точки"), LINE("Линия"), NONE("Нет") }
 @Serializable enum class TileFill(val title: String) { ACCENT("Цвет акцента"), ICON_COLOR("Цвет иконки"), TRANSPARENT("Прозрачные (обои внутри плиток)") }
@@ -118,7 +121,26 @@ data class ThemeSpec(
 object ThemeCodec {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false; coerceInputValues = true }
     fun encode(t: ThemeSpec): String = json.encodeToString(t)
-    fun decode(s: String?): ThemeSpec? = try { s?.let { json.decodeFromString<ThemeSpec>(it).sanitized() } } catch (_: Exception) { null }
+    fun decode(s: String?): ThemeSpec? = try { s?.let { LegacyNames.migrate(json.decodeFromString<ThemeSpec>(it)).sanitized() } } catch (_: Exception) { null }
+}
+
+/**
+ * 1.3.9: user-visible theme names were changed for legal safety, ids/keys stay the same.
+ * A saved theme stores its name, so an old saved name is mapped to the current one on read
+ * (the user's chosen theme, layout and per-theme settings keep working — they are keyed by id).
+ */
+object LegacyNames {
+    /** id → (old names → new name). «Стекло» moved from `glass` to `cupertino`, `glass` became «Призма». */
+    private val renames: Map<String, Pair<Set<String>, String>> = mapOf(
+        "cupertino" to (setOf("Купертино", "Cupertino") to "Стекло"), // legacy-name: old saved value, never shown
+        "glass" to (setOf("Стекло") to "Призма"),
+        // «Свой стиль» started from the old preset keeps its copied name.
+        "custom" to (setOf("Купертино") to "Стекло"), // legacy-name: old saved value, never shown
+    )
+    fun migrate(t: ThemeSpec): ThemeSpec {
+        val (old, new) = renames[t.id] ?: return t
+        return if (t.name in old) t.copy(name = new) else t
+    }
 }
 
 /** Classic flat accent palette (colors are not proprietary; names are ours). */
@@ -135,7 +157,7 @@ object AccentPalette {
 
 object Presets {
     val cupertino = ThemeSpec(
-        id = "cupertino", name = "Купертино",
+        id = "cupertino", name = "Стекло",
         description = "Сетка 4×6, сквирклы, матовый док, точки страниц, библиотека приложений, пружинная анимация",
         layout = HomeLayout.GRID, drawer = DrawerStyle.LIBRARY,
         headingFont = "inter", bodyFont = "inter", clockFont = "inter", clockWeight = 300,
@@ -181,7 +203,7 @@ object Presets {
         clockStyle = ClockStyle.STACKED, motion = Motion.SPRING, drawer = DrawerStyle.GRID, columns = 5, rows = 6,
     )
     val glass = ThemeSpec(
-        id = "glass", name = "Стекло",
+        id = "glass", name = "Призма",
         description = "Призматический градиент, размытие, тонкий шрифт",
         headingFont = "inter", bodyFont = "inter", clockFont = "poiret_one", clockWeight = 400,
         accent = 0xFF9BE7FF, background = 0xFF0B1020, surface = 0xFF1A2236, onSurface = 0xFFFFFFFF, surfaceAlpha = 0.55f,

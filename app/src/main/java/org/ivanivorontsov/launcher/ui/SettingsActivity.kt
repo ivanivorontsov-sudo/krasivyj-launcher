@@ -153,17 +153,26 @@ class SettingsActivity : ComponentActivity() {
 
 private enum class Screen(val title: String) {
     MAIN("СуперСмарт"), HOME("Главный экран"), THEMES("Темы"), EDITOR("Свой стиль"), FONTS("Шрифты"), GESTURES("Жесты"), HIDDEN("Скрытые приложения"),
-    ICONS("Набор иконок"), LIVE("Живые плитки и разрешения"), DIGITS("Цифры поверх приложений"), SYSTEM("Системный шрифт и обои"), SMOOTH("Плавность и батарея"), ABOUT("О приложении")
+    ICONS("Набор иконок"), LIVE("Живые плитки и разрешения"), DIGITS("Цифры поверх приложений"), SYSTEM("Системный шрифт и обои"), SMOOTH("Плавность и батарея"), ABOUT("О приложении"), LICENSES("Лицензии")
 }
 
 @Composable
 private fun SettingsRoot(start: String?, close: () -> Unit) {
     var screen by remember { mutableStateOf(if (start == "themes") Screen.THEMES else Screen.MAIN) }
     var fontTarget by remember { mutableStateOf("all") }
-    BackHandler { if (screen == Screen.MAIN) close() else screen = if (screen == Screen.FONTS) Screen.EDITOR else Screen.MAIN }
+    var licText by remember { mutableStateOf<String?>(null) }
+    val back: () -> Unit = {
+        when {
+            screen == Screen.MAIN -> close()
+            screen == Screen.LICENSES && licText != null -> licText = null
+            else -> screen = when (screen) { Screen.FONTS -> Screen.EDITOR; Screen.LICENSES -> Screen.ABOUT; else -> Screen.MAIN }
+        }
+        Unit
+    }
+    BackHandler { back() }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { if (screen == Screen.MAIN) close() else screen = if (screen == Screen.FONTS) Screen.EDITOR else Screen.MAIN }.padding(horizontal = 14.dp))
+            Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { back() }.padding(horizontal = 14.dp))
             Text(screen.title, style = MaterialTheme.typography.headlineSmall)
         }
         Box(Modifier.weight(1f).navigationBarsPadding()) {
@@ -180,7 +189,8 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
                 Screen.DIGITS -> DigitsScreen()
                 Screen.SYSTEM -> SystemScreen()
                 Screen.SMOOTH -> SmoothScreen()
-                Screen.ABOUT -> AboutScreen()
+                Screen.ABOUT -> AboutScreen(openLicenses = { licText = null; screen = Screen.LICENSES })
+                Screen.LICENSES -> LicensesScreen(licText) { licText = it }
             }
         }
     }
@@ -236,7 +246,8 @@ private fun MainScreen(go: (Screen) -> Unit) {
         item { NavRow("Скрытые приложения") { go(Screen.HIDDEN) } }
         item { NavRow("Набор иконок") { go(Screen.ICONS) } }
         item { NavRow("Плавность и батарея", "Частота экрана, фоновая работа (${Device.oemName()})") { go(Screen.SMOOTH) } }
-        item { NavRow("О приложении", "Версия ${BuildConfig.VERSION_NAME}, лицензии шрифтов") { go(Screen.ABOUT) } }
+        item { NavRow("О приложении", "Версия ${BuildConfig.VERSION_NAME}, лицензии") { go(Screen.ABOUT) } }
+        item { NavRow("Лицензии", "Шрифты и библиотеки с полными текстами лицензий") { go(Screen.LICENSES) } }
     }
 }
 
@@ -626,8 +637,9 @@ private fun HomeScreenSettings() {
         } }
         item { Section("Перелистывание страниц") {
             val cur = cfg.pageEffectFor(spec.id, spec.layout)
+            PagePreview(cur, Modifier.fillMaxWidth().height(150.dp).padding(bottom = 8.dp))
             Chips(org.ivanivorontsov.launcher.core.PageEffect.entries, cur, { it.title }) { v -> store.update { it.copy(pageEffects = it.pageEffects + (spec.id to v)) } }
-            Info("Эффект хранится отдельно для каждой темы (сейчас — «${spec.name}»). «Цилиндр» сворачивает страницы на объёмный барабан: в покое экран ровный, при листании края уходят вглубь, а соседняя страница видна с обратной стороны.")
+            Info("Эффект хранится отдельно для каждой темы (сейчас — «${spec.name}»). Если в системе отключена анимация, страницы листаются без эффекта. «Цилиндр» сворачивает страницы на объёмный барабан: в покое экран ровный, при листании края уходят вглубь, а соседняя страница видна с обратной стороны.")
         } }
         item { Section("Перетаскивание") {
             Info("Долгое нажатие поднимает иконку — тяните её: остальные иконки расступаются. Отпустите на другой иконке, чтобы сделать папку; у края экрана страница перелистнётся сама. Сверху появятся «Удалить с экрана», «О приложении» и «Удалить приложение».")
@@ -784,15 +796,17 @@ private fun SmoothScreen() {
 }
 
 @Composable
-private fun AboutScreen() {
+private fun AboutScreen(openLicenses: () -> Unit) {
     val ctx = LocalContext.current
     var showOfl by remember { mutableStateOf(false) }
-    val ofl = remember { try { ctx.assets.open("OFL.txt").bufferedReader().readText() } catch (_: Exception) { "" } }
+    val ofl = remember { try { ctx.assets.open("licenses/OFL-1.1.txt").bufferedReader().readText() } catch (_: Exception) { "" } }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 0.dp, 16.dp, 40.dp)) {
         item {
             Text("СуперСмарт ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleLarge)
             Info("Без интернета (нет разрешения INTERNET), без рекламы и трекеров. Все данные — на телефоне.")
-            Info("Идеи взяты из лучших лаунчеров: быстрый поиск и плавность Kvaesitso и Olauncher, алфавит-«волна» Niagara, формы иконок и шрифты Lawnchair, живые плитки SquareHome/Launcher 10. Темы «Купертино» и «Плитки» — оригинальные работы по мотивам классических раскладок; логотипы, иконки, обои и фирменные шрифты Apple и Microsoft не используются.")
+            Info("Идеи взяты из лучших лаунчеров: быстрый поиск и плавность Kvaesitso и Olauncher, алфавит-«волна» Niagara, формы иконок и шрифты Lawnchair, живые плитки SquareHome. Чужие логотипы, значки, обои и фирменные шрифты не используются.")
+            Info(org.ivanivorontsov.launcher.core.Legal.DISCLAIMER)
+            Button(onClick = openLicenses, modifier = Modifier.padding(top = 12.dp)) { Text("Лицензии шрифтов и библиотек") }
             Text("Шрифты", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
             Info("Все шрифты распространяются по лицензии SIL Open Font License 1.1. Шрифты с «зарезервированным именем» включены без изменений; остальные сокращены до латиницы и кириллицы (это разрешено лицензией).")
         }

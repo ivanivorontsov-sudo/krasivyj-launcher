@@ -1,0 +1,541 @@
+{
+ "fontFiles": 44,
+ "fonts": [
+  {
+   "family": "Amatic SC",
+   "files": [
+    "f_amatic_sc.ttf"
+   ],
+   "copyright": "Copyright 2015 The Amatic SC Project Authors (https://github.com/googlefonts/AmaticSC)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Bad Script",
+   "files": [
+    "f_bad_script.ttf"
+   ],
+   "copyright": "Copyright 2011 The Bad Script Project Authors (https://github.com/alexeiva/badscript)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://openfontlicense.org",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Balsamiq Sans",
+   "files": [
+    "f_balsamiq_sans.ttf"
+   ],
+   "copyright": "Copyright 2011 The Balsamiq Sans Project Authors (https://github.com/balsamiq/balsamiqsans)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Caveat",
+   "files": [
+    "f_caveat.ttf"
+   ],
+   "copyright": "Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Comfortaa",
+   "files": [
+    "f_comfortaa.ttf"
+   ],
+   "copyright": "Copyright 2011 The Comfortaa Project Authors (https://github.com/alexeiva/comfortaa), with Reserved Font Name \"Comfortaa\".",
+   "designer": "Johan Aakerlund",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Comforter",
+   "files": [
+    "f_comforter.ttf"
+   ],
+   "copyright": "Copyright 2015 The Comforter Project Authors (https://github.com/googlefonts/comforter)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Cormorant Garamond",
+   "files": [
+    "f_cormorant.ttf"
+   ],
+   "copyright": "Copyright 2015 The Cormorant Project Authors (github.com/CatharsisFonts/Cormorant)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://openfontlicense.org",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Exo 2",
+   "files": [
+    "f_exo2.ttf"
+   ],
+   "copyright": "Copyright 2013 The Exo 2 Project Authors (https://github.com/googlefonts/Exo-2.0)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://openfontlicense.org",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Gabriela",
+   "files": [
+    "f_gabriela.ttf"
+   ],
+   "copyright": "Copyright 2013 The Gabriela Project Authors (https://github.com/etunni/Gabriela), with Reserved Font Name \"Gabriela\".",
+   "designer": "Eduardo Rodriguez Tunni",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Golos Text",
+   "files": [
+    "f_golos.ttf"
+   ],
+   "copyright": "Copyright 2019 The Golos Text Project Authors (https://github.com/googlefonts/golos-text)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Great Vibes",
+   "files": [
+    "f_great_vibes.ttf"
+   ],
+   "copyright": "Copyright 2010 The Great Vibes Pro Project Authors (https://github.com/googlefonts/great-vibes)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://openfontlicense.org",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "IBM Plex Mono",
+   "files": [
+    "f_plex_mono.ttf"
+   ],
+   "copyright": "Copyright 2017 IBM Corp. All rights reserved.",
+   "designer": "Mike Abbink, Paul van der Laan, Pieter van Rosmalen",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Inter",
+   "files": [
+    "f_inter_300.ttf",
+    "f_inter_400.ttf",
+    "f_inter_600.ttf"
+   ],
+   "copyright": "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://openfontlicense.org",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "JetBrains Mono",
+   "files": [
+    "f_jetbrains_mono.ttf"
+   ],
+   "copyright": "Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Jura",
+   "files": [
+    "f_jura.ttf"
+   ],
+   "copyright": "Copyright 2019 The Jura Project Authors (https://github.com/ossobuffo/jura)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Kelly Slab",
+   "files": [
+    "f_kelly_slab.ttf"
+   ],
+   "copyright": "Copyright (c) 2011, Denis Masharov <denis.masharov@gmail.com>, with Reserved Font Names \"Kelly\", \"Kelly Slab\".",
+   "designer": "Denis Masharov",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Klee One",
+   "files": [
+    "f_klee_one.ttf"
+   ],
+   "copyright": "Copyright 2020 The Klee Project Authors (https://github.com/fontworks-fonts/Klee)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Lobster",
+   "files": [
+    "f_lobster.ttf"
+   ],
+   "copyright": "Copyright 2010 The Lobster Project Authors (https://github.com/impallari/The-Lobster-Font), with Reserved Font Name \"Lobster\".",
+   "designer": "Impallari Type",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Manrope",
+   "files": [
+    "f_manrope.ttf"
+   ],
+   "copyright": "Copyright 2019 The Manrope Project Authors (https://github.com/googlefonts/manrope)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://openfontlicense.org",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Marck Script",
+   "files": [
+    "f_marck_script.ttf"
+   ],
+   "copyright": "Copyright (c) 2011, Denis Masharov <denis.masharov@gmail.com>, Marck Fogel, with Reserved Font Names \"Marck Script\".",
+   "designer": "Denis Masharov, Marck Fogel",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Marmelad",
+   "files": [
+    "f_marmelad.ttf"
+   ],
+   "copyright": "Copyright 2016 The Marmelad Project Authors (https://github.com/cyrealtype/Marmelad-Cyrillic)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Neucha",
+   "files": [
+    "f_neucha.ttf"
+   ],
+   "copyright": "Copyright (c) 2005-2010 by Jovanny Lemonad. All rights reserved.",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Nunito",
+   "files": [
+    "f_nunito.ttf"
+   ],
+   "copyright": "Copyright 2014 The Nunito Project Authors (https://github.com/googlefonts/nunito)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Open Sans",
+   "files": [
+    "f_open_sans_300.ttf",
+    "f_open_sans_400.ttf",
+    "f_open_sans_600.ttf"
+   ],
+   "copyright": "Copyright 2020 The Open Sans Project Authors (https://github.com/googlefonts/opensans)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Oranienbaum",
+   "files": [
+    "f_oranienbaum.ttf"
+   ],
+   "copyright": "Copyright (c) 2012, Oleg Pospelov (oleg@pospelov.com), Jovanny Lemonad (lemonad@jovanny.ru), with Reserved Font Name 'Oranienbaum'",
+   "designer": "Oleg Pospelov and Jovanny Lemonad",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Pacifico",
+   "files": [
+    "f_pacifico.ttf"
+   ],
+   "copyright": "Copyright 2018 The Pacifico Project Authors (https://github.com/googlefonts/Pacifico)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Pangolin",
+   "files": [
+    "f_pangolin.ttf"
+   ],
+   "copyright": "Copyright 2016 The Pangolin Project Authors (https://github.com/googlefonts/pangolin)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Pattaya",
+   "files": [
+    "f_pattaya.ttf"
+   ],
+   "copyright": "Copyright (c) 2015, Cadson Demak (info@cadsondemak.com), Copyright (c) 2010, Pablo Impallari (www.impallari.com|impallari@gmail.com), Copyright (c) 2010, 2011, Alexei Vanyashin (www.cyreal.org|a@cyreal.org), with Reserved Font Name Lobster.",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Philosopher",
+   "files": [
+    "f_philosopher.ttf"
+   ],
+   "copyright": "Copyright 2011 The Philosopher Project Authors (https://github.com/alexeiva/philosopher)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://openfontlicense.org",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Poiret One",
+   "files": [
+    "f_poiret_one.ttf"
+   ],
+   "copyright": "Copyright 2011 The Poiret One Project Authors (https://github.com/alexeiva/poiretone)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Press Start 2P",
+   "files": [
+    "f_press_start.ttf"
+   ],
+   "copyright": "Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net), with Reserved Font Name \"Press Start 2P\"",
+   "designer": "CodeMan38",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Ruslan Display",
+   "files": [
+    "f_ruslan_display.ttf"
+   ],
+   "copyright": "Copyright 2011 Oleg Snarsky, Denis Masharov, Vladimir Rabdu.",
+   "designer": "Oleg Snarsky, Denis Masharov, Vladimir Rabdu",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Russo One",
+   "files": [
+    "f_russo_one.ttf"
+   ],
+   "copyright": "Copyright (c) 2011-2012, Jovanny Lemonad (jovanny.ru), with Reserved Font Name \"Russo\"",
+   "designer": "Jovanny lemonad",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Shantell Sans",
+   "files": [
+    "f_shantell_sans.ttf"
+   ],
+   "copyright": "Copyright 2022 The Shantell Sans Project Authors (https://github.com/arrowtype/shantell-sans)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://openfontlicense.org",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Stalinist One",
+   "files": [
+    "f_stalinist_one.ttf"
+   ],
+   "copyright": "Copyright (c) 2009-2011, Alexey Maslov, Jovanny Lemonad (lemonad@jovanny.ru), with Reserved Font Name 'Stalinist'",
+   "designer": "Jovanny Lemonad",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Tektur",
+   "files": [
+    "f_tektur.ttf"
+   ],
+   "copyright": "Copyright 2023 The Tektur Project Authors (https://www.github.com/hyvyys/Tektur)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Tiny5",
+   "files": [
+    "f_tiny5.ttf"
+   ],
+   "copyright": "Copyright 2024 The tiny5 Project Authors (https://github.com/Gissio/font_tiny5)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://openfontlicense.org",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Unbounded",
+   "files": [
+    "f_unbounded.ttf"
+   ],
+   "copyright": "Copyright 2022 The Unbounded Project Authors (https://github.com/googlefonts/unbounded)",
+   "designer": "",
+   "license": "OFL-1.1",
+   "licenseUrl": "https://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Underdog",
+   "files": [
+    "f_underdog.ttf"
+   ],
+   "copyright": "Copyright (c) 2012, Sergey Steblina (sergey@steblina.com), Jovanny Lemonad (lemonad@jovanny.ru), with Reserved Font Name 'Underdog'",
+   "designer": "Sergey Steblina",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  },
+  {
+   "family": "Yeseva One",
+   "files": [
+    "f_yeseva_one.ttf"
+   ],
+   "copyright": "Copyright 2012 The Yeseva One Project Authors (lemonad@jovanny.ru), with Reserved Font Name \"Yeseva\".",
+   "designer": "Jovanny Lemonad",
+   "license": "OFL-1.1",
+   "licenseUrl": "http://scripts.sil.org/OFL",
+   "text": "OFL-1.1"
+  }
+ ],
+ "libraries": [
+  {
+   "name": "ONNX Runtime",
+   "version": "1.30.0",
+   "author": "© Microsoft Corporation",
+   "license": "MIT",
+   "text": "MIT-onnxruntime",
+   "extra": "onnxruntime-notices",
+   "use": "движок нейросети модуля «Мудрость»",
+   "url": "https://github.com/microsoft/onnxruntime"
+  },
+  {
+   "name": "rubert-tiny2 (модель)",
+   "version": "int8",
+   "author": "© David Dale",
+   "license": "MIT",
+   "text": "MIT-rubert-tiny2",
+   "use": "смысловой поиск в «Мудрости»",
+   "url": "https://huggingface.co/cointegrated/rubert-tiny2"
+  },
+  {
+   "name": "Jetpack Compose (UI, Foundation, Material 3, Material Icons)",
+   "version": "BOM 2024.10.01",
+   "author": "© The Android Open Source Project",
+   "license": "Apache-2.0",
+   "text": "Apache-2.0",
+   "url": "https://developer.android.com/jetpack/androidx"
+  },
+  {
+   "name": "AndroidX Core, Activity, Lifecycle, Navigation",
+   "version": "1.13–1.15, 1.9.3, 2.8.7, 2.8.4",
+   "author": "© The Android Open Source Project",
+   "license": "Apache-2.0",
+   "text": "Apache-2.0",
+   "url": "https://developer.android.com/jetpack/androidx"
+  },
+  {
+   "name": "AndroidX Room, WorkManager, DataStore",
+   "version": "2.6.1, 2.10.0, 1.1.1",
+   "author": "© The Android Open Source Project",
+   "license": "Apache-2.0",
+   "text": "Apache-2.0",
+   "url": "https://developer.android.com/jetpack/androidx"
+  },
+  {
+   "name": "AndroidX Profile Installer, Metrics (JankStats), Graphics Path",
+   "version": "1.4.1, 1.0.0-beta01",
+   "author": "© The Android Open Source Project",
+   "license": "Apache-2.0",
+   "text": "Apache-2.0",
+   "url": "https://developer.android.com/jetpack/androidx"
+  },
+  {
+   "name": "Guava ListenableFuture",
+   "version": "1.0",
+   "author": "© The Guava Authors",
+   "license": "Apache-2.0",
+   "text": "Apache-2.0",
+   "url": "https://github.com/google/guava"
+  },
+  {
+   "name": "Kotlin Standard Library",
+   "version": "2.0",
+   "author": "© JetBrains s.r.o. and Kotlin contributors",
+   "license": "Apache-2.0",
+   "text": "Apache-2.0",
+   "url": "https://kotlinlang.org"
+  },
+  {
+   "name": "kotlinx.coroutines",
+   "version": "1.9.0",
+   "author": "© JetBrains s.r.o.",
+   "license": "Apache-2.0",
+   "text": "Apache-2.0",
+   "url": "https://github.com/Kotlin/kotlinx.coroutines"
+  },
+  {
+   "name": "kotlinx.serialization",
+   "version": "1.7.3",
+   "author": "© JetBrains s.r.o.",
+   "license": "Apache-2.0",
+   "text": "Apache-2.0",
+   "url": "https://github.com/Kotlin/kotlinx.serialization"
+  }
+ ],
+ "texts": {
+  "OFL-1.1": "OFL-1.1.txt",
+  "Apache-2.0": "Apache-2.0.txt",
+  "MIT-onnxruntime": "onnxruntime-LICENSE.txt",
+  "onnxruntime-notices": "onnxruntime-ThirdPartyNotices.txt",
+  "MIT-rubert-tiny2": "rubert-tiny2-MIT.txt"
+ }
+}

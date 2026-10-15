@@ -9,6 +9,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,6 +25,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import org.ivanivorontsov.launcher.core.BackAnim
@@ -110,3 +113,61 @@ fun UnlockPreview(anim: UnlockAnim, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * 1.3.9: looping preview of a page-turn effect. Two mini home pages swipe back and forth; the effect uses the same
+ * [pageLayer] code as the real pager and is applied in graphics layers only (no recomposition per frame).
+ */
+@Composable
+fun PagePreview(effect: org.ivanivorontsov.launcher.core.PageEffect, modifier: Modifier = Modifier) {
+    val pos = remember { Animatable(0f) }
+    val anim = org.ivanivorontsov.launcher.data.Device.animationsEnabled()
+    LaunchedEffect(effect, anim) {
+        pos.snapTo(0f)
+        if (!anim) return@LaunchedEffect
+        while (true) {
+            delay(500)
+            pos.animateTo(1f, tween(700, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+            delay(700)
+            pos.animateTo(0f, tween(700, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        }
+    }
+    androidx.compose.foundation.layout.Box(modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFF15182A))) {
+        for (page in 0..1) {
+            androidx.compose.foundation.layout.Box(
+                androidx.compose.ui.Modifier.matchParentSize()
+                    .then(androidx.compose.ui.Modifier.layout { m, c ->
+                        val p = m.measure(c)
+                        layout(p.width, p.height) { p.place(0, 0, zIndex = -kotlin.math.abs(page - pos.value)) }
+                    })
+                    .graphicsLayer {
+                        val o = page - pos.value
+                        translationX = o * size.width
+                        if (kotlin.math.abs(o) >= 1f) alpha = 0f
+                    }
+                    .graphicsLayer {
+                        val o = page - pos.value
+                        if (kotlin.math.abs(o) < 1f) pageLayer(effect, o)
+                    }
+            ) { MiniPage(page) }
+        }
+    }
+}
+
+@Composable
+private fun MiniPage(page: Int) {
+    Canvas(androidx.compose.ui.Modifier.matchParentSizeCompat()) {
+        val pad = size.minDimension * 0.08f
+        drawRoundRect(Color(if (page == 0) 0xFF2B3A67 else 0xFF4A2B67), Offset(pad / 2, pad / 2), Size(size.width - pad, size.height - pad), CornerRadius(pad, pad))
+        val cols = 4; val rows = 3
+        val cell = minOf((size.width - 2 * pad) / cols, (size.height - 2 * pad) / rows)
+        val ox = (size.width - cell * cols) / 2; val oy = (size.height - cell * rows) / 2
+        for (r in 0 until rows) for (c in 0 until cols) {
+            val col = Color(previewIcons[(r * cols + c + page * 5) % previewIcons.size])
+            val s = cell * 0.62f
+            drawRoundRect(col, Offset(ox + c * cell + (cell - s) / 2, oy + r * cell + (cell - s) / 2), Size(s, s), CornerRadius(s * 0.28f, s * 0.28f))
+        }
+    }
+}
+
+private fun androidx.compose.ui.Modifier.matchParentSizeCompat() = this.then(androidx.compose.ui.Modifier.fillMaxSize())

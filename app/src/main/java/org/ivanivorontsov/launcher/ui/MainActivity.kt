@@ -69,6 +69,22 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         }
     }
     private var resumeUptime = 0L
+    /** 1.3.9: uptime when the current return overlay began (0 = none) — for the hard timeout. */
+    private var returnStartedAt = 0L
+
+    /**
+     * 1.3.9: removes the return overlay immediately and shows the grid at full size. Called by the hard
+     * timeout ([ReturnGuard]) and on any interruption, so a half-transparent card can never stay on screen.
+     */
+    private fun forceEndReturn(reason: String) {
+        returnStartedAt = 0L
+        if (ui.returning == null) return
+        JankMonitor.mark("return", "force-end " + reason)
+        ui.returning = null
+        contractKey = null
+        returnArmed = true
+        ui.scope.launch { ui.returnProgress.snapTo(1f); ui.homeZoom.snapTo(1f); ui.returnTail.snapTo(0f) }
+    }
 
     /**
      * 1.3.5: unlock animation. Before, the home "enter" animation was one-shot per activity
@@ -218,12 +234,26 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         super.onStart()
         // 1.3.7: coming back from an app, widget updates would land during the system close animation.
         if (app.store.config.value.diagNoWidgets) {}
-        else if (ui.launchedApp) window.decorView.postDelayed({ if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) try { WidgetHostHolder.host(this).startListening() } catch (_: Exception) {} }, 450)
+        // 1.3.9: startListening makes the system re-send every widget's RemoteViews, which are re-applied
+        // (inflated) on the main thread. At the old fixed 450 ms that landed inside the return flight on
+        // longer durations; now it waits for the same "after landing" point as live tiles.
+        else if (ui.launchedApp) window.decorView.postDelayed({ if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) try { WidgetHostHolder.host(this).startListening() } catch (_: Exception) {} },
+            afterLandingMs())
         else try { WidgetHostHolder.host(this).startListening() } catch (_: Exception) {}
         if (displayRefresh == null) {
-            displayRefresh = Device.registerDisplayRefresh(this) { app.store.config.value.highRefreshRate }
+            displayRefresh = Device.registerDisplayRefresh(this, busy = { inTransition() }) { app.store.config.value.highRefreshRate }
         }
     }
+
+    /** 1.3.9: one place for "the return flight has certainly landed" (used by widgets, live tiles, theme refresh). */
+    private fun afterLandingMs(): Long {
+        val cfg = app.store.config.value
+        val style = org.ivanivorontsov.launcher.core.resolveReturn(cfg.homeAnim, cfg.backAnim, fromBack = !homeIntentSinceStop)
+        return (org.ivanivorontsov.launcher.core.ReturnGuard.plannedMs(cfg.returnDurationMs, style) + 200L).coerceIn(480L, 1500L)
+    }
+
+    /** 1.3.9: true while a return-to-home transition is running — refresh-rate re-requests wait until it ends. */
+    private fun inTransition(): Boolean = ui.returning != null || (resumeUptime != 0L && SystemClock.uptimeMillis() - resumeUptime < afterLandingMs())
 
     // Re-assert the preferred mode on every resume: Android/OEM task transitions can reset it.
     private fun applyRefreshRate(high: Boolean) = Device.applyRefreshRate(window, high)
@@ -261,6 +291,13 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             if (ui.returnStyle == org.ivanivorontsov.launcher.core.ReturnStyle.CONTRACT || !ui.returnStyle.card) fxNow = true
         }
         // Home gesture on realme/ColorOS: the system draws its own close; ours plays on the real icon on the first frame.
+        // 1.3.9: hard timeout — the overlay is gone no later than planned duration + 400 ms (+ start slack).
+        ui.returning?.let { r ->
+            returnStartedAt = SystemClock.uptimeMillis()
+            val started = returnStartedAt
+            val limit = org.ivanivorontsov.launcher.core.ReturnGuard.deadlineMs(app.store.config.value.returnDurationMs, ui.returnStyle)
+            window.decorView.postDelayed({ if (ui.returning === r && returnStartedAt == started) forceEndReturn("timeout") }, limit)
+        }
         if (fxNow && fxKey != null && !app.store.config.value.diagNoAnim) android.view.Choreographer.getInstance().postFrameCallback { playIconFx(fxKey) }
         val comingHome = backFromApp
         // Cached mode id only: ColorOS drops a third-party launcher to 60 Hz for the
@@ -291,14 +328,13 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         // 1.3.6: live tiles / widgets refresh only after the flight has landed (at 450 ms it fired mid-flight
         // and recomposed the whole grid → the visible hitch).
         if (comingHome) {
-            val cfgMs = app.store.config.value.returnDurationMs
             window.decorView.postDelayed({
                 if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) return@postDelayed
                 JankMonitor.mark("deferred", "theme+tiles+overlay")
                 if (app.store.refreshThemeFromPreferences()) app.icons.clear()
                 if (!app.store.config.value.diagNoLive) { ui.resumed = true; app.live.refreshNow() }
                 DigitOverlay.poke(this)
-            }, (cfgMs + 200L).coerceAtLeast(480L))
+            }, afterLandingMs())
         }
         else {
             window.decorView.post { window.decorView.post { app.live.refreshNow() } }
@@ -359,7 +395,10 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         }
         val gate = visible
         val key = ui.returning?.key
+        val timeout = org.ivanivorontsov.launcher.core.ReturnGuard.flightTimeoutMs(app.store.config.value.returnDurationMs, ui.returnStyle)
         ui.scope.launch {
+          var finished = false
+          try { finished = kotlinx.coroutines.withTimeoutOrNull(timeout) {
             // onStop schedules a reset on the same scope; on fast realme/ColorOS task
             // transitions that reset can race with onResume and leave progress already at 1.
             // Reset here, in the animation coroutine, so every return starts at frame zero.
@@ -398,6 +437,12 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
                 else -> {}
             }
             // 1.3.1: no landing "pop" — the scale bump at the end read as a twitch.
+            true } ?: false
+          } finally {
+            // 1.3.9: timed out or cancelled (activity stopped, another app opened mid-flight): never leave the card.
+            if (!finished && key != null && ui.returning?.key == key) forceEndReturn("flight-timeout")
+            else if (finished) returnStartedAt = 0L
+          }
         }
     }
 
@@ -455,6 +500,8 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     override fun onPause() {
         super.onPause(); wasResumed = false; ui.resumed = false; ui.menu = null
+        // 1.3.9: another app opened while the card was still flying — drop the overlay now.
+        if (ui.returning != null && returnArmed) forceEndReturn("pause")
         if (ui.drag.item != null) ui.cancelDrag()
     }
 

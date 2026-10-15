@@ -66,7 +66,7 @@ private fun Modifier.zIndexFor(pager: PagerState, page: Int): Modifier =
         layout(p.width, p.height) { p.place(0, 0, zIndex = -abs(page - pager.position())) }
     })
 
-private fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
+internal fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
     val a = abs(o)
     // Camera far enough that a 90-180° turn never clips the near edge on a tall 144 Hz panel.
     cameraDistance = 24f * density
@@ -97,6 +97,67 @@ private fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
             val s = 1f - 0.14f * o.coerceAtMost(1f)
             scaleX = s; scaleY = s
             alpha = 1f - 0.5f * o.coerceAtMost(1f)
+        }
+        // 1.3.9 — new effects. All are pure layer transforms of the page (no recomposition while swiping).
+        PageEffect.CUBE_IN -> {
+            // Inside of the cube: the shared edge stays put, the faces turn towards the viewer.
+            transformOrigin = TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
+            rotationY = -90f * o.coerceIn(-1f, 1f)
+            alpha = 1f - 0.25f * a.coerceAtMost(1f)
+        }
+        PageEffect.CAROUSEL -> {
+            // Pages ride on a round table: they turn around their own centre and step back.
+            val c = a.coerceAtMost(1f)
+            rotationY = 55f * o.coerceIn(-1f, 1f)
+            translationX = -o * size.width * 0.28f
+            val s = 1f - 0.24f * c
+            scaleX = s; scaleY = s
+            alpha = 1f - 0.4f * c
+        }
+        PageEffect.TILT -> {
+            transformOrigin = TransformOrigin(0.5f, 0.5f)
+            rotationY = -28f * o.coerceIn(-1f, 1f)
+            rotationX = 6f * a.coerceAtMost(1f)
+            val s = 1f - 0.08f * a.coerceAtMost(1f)
+            scaleX = s; scaleY = s
+        }
+        PageEffect.ZOOM_IN -> {
+            // The leaving page swells towards the viewer and dissolves; the next one grows into place.
+            val c = a.coerceAtMost(1f)
+            val s = if (o < 0f) 1f + 0.35f * c else 1f - 0.25f * c
+            scaleX = s; scaleY = s
+            alpha = 1f - c
+        }
+        PageEffect.DEPTH -> if (o > 0f) {
+            // The page on the right waits underneath; the current one slides over it.
+            val c = o.coerceAtMost(1f)
+            translationX = -o * size.width
+            val s = 0.75f + 0.25f * (1f - c)
+            scaleX = s; scaleY = s
+            alpha = 1f - c
+        }
+        PageEffect.ACCORDION -> {
+            transformOrigin = TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
+            scaleX = (1f - a).coerceIn(0f, 1f)
+            alpha = 1f - 0.3f * a.coerceAtMost(1f)
+        }
+        PageEffect.SPIN -> {
+            val c = a.coerceAtMost(1f)
+            rotationZ = 90f * o.coerceIn(-1f, 1f)
+            val s = 1f - 0.45f * c
+            scaleX = s; scaleY = s
+            alpha = 1f - c
+        }
+        PageEffect.FADE -> {
+            // Pages do not move at all: one dissolves into the other.
+            translationX = -o * size.width
+            alpha = 1f - a.coerceAtMost(1f)
+        }
+        PageEffect.WHEEL -> {
+            // Ferris wheel: pages swing around a hub high above the screen.
+            transformOrigin = TransformOrigin(0.5f, -1.1f)
+            rotationZ = -24f * o.coerceIn(-1f, 1f)
+            alpha = 1f - 0.3f * a.coerceAtMost(1f)
         }
         // Pages without per-item content (widgets page, tiles, text lists) get a page-level cylinder.
         PageEffect.CYLINDER -> {

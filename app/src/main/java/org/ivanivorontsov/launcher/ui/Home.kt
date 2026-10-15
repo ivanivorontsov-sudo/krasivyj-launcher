@@ -185,7 +185,7 @@ fun LauncherRoot(ui: UiState) {
     ui.onFolderHover = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
 
     LauncherTheme(spec, animations) {
-      CompositionLocalProvider(LocalUi provides ui, LocalAppsByKey provides byKey, LocalPageEffect provides config.pageEffectFor(spec.id, spec.layout)) {
+      CompositionLocalProvider(LocalUi provides ui, LocalAppsByKey provides byKey, LocalPageEffect provides (if (animations) config.pageEffectFor(spec.id, spec.layout) else org.ivanivorontsov.launcher.core.PageEffect.NONE)) {
         val density = LocalDensity.current
         BoxWithConstraints(Modifier.fillMaxSize().dragTracker(ui)) {
             val wPx = with(density) { maxWidth.roundToPx() }; val hPx = with(density) { maxHeight.roundToPx() }
@@ -356,7 +356,7 @@ private fun Modifier.composedDrag(ui: UiState, configNow: LauncherConfig, height
     )
 }
 
-// ---------------------------------------------------------------- GRID (Купертино-style, «Письмо» and generic)
+// ---------------------------------------------------------------- GRID («Стекло», «Письмо» and generic)
 
 /** Maps the finger to a reorder slot / dock slot / folder target on the icon grid; edge auto-scroll. */
 private class GridHost(val ui: UiState) : DropHost {

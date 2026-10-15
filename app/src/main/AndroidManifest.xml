@@ -53,7 +53,7 @@
             android:taskAffinity=""
             android:screenOrientation="unspecified"
             android:windowSoftInputMode="adjustNothing|stateAlwaysHidden"
-            android:configChanges="keyboard|keyboardHidden|mcc|mnc|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection">
+            android:configChanges="keyboard|keyboardHidden|mcc|mnc|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection|touchscreen|colorMode|fontWeightAdjustment|grammaticalGender">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />

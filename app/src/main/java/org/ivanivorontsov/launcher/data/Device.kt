@@ -170,7 +170,6 @@ object Device {
                 window.attributes = lp
             }
             hintFrameRate(window, 0f)
-            logRefresh("default", display)
             return
         }
         val best = bestMode(display) ?: return
@@ -178,23 +177,33 @@ object Device {
             lp.preferredDisplayModeId = best.id
             lp.preferredRefreshRate = best.rate
             window.attributes = lp
+            // 1.3.9: log only real changes (it formatted a string and queried the display mode on every resume).
+            logRefresh("request ${fmtHz(best.rate)} mode ${best.id}", display)
         }
         hintFrameRate(window, best.rate)
-        logRefresh("request ${fmtHz(best.rate)} mode ${best.id}", display)
     }
 
     /** Drop the cached mode after a display change so the next apply re-reads supported modes. */
     fun invalidateRefreshCache() { refreshPick = null }
 
-    fun registerDisplayRefresh(activity: android.app.Activity, high: () -> Boolean): DisplayManager.DisplayListener {
+    fun registerDisplayRefresh(activity: android.app.Activity, busy: () -> Boolean = { false }, high: () -> Boolean): DisplayManager.DisplayListener {
         val dm = activity.getSystemService(DisplayManager::class.java)
+        val main = Handler(Looper.getMainLooper())
+        var pending = false
         val listener = object : DisplayManager.DisplayListener {
             override fun onDisplayAdded(displayId: Int) {}
             override fun onDisplayRemoved(displayId: Int) {}
             override fun onDisplayChanged(displayId: Int) {
                 val current = activity.display?.displayId ?: Display.DEFAULT_DISPLAY
                 if (displayId != current && displayId != Display.DEFAULT_DISPLAY) return
-                invalidateRefreshCache()
+                // 1.3.9: ColorOS switches 60↔120/144 Hz around every Home transition and each switch fires this.
+                // Before, every callback dropped the mode cache (binder query of all modes) and re-applied window
+                // attributes in the middle of the return animation. The cache is keyed by resolution already, so it
+                // stays; and while a transition runs we re-apply once, after it.
+                if (busy()) {
+                    if (!pending) { pending = true; main.postDelayed({ pending = false; applyRefreshRate(activity.window, high()) }, 700) }
+                    return
+                }
                 applyRefreshRate(activity.window, high())
             }
         }
@@ -246,11 +255,19 @@ object Device {
     }
 
     /** Hidden ViewRootImpl surface, when the platform still lets us see it. Public mode id is the real request. */
+    // 1.3.9: reflection is resolved once. Before, every resume did getMethod/getDeclaredField on hidden API
+    // (with the runtime's hidden-API checks and, where blocked, an exception) on the main thread at the
+    // exact moment the Home transition starts.
+    @Volatile private var surfaceReflectFailed = false
+    private var getRootMethod: java.lang.reflect.Method? = null
+    private var surfaceField: java.lang.reflect.Field? = null
+
     private fun hintSurface(view: android.view.View, rate: Float) {
+        if (surfaceReflectFailed) return
         try {
-            val root = android.view.View::class.java.getMethod("getViewRootImpl").invoke(view) ?: return
-            val field = root.javaClass.getDeclaredField("mSurface")
-            field.isAccessible = true
+            val m = getRootMethod ?: android.view.View::class.java.getMethod("getViewRootImpl").also { getRootMethod = it }
+            val root = m.invoke(view) ?: return
+            val field = surfaceField ?: root.javaClass.getDeclaredField("mSurface").also { it.isAccessible = true; surfaceField = it }
             val surface = field.get(root) as? Surface ?: return
             if (!surface.isValid) return
             if (Build.VERSION.SDK_INT >= 31) {
@@ -258,7 +275,7 @@ object Device {
             } else {
                 surface.setFrameRate(rate, Surface.FRAME_RATE_COMPATIBILITY_DEFAULT)
             }
-        } catch (_: Throwable) {}
+        } catch (_: Throwable) { surfaceReflectFailed = true }
     }
 
     private fun logRefresh(request: String, display: Display) {
