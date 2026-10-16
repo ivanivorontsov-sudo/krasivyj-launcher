@@ -559,7 +559,7 @@ private fun AboutScreen() {
         item {
             Text("Уют ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleLarge)
             Info("Без интернета (нет разрешения INTERNET), без рекламы и трекеров. Все данные — на телефоне.")
-            Info("Идеи взяты из лучших лаунчеров: быстрый поиск и плавность Kvaesitso и Olauncher, алфавит-«волна» Niagara, формы иконок и шрифты Lawnchair, живые плитки SquareHome/Launcher 10. Темы «Купертино» и «Плитки» — оригинальные работы по мотивам классических раскладок; логотипы, иконки, обои и фирменные шрифты Apple и Microsoft не используются.")
+            Info("Идеи взяты из лучших лаунчеров: быстрый поиск и плавность Kvaesitso и Olauncher, алфавит-«волна» Niagara, формы иконок и шрифты Lawnchair, живые плитки SquareHome/Launcher 10. Темы «Сквиркл» и «Плитки» — оригинальные работы по мотивам классических раскладок; логотипы, иконки, обои и фирменные шрифты Apple и Microsoft не используются; Apple и Microsoft — товарные знаки их владельцев, лаунчер с ними не связан.")
             Text("Шрифты", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
             Info("Все шрифты распространяются по лицензии SIL Open Font License 1.1. Шрифты с «зарезервированным именем» включены без изменений; остальные сокращены до латиницы и кириллицы (это разрешено лицензией).")
         }

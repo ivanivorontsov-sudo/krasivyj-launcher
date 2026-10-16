@@ -115,7 +115,7 @@ object AccentPalette {
 
 object Presets {
     val cupertino = ThemeSpec(
-        id = "cupertino", name = "Купертино",
+        id = "cupertino", name = "Сквиркл",
         description = "Сетка 4×6, сквирклы, матовый док, точки страниц, библиотека приложений, пружинная анимация",
         layout = HomeLayout.GRID, drawer = DrawerStyle.LIBRARY,
         headingFont = "inter", bodyFont = "inter", clockFont = "inter", clockWeight = 300,

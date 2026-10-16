@@ -293,7 +293,7 @@ private fun Modifier.composedDrag(ui: UiState, configNow: LauncherConfig, height
     )
 }
 
-// ---------------------------------------------------------------- GRID (Купертино-style, «Письмо» and generic)
+// ---------------------------------------------------------------- GRID (Сквиркл-style, «Письмо» and generic)
 
 /** Maps the finger to a reorder slot / dock slot / folder target on the icon grid; edge auto-scroll. */
 private class GridHost(val ui: UiState) : DropHost {
