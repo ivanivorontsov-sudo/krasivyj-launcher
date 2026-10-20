@@ -72,8 +72,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * «Стоп-экран» settings inside Уют. Protected by the same password as ScreenLimit (if one is set):
- * the whole section — and leaving a pause — needs it. Themes, fonts, effects stay freely editable elsewhere.
+ * «Стоп-экран» settings inside Уют. Changing settings is protected by the same password as ScreenLimit
+ * (if one is set). Screen time and history stay readable without it. Themes stay freely editable elsewhere.
  */
 class StopActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,9 +90,27 @@ class StopActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() { super.onResume(); tick++ ; StopGuard.tick() }
+    private var displayRefresh: android.hardware.display.DisplayManager.DisplayListener? = null
+
+    override fun onStart() {
+        super.onStart()
+        if (displayRefresh == null) {
+            displayRefresh = org.ivanivorontsov.launcher.data.Device.registerDisplayRefresh(this) {
+                org.ivanivorontsov.launcher.LauncherApp.instance.store.config.value.highRefreshRate
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        tick++
+        StopGuard.tick()
+        org.ivanivorontsov.launcher.data.Device.applyRefreshRate(window, org.ivanivorontsov.launcher.LauncherApp.instance.store.config.value.highRefreshRate)
+    }
     /** Leaving Stop Screen settings ends the one-password editing session. */
     override fun onStop() {
+        org.ivanivorontsov.launcher.data.Device.unregisterDisplayRefresh(this, displayRefresh)
+        displayRefresh = null
         super.onStop()
         // Android's VPN consent screen temporarily backgrounds this activity. Keep the
         // one-password editing session for that system dialog only.
@@ -139,18 +157,12 @@ private fun StopRoot(close: () -> Unit) {
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (!editingUnlocked) {
-                // Do not render settings underneath a translucent lock screen: no labels,
-                // values, toggles, or app lists are visible until the one-time password entry.
-                Column(
-                    Modifier.fillMaxSize().padding(horizontal = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("Настройки скрыты", style = MaterialTheme.typography.headlineSmall)
-                    Text("Введите пароль один раз. После разблокировки можно менять любые параметры без дополнительных паролей и подтверждений — до выхода из настроек.", style = MaterialTheme.typography.bodyMedium)
-                    Button(onClick = { showPasswordPrompt = true }) { Text("Снять блокировку") }
-                }
+            if (!editingUnlocked && page == Page.HISTORY) {
+                HistoryPage()
+            } else if (!editingUnlocked) {
+                // Stats and history are readable without the password. Toggles, app lists
+                // and other edits stay off this screen until the one-time password entry.
+                ReadOnlyStats(onHistory = { page = Page.HISTORY }, onUnlock = { showPasswordPrompt = true })
             } else {
                 when (page) {
                     Page.MAIN -> MainPage { page = it }
@@ -404,7 +416,7 @@ private fun MainPage(go: (Page) -> Unit) {
             Info("Уют должен быть лаунчером по умолчанию: тогда «Домой» всегда ведёт в Уют и никаких окон блокировки не появляется.")
         } }
         item { Section("Пароль") {
-            Info(if (store.hasPassword) "🔑 Пароль задан: без него этот раздел и выход из паузы не открыть." else "Пароль не задан — раздел открыт всем. Пусть пароль задаст другой человек.")
+            Info(if (store.hasPassword) "🔑 Пароль задан: без него нельзя менять настройки и выходить из паузы. Статистика и история открыты без пароля." else "Пароль не задан — раздел открыт всем. Пусть пароль задаст другой человек.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { setPw = true }) { Text(if (store.hasPassword) "Сменить пароль" else "Задать пароль") }
                 if (store.hasPassword) OutlinedButton(onClick = {
@@ -519,6 +531,33 @@ private fun AppChecklist(info: String, selected: () -> Set<String>, protectedPkg
                     Text(a.label, style = MaterialTheme.typography.bodyLarge)
                     if (locked) Text("телефон, SMS и сам Уют не запрещаются", style = MaterialTheme.typography.bodySmall)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReadOnlyStats(onHistory: () -> Unit, onUnlock: () -> Unit) {
+    val view by StopGuard.view.collectAsStateCompat()
+    val historyCount = StopGuard.store.history.size
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { Section("Статистика") {
+            Info(when {
+                !view.enabled -> "Стоп-экран выключен. Сегодня за экраном: ${StopGuard.fmt(view.usedMs)}."
+                view.paused -> "Пауза" + (if (view.pauseUntil > 0) " до " + SimpleDateFormat("HH:mm", Locale("ru")).format(Date(view.pauseUntil)) else "") + ". Сегодня за экраном: ${StopGuard.fmt(view.usedMs)}."
+                view.remainingMs != null -> "Сегодня за экраном: ${StopGuard.fmt(view.usedMs)}. Осталось ${StopGuard.fmt(view.remainingMs!!)}."
+                else -> "Сегодня за экраном: ${StopGuard.fmt(view.usedMs)}."
+            })
+            Info("Это только просмотр. Лимит, список приложений, строгий режим и пароль по-прежнему меняются после снятия блокировки.")
+        } }
+        item { Section("История") {
+            Row(Modifier.fillMaxWidth().clickable { onHistory() }.padding(vertical = 10.dp)) {
+                Text("Открыть историю ($historyCount)", style = MaterialTheme.typography.bodyLarge)
+            }
+        } }
+        item {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Button(onClick = onUnlock) { Text("Снять блокировку и изменить настройки") }
             }
         }
     }

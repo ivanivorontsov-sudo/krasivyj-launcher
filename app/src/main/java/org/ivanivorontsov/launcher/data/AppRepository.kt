@@ -55,6 +55,8 @@ class AppInfo(
     val stamp: Long = 0L,
     /** Preinstalled/system app: never auto-added to the home screen. */
     val system: Boolean = false,
+    /** `ApplicationInfo.category`, or -1 when the snapshot was written before this field existed. */
+    val androidCategory: Int = -1,
 ) {
     val component: ComponentName get() = ComponentName(pkg, cls)
     override fun equals(other: Any?) = other is AppInfo && other.key == key && other.label == label
@@ -136,7 +138,7 @@ class AppRepository(private val context: Context, private val store: Store) {
                 val stamp = try { (ai.sourceDir?.hashCode()?.toLong() ?: 0L) * 31 + File(ai.sourceDir ?: "").lastModified() } catch (_: Exception) { 0L }
                 val system = (ai.flags and (android.content.pm.ApplicationInfo.FLAG_SYSTEM or android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
                 list += AppInfo(key, label, orig, a.componentName.packageName, a.componentName.className, user, user != me, cat,
-                    AlphabetIndex.letterOf(label), SearchKey(label, if (label != orig) orig + " " + a.componentName.packageName else a.componentName.packageName), stamp, system)
+                    AlphabetIndex.letterOf(label), SearchKey(label, if (label != orig) orig + " " + a.componentName.packageName else a.componentName.packageName), stamp, system, ai.category)
             }
         }
         list.sortWith(compareBy<AppInfo> { AlphabetIndex.order(it.letter) }.thenComparator { a, b -> collator.compare(a.label, b.label) })
@@ -167,7 +169,7 @@ class AppRepository(private val context: Context, private val store: Store) {
         try {
             val arr = JSONArray()
             for (a in list) arr.put(JSONObject().put("k", a.key).put("l", a.label).put("o", a.originalLabel).put("p", a.pkg).put("c", a.cls)
-                .put("u", userManager.getSerialNumberForUser(a.user)).put("w", a.isWork).put("g", a.category.name).put("s", a.stamp).put("y", a.system))
+                .put("u", userManager.getSerialNumberForUser(a.user)).put("w", a.isWork).put("g", a.category.name).put("s", a.stamp).put("y", a.system).put("ac", a.androidCategory))
             val tmp = File(snapshotFile.path + ".tmp"); tmp.writeText(arr.toString()); tmp.renameTo(snapshotFile)
         } catch (_: Exception) {}
     }
@@ -182,7 +184,7 @@ class AppRepository(private val context: Context, private val store: Store) {
             val label = o.getString("l"); val orig = o.getString("o"); val pkg = o.getString("p")
             out += AppInfo(o.getString("k"), label, orig, pkg, o.getString("c"), user, o.getBoolean("w"),
                 runCatching { AppCategory.valueOf(o.getString("g")) }.getOrDefault(AppCategory.OTHER), AlphabetIndex.letterOf(label),
-                SearchKey(label, if (label != orig) "$orig $pkg" else pkg), o.optLong("s"), o.optBoolean("y"))
+                SearchKey(label, if (label != orig) "$orig $pkg" else pkg), o.optLong("s"), o.optBoolean("y"), o.optInt("ac", -1))
         }
         return out
     }
