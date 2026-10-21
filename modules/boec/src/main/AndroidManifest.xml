@@ -28,7 +28,7 @@
             android:label="@string/mod_boec_name"
             android:icon="@mipmap/mod_boec_icon"
             android:theme="@style/Theme.Boec"
-            android:taskAffinity="org.ivanivorontsov.launcher.mod.boec"
+            android:taskAffinity="${applicationId}.mod.boec"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode|keyboardHidden">
@@ -42,7 +42,7 @@
             android:launchMode="singleTop"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
-            android:taskAffinity="org.ivanivorontsov.boec.call"
+            android:taskAffinity="${applicationId}.boec.call"
             android:theme="@style/Theme.Boec.Call"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode|keyboardHidden" />
 

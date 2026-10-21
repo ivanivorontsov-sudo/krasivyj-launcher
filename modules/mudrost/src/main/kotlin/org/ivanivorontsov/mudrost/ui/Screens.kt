@@ -95,6 +95,7 @@ private val tabs = listOf(
 fun MudrostApp(vm: AppViewModel, onExit: () -> Unit) {
     val st by vm.state.collectAsStateWithLifecycle()
     BackHandler { if (!vm.back()) onExit() }
+    FirstRunDisclaimer()
     Scaffold(bottomBar = {
         NavigationBar {
             tabs.forEach { t ->
@@ -150,9 +151,14 @@ private val examples = listOf("В чём смысл жизни?", "как пер
 @Composable
 private fun HomeScreen(st: UiState, engine: SearchEngine, vm: AppViewModel) {
     val kb = LocalSoftwareKeyboardController.current
+    var about by rememberSaveable { mutableStateOf(false) }
+    if (about) AboutScreen { about = false }
     LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 48.dp, bottom = 24.dp)) {
         item {
-            Text("Мудрость", style = MaterialTheme.typography.headlineMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Мудрость", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                TextButton(onClick = { about = true }) { Text("О приложении") }
+            }
             Text("Задайте вопрос — получите ответ и цитату", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 16.dp))
             SearchField(st, vm)
@@ -190,6 +196,10 @@ private fun HomeScreen(st: UiState, engine: SearchEngine, vm: AppViewModel) {
                     items(engine.data.topics.take(14)) { t -> SuggestionChip(onClick = { vm.openTopic(t) }, label = { Text("${t.emoji} ${t.title}") }) }
                     item { SuggestionChip(onClick = { vm.selectTab(Screen.Topics) }, label = { Text("Все темы →") }) }
                 }
+            }
+            item {
+                Text(Disclaimer.TEXT + " " + Disclaimer.CRISIS, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp))
             }
             if (!st.semanticReady) item {
                 Text("Подготовка смыслового поиска…", style = MaterialTheme.typography.labelSmall,

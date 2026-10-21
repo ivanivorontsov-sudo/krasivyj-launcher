@@ -67,7 +67,7 @@
             android:label="@string/settings_label"
             android:icon="@mipmap/ic_launcher"
             android:theme="@style/Theme.Launcher.Settings"
-            android:taskAffinity="org.ivanivorontsov.launcher.settings">
+            android:taskAffinity="${applicationId}.settings">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -85,7 +85,7 @@
             android:label="@string/modules_label"
             android:icon="@mipmap/ic_launcher"
             android:theme="@style/Theme.Launcher.Settings"
-            android:taskAffinity="org.ivanivorontsov.launcher.modules">
+            android:taskAffinity="${applicationId}.modules">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

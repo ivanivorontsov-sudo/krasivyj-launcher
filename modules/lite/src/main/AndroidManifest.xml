@@ -4,7 +4,7 @@
         <activity android:name="ru.vorontsov.reader.MainActivity" android:exported="true"
             android:label="@string/mod_reader_name" android:icon="@mipmap/mod_reader_icon"
             android:theme="@style/ReaderTheme" android:launchMode="singleTask"
-            android:taskAffinity="org.ivanivorontsov.launcher.mod.reader" android:hardwareAccelerated="true"
+            android:taskAffinity="${applicationId}.mod.reader" android:hardwareAccelerated="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density|keyboard|navigation">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
             <intent-filter>
@@ -44,7 +44,7 @@
         <activity android:name="ru.zametki.notes.MainActivity" android:exported="true"
             android:label="@string/mod_notes_name" android:icon="@drawable/mod_notes_icon"
             android:theme="@android:style/Theme.Material.Light.NoActionBar"
-            android:taskAffinity="org.ivanivorontsov.launcher.mod.notes" android:launchMode="singleTask"
+            android:taskAffinity="${applicationId}.mod.notes" android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>

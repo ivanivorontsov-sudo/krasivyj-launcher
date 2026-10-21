@@ -220,7 +220,26 @@ public class MainActivity extends Activity {
         else openBundled();
     }
 
+    boolean hasBundled() {
+        try (InputStream in = getAssets().open("reader/kniga.epub")) { return true; } catch (Exception e) { return false; }
+    }
+
+    void pickBook() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("*/*");
+        try { startActivityForResult(i, 1); }
+        catch (Exception e) { Toast.makeText(this, "Нет файлового менеджера", Toast.LENGTH_SHORT).show(); }
+    }
+
     void openBundled() {
+        if (!hasBundled()) {
+            runOnUiThread(() -> {
+                Toast.makeText(this, "Выберите книгу (EPUB или FB2)", Toast.LENGTH_LONG).show();
+                pickBook();
+            });
+            return;
+        }
         new Thread(() -> {
             try {
                 File f = new File(getFilesDir(), "mod_reader_bundled.epub");
@@ -509,6 +528,7 @@ public class MainActivity extends Activity {
             });
         }
         @JavascriptInterface public void openBundled() { MainActivity.this.openBundled(); }
+        @JavascriptInterface public boolean hasBundled() { return MainActivity.this.hasBundled(); }
         @JavascriptInterface public void openRecent(String key) {
             if (new File(booksDir(), key).exists()) MainActivity.this.openKey(key);
         }

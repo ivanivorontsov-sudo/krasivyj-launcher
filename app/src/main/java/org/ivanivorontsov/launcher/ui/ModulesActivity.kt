@@ -35,10 +35,11 @@ object SuperModules {
         SuperModule("Мудрость", "Офлайн-ответы на жизненные вопросы и цитаты", "org.ivanivorontsov.mudrost.MainActivity"),
         SuperModule("Кодекс жизни", "Статьи-нормы, поиск, меры пресечения, напоминания", "org.ivanivorontsov.kodekszhizni.MainActivity"),
         SuperModule("Боец поневоле", "Тренировки, самооборона, напоминания-звонки", "org.ivanivorontsov.boec.ui.MainActivity"),
-        SuperModule("Читалка", "EPUB и FB2, ваша книга уже внутри", "ru.vorontsov.reader.MainActivity"),
+        SuperModule("Читалка", if (org.ivanivorontsov.launcher.BuildConfig.HAS_BOOK) "EPUB и FB2, ваша книга уже внутри" else "EPUB и FB2", "ru.vorontsov.reader.MainActivity"),
         SuperModule("Заметки", "Простые быстрые заметки", "ru.zametki.notes.MainActivity"),
         SuperModule("Тихо", "Приватный браузер на GeckoView — открывается как отдельное приложение", null, "org.ivanivorontsov.tiho", "GNU GPL v3"),
     ).filter { !org.ivanivorontsov.launcher.BuildConfig.PLAY || it.externalPkg == null }
+     .filter { it.externalPkg != null || (org.ivanivorontsov.launcher.BuildConfig.HAS_MODULES && (it.title != "Мудрость" || org.ivanivorontsov.launcher.BuildConfig.HAS_MUDROST)) }
 
     fun open(ctx: Context, m: SuperModule) {
         if (m.activity != null) {

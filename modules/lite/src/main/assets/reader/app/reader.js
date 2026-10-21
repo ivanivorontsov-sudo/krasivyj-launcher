@@ -380,6 +380,7 @@ $('#openFile').onclick = () => { closePanels(); saveNow(); A.openFile(); };
 $('#openBundled').onclick = () => { closePanels(); if (!meta.bundled) { saveNow(); A.openBundled(); } };
 function renderLib() {
   $('#openBundled').classList.toggle('cur', !!meta.bundled);
+  try { if (A.hasBundled && !A.hasBundled()) $('#openBundled').style.display = 'none'; } catch (e) {}
   const box = $('#recent'); box.textContent = '';
   const r = JSON.parse(A.getRecent() || '[]');
   if (!r.length) return;

@@ -8,3 +8,7 @@
 -keepclasseswithmembers class org.ivanivorontsov.launcher.** { kotlinx.serialization.KSerializer serializer(...); }
 # Services referenced from the manifest are kept by AAPT rules automatically.
 -dontwarn org.jetbrains.annotations.**
+
+# «Боец поневоле» init is called reflectively from LauncherApp (so the «Лёгкий» flavor compiles without modules).
+-keep class org.ivanivorontsov.boec.data.Store { public *; }
+-keep class org.ivanivorontsov.boec.alarm.Notifier { public *; }

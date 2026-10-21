@@ -14,8 +14,8 @@ val ksProps = Properties().apply {
 }
 fun signingValue(key: String, env: String): String? = System.getenv(env) ?: ksProps.getProperty(key)
 
-val appVersionCode = (System.getenv("VERSION_CODE") ?: "1391").toInt()
-val appVersionName = System.getenv("VERSION_NAME") ?: "1.3.9"
+val appVersionCode = (System.getenv("VERSION_CODE") ?: "1400").toInt()
+val appVersionName = System.getenv("VERSION_NAME") ?: "1.4.0"
 
 android {
     namespace = "org.ivanivorontsov.launcher"
@@ -53,9 +53,24 @@ android {
     flavorDimensions += "dist"
     productFlavors {
         // Full APK (sideload): everything, incl. «Стоп-экран», screen lock, DNS filter, digit overlay.
-        create("full") { dimension = "dist"; buildConfigField("boolean", "PLAY", "false") }
+        create("full") { dimension = "dist"; buildConfigField("boolean", "PLAY", "false"); buildConfigField("boolean", "HAS_MUDROST", "true"); buildConfigField("boolean", "HAS_MODULES", "true"); buildConfigField("boolean", "HAS_BOOK", "true") }
         // Google Play: same package, without Play-restricted parts (see src/play/AndroidManifest.xml).
-        create("play") { dimension = "dist"; buildConfigField("boolean", "PLAY", "true") }
+        create("play") { dimension = "dist"; buildConfigField("boolean", "PLAY", "true"); buildConfigField("boolean", "HAS_MUDROST", "true"); buildConfigField("boolean", "HAS_MODULES", "true"); buildConfigField("boolean", "HAS_BOOK", "true") }
+        // Sideload, installs next to the main app: all modules except «Мудрость», reader without the bundled book.
+        create("nowisdom") {
+            dimension = "dist"; versionNameSuffix = "-nowisdom"
+            buildConfigField("boolean", "PLAY", "false"); buildConfigField("boolean", "HAS_MUDROST", "false"); buildConfigField("boolean", "HAS_MODULES", "true"); buildConfigField("boolean", "HAS_BOOK", "false")
+        }
+        // Sideload «Лёгкий»: only the launcher itself, no built-in modules, no «Мудрость», no book.
+        create("light") {
+            dimension = "dist"; versionNameSuffix = "-light"
+            buildConfigField("boolean", "PLAY", "false"); buildConfigField("boolean", "HAS_MUDROST", "false"); buildConfigField("boolean", "HAS_MODULES", "false"); buildConfigField("boolean", "HAS_BOOK", "false")
+        }
+    }
+
+    sourceSets {
+        getByName("full") { assets.srcDir("src/withBook/assets") }
+        getByName("play") { assets.srcDir("src/withBook/assets") }
     }
 
     buildTypes {
@@ -128,10 +143,11 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // СуперСмарт modules
-    implementation(project(":modules:mudrost"))
-    implementation(project(":modules:kodeks"))
-    implementation(project(":modules:boec"))
-    implementation(project(":modules:lite"))
+    // «Мудрость» only in the main builds; other modules in all but «Лёгкий».
+    for (cfg in listOf("fullImplementation", "playImplementation")) add(cfg, project(":modules:mudrost"))
+    for (cfg in listOf("fullImplementation", "playImplementation", "nowisdomImplementation")) {
+        add(cfg, project(":modules:kodeks")); add(cfg, project(":modules:boec")); add(cfg, project(":modules:lite"))
+    }
     implementation("androidx.metrics:metrics-performance:1.0.0-beta01")
 
     testImplementation("junit:junit:4.13.2")

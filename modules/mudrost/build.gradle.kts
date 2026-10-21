@@ -10,6 +10,7 @@ android {
     defaultConfig {
         minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
+        buildConfigField("String", "VERSION_NAME", "\"1.1.1\"")
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -19,7 +20,7 @@ android {
         jvmTarget = "17"
         freeCompilerArgs += listOf("-opt-in=androidx.compose.foundation.ExperimentalFoundationApi", "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi", "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api", "-opt-in=androidx.compose.animation.ExperimentalAnimationApi")
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     androidResources { noCompress += listOf("onnx", "bin") }
 }
 

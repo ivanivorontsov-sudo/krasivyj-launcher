@@ -11,7 +11,7 @@
             android:label="@string/mod_kodeks_name"
             android:icon="@mipmap/mod_kodeks_icon"
             android:theme="@style/Theme.KodeksZhizni"
-            android:taskAffinity="org.ivanivorontsov.launcher.mod.kodeks"
+            android:taskAffinity="${applicationId}.mod.kodeks"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -192,16 +193,16 @@ private fun WidgetEditFrame(ui: UiState, w: HomeWidget, cellW: Int, cellH: Int, 
         Handle(Alignment.CenterEnd, true, false)
         Handle(Alignment.BottomCenter, false, true)
         Handle(Alignment.BottomEnd, true, true)
-        Row(Modifier.align(Alignment.TopCenter).padding(6.dp).clip(RoundedCornerShape(50)).background(colors.surface.copy(alpha = 0.95f)).padding(horizontal = 4.dp),
+        Row(Modifier.align(Alignment.TopCenter).wrapContentWidth(unbounded = true).padding(6.dp).clip(RoundedCornerShape(50)).background(colors.surface.copy(alpha = 0.95f)).padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
             @Composable fun Btn(t: String, danger: Boolean = false, f: () -> Unit) =
-                Text(t, color = if (danger) Color(0xFFE5484D) else colors.onSurface, fontSize = 13.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable { f() }.padding(horizontal = 9.dp, vertical = 7.dp))
+                Text(t, color = if (danger) Color(0xFFE5484D) else colors.onSurface, fontSize = 13.sp, maxLines = 1, softWrap = false, modifier = Modifier.clip(RoundedCornerShape(50)).clickable { f() }.padding(horizontal = 9.dp, vertical = 7.dp))
             if (w.kind == HomeWidgetKind.CLOCK) Btn("Изменить") { clockDialog = true }
             else {
                 val info = remember(w.appWidgetId) { try { AppWidgetManager.getInstance(ctx).getAppWidgetInfo(w.appWidgetId) } catch (_: Exception) { null } }
                 if (info?.configure != null) Btn("Настроить") { (ui.actions as? WidgetBinder)?.reconfigureWidget(w.appWidgetId) }
             }
-            Btn("${w.spanX}×${w.spanY}") {}
+            if (w.spanX >= 3) Btn("${w.spanX}×${w.spanY}") {}
             Btn("Удалить", danger = true) {
                 ui.homeWidgetEdit = null
                 store.update { c -> c.editLayout(ui.themeId) { it.remove(w.id) } }

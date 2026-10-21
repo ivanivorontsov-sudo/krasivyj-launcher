@@ -83,7 +83,7 @@ fun AnswerCard(entry: Entry, topics: List<Topic>, fav: Boolean, onFav: () -> Uni
 @Composable
 fun OwnBadge() {
     Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(50)) {
-        Text("из личных записей", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer,
+        Text("из произведений автора", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp))
     }
 }

@@ -30,7 +30,7 @@ data class Quote(
     val author: String,
     val source: String = "",
     val topics: List<String>,
-    /** Quote from the app owner's personal notes (Иван Воронцов). */
+    /** Quote from the app owner's literary works (Иван Воронцов). */
     val own: Boolean = false,
 )
 
