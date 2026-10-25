@@ -291,8 +291,9 @@ fun Modifier.dragTracker(ui: UiState): Modifier = composed {
         awaitPointerEventScope {
             while (true) {
                 val e = awaitPointerEvent(PointerEventPass.Initial)
+                ui.fingers = e.changes.count { it.pressed }
                 if (!ui.drag.active) continue
-                val ch = e.changes.firstOrNull() ?: continue
+                val ch = e.changes.firstOrNull { it.pressed } ?: e.changes.firstOrNull() ?: continue
                 val prevBar = ui.drag.bar
                 ui.drag.pointer = ch.position
                 e.changes.forEach { it.consume() }
@@ -363,6 +364,17 @@ fun Modifier.launcherItem(
                     while (true) {
                         val ev = awaitPointerEvent()
                         val c = ev.changes.firstOrNull { it.id == down.id }
+                        if (ui != null && ui.fingers >= 2 && c != null && c.pressed && LauncherApp.instance.store.config.value.multiFingerDrag) {
+                            val item = dragState.value?.invoke(c.position)
+                            val origin = ref.bounds()
+                            if (item != null && origin != null) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                ev.changes.forEach { it.consume() }
+                                scope.launch { scale.snapTo(1f) }
+                                ui.startDrag(item, origin.topLeft + c.position)
+                                cancelled = true; break
+                            }
+                        }
                         if (c == null || c.isConsumed) { cancelled = true; break }
                         if (!c.pressed) { released = true; c.consume(); break }
                         if ((c.position - down.position).getDistance() > slop) { cancelled = true; break }

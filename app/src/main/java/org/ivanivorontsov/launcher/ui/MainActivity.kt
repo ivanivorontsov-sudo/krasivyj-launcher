@@ -301,7 +301,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         ui.returning?.let { r ->
             returnStartedAt = SystemClock.uptimeMillis()
             val started = returnStartedAt
-            val limit = org.ivanivorontsov.launcher.core.ReturnGuard.deadlineMs(app.store.config.value.returnDurationMs, ui.returnStyle)
+            val limit = org.ivanivorontsov.launcher.core.ReturnGuard.deadlineMs(app.store.config.value.returnDurationMs, ui.returnStyle) + (if (waitForFocus()) FOCUS_WAIT_MS else 0L)
             window.decorView.postDelayed({ if (ui.returning === r && returnStartedAt == started) forceEndReturn("timeout") }, limit)
         }
         if (fxNow && fxKey != null && !app.store.config.value.diagNoAnim) android.view.Choreographer.getInstance().postFrameCallback { playIconFx(fxKey) }
@@ -327,8 +327,12 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             // 1.3: the old code only retried after 450 ms when the first callback came within the
             // 80 ms guard, which was the visible "home appears, then pauses, then animates" stutter.
             // 1.3.6: shorter fallbacks (was 90 / 260 ms) — that wait was added on top of the user's duration.
-            window.decorView.postDelayed({ beginReturnFlight() }, 50)
-            window.decorView.postDelayed({ beginReturnFlight() }, 180)
+            if (waitForFocus()) {
+                window.decorView.postDelayed({ beginReturnFlight(force = true) }, FOCUS_WAIT_MS)
+            } else {
+                window.decorView.postDelayed({ beginReturnFlight() }, 50)
+                window.decorView.postDelayed({ beginReturnFlight() }, 180)
+            }
         } else ui.scope.launch { if (ui.turnstile.value != 0f) ui.turnstile.snapTo(0f) }
         ui.launchedApp = false
         // 1.3.6: live tiles / widgets refresh only after the flight has landed (at 450 ms it fired mid-flight
@@ -385,8 +389,14 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
      * callback, don't hold the Home gesture for 1.5 seconds: use a short 360 ms guard instead.
      * All progress is frame-clock based, not frame-count based, so 144 Hz gets every available frame.
      */
-    private fun beginReturnFlight() {
+    private fun waitForFocus(): Boolean {
+        val cfg = app.store.config.value
+        return homeIntentSinceStop && cfg.homeAnim != org.ivanivorontsov.launcher.core.HomeAnim.SYSTEM && ui.returning != null && !window.decorView.hasWindowFocus()
+    }
+
+    private fun beginReturnFlight(force: Boolean = false) {
         if (ui.returning == null || returnArmed || resumeUptime == 0L) return
+        if (!force && homeIntentSinceStop && app.store.config.value.homeAnim != org.ivanivorontsov.launcher.core.HomeAnim.SYSTEM && !window.decorView.hasWindowFocus()) return
         if (SystemClock.uptimeMillis() - resumeUptime < 40) return
         returnArmed = true
         // 1.3.6: ui.resumed is not flipped here any more: it restarted live tiles during the flight.
@@ -491,6 +501,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus && unlockArmed) playUnlock()
         if (hasFocus) visible?.complete(Unit)
+        if (hasFocus && homeIntentSinceStop) beginReturnFlight(force = true)
     }
 
     override fun onEnterAnimationComplete() {
@@ -601,6 +612,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     }
 
     private companion object {
+        const val FOCUS_WAIT_MS = 900L
         const val EXTRA_GESTURE_CONTRACT = "gesture_nav_contract_v1"
         const val EXTRA_ICON_POSITION = "gesture_nav_contract_icon_position"
         const val EXTRA_ICON_SURFACE = "gesture_nav_contract_surface_control"

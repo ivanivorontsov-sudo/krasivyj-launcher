@@ -118,6 +118,7 @@ class UiState(val scope: CoroutineScope) {
     val iconFx = Animatable(0f)
     val pop = Animatable(0f)
     var hint by mutableStateOf<String?>(null)
+    var fingers = 0
     /** Haptic tick when a folder target lights up (set by the root). */
     var onFolderHover: (() -> Unit)? = null
 }

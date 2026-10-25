@@ -99,6 +99,7 @@ data class LauncherConfig(
     val unlockAnim: UnlockAnim = UnlockAnim.FADE,
     /** 1.3.6: follow the system auto-rotate (true) or keep the launcher in portrait (false). */
     val autoRotate: Boolean = true,
+    val multiFingerDrag: Boolean = true,
     /** Show every launchable app on home pages instead of a separate app drawer. */
     val allAppsOnHome: Boolean = false,
     /** 1.2: page-turn effect per theme id (absent = the theme's default, see [pageEffectFor]). */
