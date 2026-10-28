@@ -25,3 +25,5 @@ HSPLorg/ivanivorontsov/launcher/ui/PageFxKt;->**(**)**
 HSPLorg/ivanivorontsov/launcher/data/IconCache;->**(**)**
 HSPLorg/ivanivorontsov/launcher/ui/ClockKt;->**(**)**
 HSPLorg/ivanivorontsov/launcher/ui/ClockHits;->**(**)**
+HSPLorg/ivanivorontsov/launcher/ui/ScrollGate;->**(**)**
+HSPLorg/ivanivorontsov/launcher/ui/GatedHostView;->**(**)**

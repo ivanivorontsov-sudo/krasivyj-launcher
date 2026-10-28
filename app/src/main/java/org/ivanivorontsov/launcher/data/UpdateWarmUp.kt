@@ -11,7 +11,8 @@ import org.ivanivorontsov.launcher.BuildConfig
  * 1.4.4: one-time work after install/update, run off the main thread once the UI is idle.
  *  - writes the Baseline Profile explicitly (in addition to ProfileInstallerInitializer) and records
  *    ProfileVerifier's verdict, shown in Settings → «Плавность»;
- *  - loads/initialises hot classes so the first page swipes and returns don't pay class-loading cost.
+ *  1.4.5: class preloading removed (it could contend for class-loading locks with the UI thread during the
+ *  first swipes); the work now starts later (8 s / 15 s) at minimum priority and touches only small files.
  * Nothing is drawn; no visual change. AOT compilation of the profile itself is done by Android's background
  * dexopt (idle + charging) — an app cannot force it without adb.
  */
@@ -26,10 +27,9 @@ object UpdateWarmUp {
         val first = prefs.getInt("vc", 0) != BuildConfig.VERSION_CODE
         Looper.myQueue().addIdleHandler {
             Thread({
-                try { Thread.sleep(if (first) 2500 else 4000) } catch (_: InterruptedException) {}
+                try { Thread.sleep(if (first) 8000 else 15000) } catch (_: InterruptedException) {}
                 if (first) {
                     try { ProfileInstaller.writeProfile(app) } catch (t: Throwable) { Log.w("UyutWarm", "writeProfile", t) }
-                    preload()
                     prefs.edit().putInt("vc", BuildConfig.VERSION_CODE).apply()
                 }
                 status = try { describe(ProfileVerifier.getCompilationStatusAsync().get()) } catch (t: Throwable) { "неизвестно" }

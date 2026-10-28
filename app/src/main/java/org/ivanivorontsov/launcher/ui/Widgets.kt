@@ -70,7 +70,7 @@ import org.ivanivorontsov.launcher.data.Device
 object WidgetHostHolder {
     const val HOST_ID = 0x5559
     @Volatile private var host: AppWidgetHost? = null
-    fun host(ctx: Context): AppWidgetHost = host ?: synchronized(this) { host ?: AppWidgetHost(ctx.applicationContext, HOST_ID).also { host = it } }
+    fun host(ctx: Context): AppWidgetHost = host ?: synchronized(this) { host ?: GatedWidgetHost(ctx.applicationContext, HOST_ID).also { host = it } }
 }
 
 /** Left-most page: “today” cards + Android widgets (stacked, each resizable in height). */

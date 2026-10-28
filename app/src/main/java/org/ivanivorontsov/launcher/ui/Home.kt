@@ -227,6 +227,9 @@ fun LauncherRoot(ui: UiState) {
                 else t + packedCount + (if (dragging) 1 else 0)
             val countState = androidx.compose.runtime.rememberUpdatedState(pageCount)
             val homePager = rememberPagerState(initialPage = t) { countState.value }
+            // 1.4.5: tell ScrollGate while the pager moves (defers widget updates / minute tick to the end of a swipe).
+            androidx.compose.runtime.DisposableEffect(homePager) { onDispose { ScrollGate.set(false) } }
+            LaunchedEffect(homePager) { androidx.compose.runtime.snapshotFlow { homePager.isScrollInProgress }.collect { ScrollGate.set(it) } }
             // Turning «Сегодня» on/off shifts page indices: stay on the first home page.
             val tState = androidx.compose.runtime.rememberUpdatedState(t)
             LaunchedEffect(t) { if (spec.layout != HomeLayout.TILES && homePager.currentPage < t) homePager.scrollToPage(t) else if (spec.layout != HomeLayout.TILES && homePager.currentPage >= homePager.pageCount) homePager.scrollToPage(t) }

@@ -133,10 +133,7 @@ object Device {
         if (!tryStart(ctx, Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_GALLERY)))
             tryStart(ctx, Intent(Intent.ACTION_VIEW).setType("image/*"))
     }
-    fun openCalendar(ctx: Context) {
-        if (!tryStart(ctx, Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR)))
-            tryStart(ctx, Intent(Intent.ACTION_VIEW, CalendarContract.CONTENT_URI.buildUpon().appendPath("time").build()))
-    }
+    fun openCalendar(ctx: Context) = openCalendarNow(ctx)   // 1.4.5: same scoped resolution everywhere
     fun openClock(ctx: Context) { tryStart(ctx, Intent(AlarmClock.ACTION_SHOW_ALARMS)) }
 
     // 1.4.4: clock-widget zones. Everything is resolved lazily on tap; nothing is cached or listened for.
@@ -158,9 +155,31 @@ object Device {
         } catch (_: Exception) {}
         if (!tryStart(ctx, Intent(AlarmClock.ACTION_SHOW_ALARMS))) openClockApp(ctx)
     }
+    // 1.4.5: never an unscoped ACTION_VIEW — on realme the content:// time URI was caught by a file manager.
+    private val calendarPkgs = listOf("com.coloros.calendar", "com.oplus.calendar", "com.android.calendar", "com.google.android.calendar",
+        "com.samsung.android.calendar", "com.miui.calendar", "com.huawei.calendar", "com.xiaomi.calendar", "com.oneplus.calendar",
+        "ws.xsoh.etar", "org.fossify.calendar", "com.simplemobiletools.calendar.pro")
+    /** Packages that really are calendar apps: they declare CATEGORY_APP_CALENDAR or are a known calendar package. */
+    private fun calendarApps(ctx: Context): Set<String> {
+        val pm = ctx.packageManager
+        val out = LinkedHashSet<String>()
+        try { pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR), 0).forEach { out += it.activityInfo.packageName } } catch (_: Exception) {}
+        calendarPkgs.forEach { if (pm.getLaunchIntentForPackage(it) != null) out += it }
+        return out
+    }
     fun openCalendarNow(ctx: Context) {
+        val cals = calendarApps(ctx)
+        val pm = ctx.packageManager
+        // 1) system "calendar app" selector, only if it resolves to a real calendar app
+        val sel = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR)
+        val r = try { pm.resolveActivity(sel, 0)?.activityInfo?.packageName } catch (_: Exception) { null }
+        if (r != null && r in cals && tryStart(ctx, sel)) return
+        // 2) known calendar packages, explicitly
+        for (p in calendarPkgs + cals) { if (p !in cals) continue; val i = launch(ctx, p) ?: continue; if (tryStart(ctx, i)) return }
+        // 3) the time URI, scoped to a calendar package
         val u = CalendarContract.CONTENT_URI.buildUpon().appendPath("time").appendPath(System.currentTimeMillis().toString()).build()
-        if (!tryStart(ctx, Intent(Intent.ACTION_VIEW, u)) && !tryStart(ctx, Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR))) openClockApp(ctx)
+        for (p in cals) if (tryStart(ctx, Intent(Intent.ACTION_VIEW, u).setPackage(p))) return
+        openClockApp(ctx)
     }
     fun webSearch(ctx: Context, q: String) {
         if (!tryStart(ctx, Intent(Intent.ACTION_WEB_SEARCH).putExtra(android.app.SearchManager.QUERY, q)))

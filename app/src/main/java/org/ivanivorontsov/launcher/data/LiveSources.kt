@@ -47,7 +47,8 @@ class LiveSources(private val context: Context) {
             override fun onReceive(c: Context?, i: Intent?) {
                 _powerSave.value = power.isPowerSaveMode
                 if (i?.action != Intent.ACTION_TIME_TICK) alarmStale = true
-                _minute.value = System.currentTimeMillis()
+                // 1.4.5: a minute tick that lands mid-swipe is applied when the pager settles.
+                org.ivanivorontsov.launcher.ui.ScrollGate.runWhenIdle("minute") { _minute.value = System.currentTimeMillis() }
             }
         }
         if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(r, f, Context.RECEIVER_NOT_EXPORTED) else @Suppress("UnspecifiedRegisterReceiverFlag") context.registerReceiver(r, f)

@@ -28,6 +28,25 @@
         <intent><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent>
         <intent><action android:name="android.intent.action.WEB_SEARCH" /></intent>
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="market" /></intent>
+        <package android:name="com.coloros.calendar" />
+        <package android:name="com.oplus.calendar" />
+        <package android:name="com.android.calendar" />
+        <package android:name="com.google.android.calendar" />
+        <package android:name="com.samsung.android.calendar" />
+        <package android:name="com.miui.calendar" />
+        <package android:name="com.huawei.calendar" />
+        <package android:name="com.xiaomi.calendar" />
+        <package android:name="com.oneplus.calendar" />
+        <package android:name="ws.xsoh.etar" />
+        <package android:name="org.fossify.calendar" />
+        <package android:name="com.simplemobiletools.calendar.pro" />
+        <package android:name="com.coloros.alarmclock" />
+        <package android:name="com.oplus.alarmclock" />
+        <package android:name="com.google.android.deskclock" />
+        <package android:name="com.android.deskclock" />
+        <package android:name="com.sec.android.app.clockpackage" />
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.APP_CALENDAR" /></intent>
+        <intent><action android:name="android.intent.action.SHOW_ALARMS" /></intent>
     </queries>
 
     <application
