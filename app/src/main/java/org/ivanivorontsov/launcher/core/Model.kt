@@ -98,7 +98,7 @@ data class LauncherConfig(
     val clockZoneCount: Int = 1,
     val clockZones: List<ClockZone> = emptyList(),
     /** 1.3.6: unlock animation of the home screen. */
-    val unlockAnim: UnlockAnim = UnlockAnim.FADE,
+    val unlockAnim: UnlockAnim = UnlockAnim.CENTER,  // 1.4.4: default per owner request
     /** 1.3.6: follow the system auto-rotate (true) or keep the launcher in portrait (false). */
     val autoRotate: Boolean = true,
     val multiFingerDrag: Boolean = true,

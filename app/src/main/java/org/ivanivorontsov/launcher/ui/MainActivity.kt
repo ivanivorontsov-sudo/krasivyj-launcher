@@ -147,7 +147,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val cx = v.width / 2f; val cy = v.height / 2f
         val pts = ui.iconBounds.mapNotNull { (k, ref) -> ref.bounds()?.let { k to it.center } }
         if (pts.isEmpty()) return
-        if (style == org.ivanivorontsov.launcher.core.UnlockAnim.WAVE) {
+        if (style == org.ivanivorontsov.launcher.core.UnlockAnim.WAVE || style == org.ivanivorontsov.launcher.core.UnlockAnim.CENTER) {
             val maxD = pts.maxOf { kotlin.math.hypot(it.second.x - cx, it.second.y - cy) }.coerceAtLeast(1f)
             for ((k, c) in pts) ui.unlockDelay[k] = kotlin.math.hypot(c.x - cx, c.y - cy) / maxD
         } else {

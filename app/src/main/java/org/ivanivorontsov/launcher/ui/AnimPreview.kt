@@ -106,6 +106,7 @@ fun UnlockPreview(anim: UnlockAnim, modifier: Modifier = Modifier) {
                 UnlockAnim.SPRING -> { s = 0.82f + 0.18f * v; a = (ec * 2.5f).coerceAtMost(1f) }
                 UnlockAnim.WAVE -> { val l = unlockLocal(ec, (p - ctr).getDistance() / maxD); a = l; s = 0.55f + 0.45f * l }
                 UnlockAnim.STAGGER -> { val l = unlockLocal(ec, i / 17f); a = l; dy = (1 - l) * 28.dp.toPx() }
+                UnlockAnim.CENTER -> { val c0 = ctr + (p - ctr) * (0.85f + 0.15f * ec); val l = unlockLocal(ec, (p - ctr).getDistance() / maxD * 0.45f); a = l; s = 0.85f + 0.15f * l; dy = c0.y - p.y }
                 UnlockAnim.NONE -> a = 1f
             }
             val w = ic * s

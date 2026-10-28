@@ -21,6 +21,7 @@ class LauncherApp : Application() {
         live = LiveSources(this)
         apps.onPackageGone = { icons.forgetPackage(it) }
         org.ivanivorontsov.launcher.stop.StopGuard.init(this)
+        org.ivanivorontsov.launcher.data.UpdateWarmUp.schedule(this)
         org.ivanivorontsov.launcher.ui.DigitOverlay.attach(this, store)
         // СуперСмарт: «Боец поневоле» module state + channels (its alarm receivers also self-init).
         // Called reflectively so the «Лёгкий» flavor (no modules) still compiles.

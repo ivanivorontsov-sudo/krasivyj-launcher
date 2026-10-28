@@ -145,6 +145,16 @@ fun Modifier.launcherItemVisibility(ui: UiState?, id: String): Modifier =
                 else translationY = (1f - l) * 28.dp.toPx()
             }
         }
+        // 1.4.4: «Вылет из центра» — light outward stagger on top of the page-level scale/fade.
+        if (us == org.ivanivorontsov.launcher.core.UnlockAnim.CENTER) {
+            val e = ui.enter.value
+            if (e < 1f) {
+                val x = ((e - (ui.unlockDelay[id] ?: 0f) * 0.25f) / 0.75f).coerceIn(0f, 1f)
+                val l = 1f - (1f - x) * (1f - x)
+                alpha *= l
+                val s = 0.9f + 0.1f * l; scaleX = s; scaleY = s
+            }
+        }
     }
 
 /** Remembers an element's position so app-open animations can start from the exact icon. */
@@ -251,7 +261,7 @@ fun Badge(n: Int, modifier: Modifier = Modifier) {
  * Press feedback that does not consume events (clicks/long-press still work):
  * SPRING/SMOOTH → darken + slight scale (springy), TURNSTILE → 3D tilt toward the finger, PIXEL → stepped scale.
  */
-fun Modifier.pressFeedback(onClick: () -> Unit, onLongClick: (() -> Unit)?, tiltOverride: Boolean? = null): Modifier = composed {
+fun Modifier.pressFeedback(onClick: () -> Unit, onLongClick: (() -> Unit)?, tiltOverride: Boolean? = null, onTapAt: ((androidx.compose.ui.geometry.Offset) -> Unit)? = null): Modifier = composed {
     val spec = LocalSpec.current
     val anim = LocalAnimations.current
     val tiltMode = tiltOverride ?: (spec.motion == Motion.TURNSTILE || spec.iconTilt)
@@ -289,9 +299,9 @@ fun Modifier.pressFeedback(onClick: () -> Unit, onLongClick: (() -> Unit)?, tilt
                 }
             }
         }
-        .pointerInput(onClick, onLongClick) {
+        .pointerInput(onClick, onLongClick, onTapAt) {
             detectTapGestures(
-                onTap = { onClick() },
+                onTap = { if (onTapAt != null) onTapAt(it) else onClick() },
                 onLongPress = onLongClick?.let { lc -> { _: androidx.compose.ui.geometry.Offset -> haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); lc() } },
             )
         }

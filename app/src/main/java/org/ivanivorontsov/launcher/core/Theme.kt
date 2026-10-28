@@ -32,7 +32,7 @@ import kotlinx.serialization.json.Json
 /** 1.3.6: how the home screen appears after the phone is unlocked. */
 @Serializable enum class UnlockAnim(val title: String) {
     FADE("Плавное появление"), RISE("Вылет снизу"), WAVE("Волна из центра"), SPRING("Пружина (масштаб)"),
-    STAGGER("Рассыпание по очереди"), NONE("Без анимации")
+    STAGGER("Рассыпание по очереди"), CENTER("Вылет из центра"), NONE("Без анимации")
 }
 /** 1.3: how home appears after Back closes an app, and how Уют's own screens close on Back. */
 @Serializable enum class BackAnim(val title: String) {

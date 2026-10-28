@@ -50,6 +50,11 @@ fun Modifier.pageEffect(effect: PageEffect, pager: PagerState, page: Int, itemsD
         // 1.3.4: only the current page and the incoming neighbour may draw. Pages kept composed by the
         // pager (or a far page such as the first one) are fully hidden, so nothing ghosts on top.
         if (abs(raw) >= 1f) { alpha = 0f; return@graphicsLayer }
+        // 1.4.4: mid-swipe the whole page is flattened into one offscreen GPU layer and transformed/faded as a
+        // single texture (one alpha pass instead of per-icon/per-label). At rest it stays Auto, so the resting
+        // page is drawn exactly as before. Offset is read only here (draw phase) — no recomposition per frame.
+        compositingStrategy = if (abs(raw) > 0.001f) androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+            else androidx.compose.ui.graphics.CompositingStrategy.Auto
         pageLayer(effect, raw)
     }
 }

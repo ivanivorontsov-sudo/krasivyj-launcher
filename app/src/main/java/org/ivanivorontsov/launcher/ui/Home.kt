@@ -262,6 +262,7 @@ fun LauncherRoot(ui: UiState) {
                     null -> 0.92f + 0.08f * e
                     org.ivanivorontsov.launcher.core.UnlockAnim.FADE -> 0.97f + 0.03f * e
                     org.ivanivorontsov.launcher.core.UnlockAnim.SPRING -> 0.82f + 0.18f * raw
+                    org.ivanivorontsov.launcher.core.UnlockAnim.CENTER -> 0.85f + 0.15f * e   // 1.4.4: home grows out of the screen centre
                     else -> 1f
                 }
                 val s = (1f - 0.06f * p) * zs * es
@@ -280,6 +281,7 @@ fun LauncherRoot(ui: UiState) {
                 val ea = when (us) {
                     org.ivanivorontsov.launcher.core.UnlockAnim.WAVE, org.ivanivorontsov.launcher.core.UnlockAnim.STAGGER -> (e * 4f).coerceAtMost(1f)
                     org.ivanivorontsov.launcher.core.UnlockAnim.SPRING -> (e * 2.5f).coerceAtMost(1f)
+                    org.ivanivorontsov.launcher.core.UnlockAnim.CENTER -> (e * 2f).coerceAtMost(1f)
                     else -> e
                 }
                 alpha = (1f - p) * ea * za

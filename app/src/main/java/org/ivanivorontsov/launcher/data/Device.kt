@@ -138,6 +138,30 @@ object Device {
             tryStart(ctx, Intent(Intent.ACTION_VIEW, CalendarContract.CONTENT_URI.buildUpon().appendPath("time").build()))
     }
     fun openClock(ctx: Context) { tryStart(ctx, Intent(AlarmClock.ACTION_SHOW_ALARMS)) }
+
+    // 1.4.4: clock-widget zones. Everything is resolved lazily on tap; nothing is cached or listened for.
+    private val clockPkgs = listOf("com.coloros.alarmclock", "com.oplus.alarmclock", "com.google.android.deskclock", "com.android.deskclock", "com.sec.android.app.clockpackage")
+    /** Opens the clock app itself (OEM clock first), falling back to the alarm list. */
+    fun openClockApp(ctx: Context) {
+        for (p in clockPkgs) { val i = launch(ctx, p) ?: continue; if (tryStart(ctx, i)) return }
+        if (!tryStart(ctx, Intent(AlarmClock.ACTION_SHOW_ALARMS))) openCalendarless(ctx)
+    }
+    private fun openCalendarless(ctx: Context) { tryStart(ctx, Intent(Settings.ACTION_DATE_SETTINGS)) }
+    /** ColorOS Clock has no public deep link to its World clock tab, so this opens the clock app. */
+    fun openWorldClock(ctx: Context) = openClockApp(ctx)
+    fun openAlarms(ctx: Context) {
+        val pi = try { ctx.getSystemService(android.app.AlarmManager::class.java)?.nextAlarmClock?.showIntent } catch (_: Exception) { null }
+        if (pi != null) try {
+            if (Build.VERSION.SDK_INT >= 34) pi.send(ctx, 0, null, null, null, null,
+                android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle())
+            else pi.send(); return
+        } catch (_: Exception) {}
+        if (!tryStart(ctx, Intent(AlarmClock.ACTION_SHOW_ALARMS))) openClockApp(ctx)
+    }
+    fun openCalendarNow(ctx: Context) {
+        val u = CalendarContract.CONTENT_URI.buildUpon().appendPath("time").appendPath(System.currentTimeMillis().toString()).build()
+        if (!tryStart(ctx, Intent(Intent.ACTION_VIEW, u)) && !tryStart(ctx, Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR))) openClockApp(ctx)
+    }
     fun webSearch(ctx: Context, q: String) {
         if (!tryStart(ctx, Intent(Intent.ACTION_WEB_SEARCH).putExtra(android.app.SearchManager.QUERY, q)))
             tryStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse("https://yandex.ru/search/?text=" + Uri.encode(q))))

@@ -46,6 +46,7 @@ class LiveSources(private val context: Context) {
         val r = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, i: Intent?) {
                 _powerSave.value = power.isPowerSaveMode
+                if (i?.action != Intent.ACTION_TIME_TICK) alarmStale = true
                 _minute.value = System.currentTimeMillis()
             }
         }
@@ -54,10 +55,20 @@ class LiveSources(private val context: Context) {
 
     fun refreshNow() { _minute.value = System.currentTimeMillis(); _powerSave.value = power.isPowerSaveMode }
 
+    // 1.4.4: the next alarm is read from AlarmManager only when it (or the clock/zone) changes, not every minute;
+    // the formatted text is cached per trigger time and only the "> 24 h" switch is re-checked each tick.
+    @Volatile private var alarmStale = true
+    private var alarmAt = 0L
+    private var alarmTxt: String? = null; private var alarmTxtFor = -1L; private var alarmTxtLong = false
+    private val fmtShort = SimpleDateFormat("HH:mm", Locale("ru")); private val fmtLong = SimpleDateFormat("EE HH:mm", Locale("ru"))
     fun nextAlarm(): String? {
-        val info = context.getSystemService(AlarmManager::class.java)?.nextAlarmClock ?: return null
-        if (info.triggerTime - System.currentTimeMillis() > 24 * 3600_000L) return SimpleDateFormat("EE HH:mm", Locale("ru")).format(Date(info.triggerTime))
-        return SimpleDateFormat("HH:mm", Locale("ru")).format(Date(info.triggerTime))
+        if (alarmStale) { alarmStale = false; alarmAt = try { context.getSystemService(AlarmManager::class.java)?.nextAlarmClock?.triggerTime ?: 0L } catch (_: Exception) { 0L } }
+        val at = alarmAt
+        if (at == 0L) return null
+        if (at < System.currentTimeMillis()) { alarmStale = true; return nextAlarm().takeIf { alarmAt != at } }
+        val long = at - System.currentTimeMillis() > 24 * 3600_000L
+        if (at != alarmTxtFor || long != alarmTxtLong) { alarmTxt = (if (long) fmtLong else fmtShort).format(Date(at)); alarmTxtFor = at; alarmTxtLong = long }
+        return alarmTxt
     }
 
     // ---------------- Photos ----------------

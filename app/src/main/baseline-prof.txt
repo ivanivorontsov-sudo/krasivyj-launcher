@@ -23,3 +23,5 @@ HSPLorg/ivanivorontsov/launcher/ui/HomeWidgetsUiKt;->**(**)**
 HSPLorg/ivanivorontsov/launcher/ui/WidgetsKt;->**(**)**
 HSPLorg/ivanivorontsov/launcher/ui/PageFxKt;->**(**)**
 HSPLorg/ivanivorontsov/launcher/data/IconCache;->**(**)**
+HSPLorg/ivanivorontsov/launcher/ui/ClockKt;->**(**)**
+HSPLorg/ivanivorontsov/launcher/ui/ClockHits;->**(**)**
