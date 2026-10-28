@@ -35,6 +35,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.ImeAction
+import org.ivanivorontsov.launcher.core.SearchKey
+import org.ivanivorontsov.launcher.core.WidgetSearch
 import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -167,7 +176,7 @@ fun WidgetPicker(toToday: Boolean = false, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val colors = LocalColors.current; val fonts = LocalFonts.current
     val actions = LocalActions.current as? WidgetBinder
-    val groups by produceState<List<Pair<String, List<AppWidgetProviderInfo>>>?>(null) {
+    val all by produceState<List<Pair<String, List<PickerEntry>>>?>(null) {
         value = withContext(Dispatchers.IO) {
             val awm = AppWidgetManager.getInstance(ctx)
             val um = ctx.getSystemService(UserManager::class.java)
@@ -175,20 +184,42 @@ fun WidgetPicker(toToday: Boolean = false, onDismiss: () -> Unit) {
             fun app(p: AppWidgetProviderInfo) = try { pm.getApplicationLabel(pm.getApplicationInfo(p.provider.packageName, 0)).toString() } catch (_: Exception) { p.provider.packageName }
             um.userProfiles.flatMap { awm.getInstalledProvidersForProfile(it) }
                 .groupBy { app(it) }.toSortedMap(String.CASE_INSENSITIVE_ORDER)
-                .map { (a, l) -> a to l.sortedBy { it.loadLabel(pm) } }
+                .map { (a, l) -> a to l.map { p -> val lb = p.loadLabel(pm) ?: ""; PickerEntry(p, lb, WidgetSearch.key(lb, a, p.provider.packageName)) }.sortedBy { it.label } }
         }
     }
+    // Search by widget label and app name: case/ё-insensitive, translit and wrong keyboard layout (same engine as app search).
+    var query by rememberSaveable { mutableStateOf("") }
+    val groups = remember(all, query) {
+        all?.let { g -> if (query.isBlank()) g else g.mapNotNull { (a, l) -> WidgetSearch.filter(l, query) { it.key }.takeIf { it.isNotEmpty() }?.let { a to it } } }
+    }
+    val showOwnClock = query.isBlank() || WidgetSearch.filter(listOf(Unit), query) { WidgetSearch.key("Часы", "СуперСмарт", "clock время") }.isNotEmpty()
     androidx.activity.compose.BackHandler { onDismiss() }
     Column(Modifier.fillMaxSize().background(colors.surface).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (toToday) "Виджеты: «Сегодня»" else "Виджеты на главный экран", color = colors.onSurface, fontFamily = fonts.heading, fontSize = 24.sp, modifier = Modifier.weight(1f))
             Text("Закрыть", color = colors.accent, modifier = Modifier.clickable { onDismiss() }.padding(8.dp))
         }
-        if (groups == null) Text("Загружаю список виджетов…", color = colors.onSurface.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
-        else if (groups!!.isEmpty()) Text("На телефоне нет приложений с виджетами", color = colors.onSurface, modifier = Modifier.padding(16.dp))
+        Box(
+            Modifier.padding(horizontal = 16.dp).padding(bottom = 6.dp).fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp))
+                .background(colors.onSurface.copy(alpha = 0.08f)).padding(start = 16.dp, end = 4.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            if (query.isEmpty()) Text("⌕  Поиск виджета или приложения", color = colors.onSurface.copy(alpha = 0.55f), fontFamily = fonts.body, fontSize = 16.sp)
+            BasicTextField(
+                query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(end = 40.dp),
+                textStyle = androidx.compose.ui.text.TextStyle(color = colors.onSurface, fontFamily = fonts.body, fontSize = 17.sp),
+                cursorBrush = SolidColor(colors.accent),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
+            )
+            if (query.isNotEmpty()) Text("✕", color = colors.onSurface.copy(alpha = 0.6f), fontSize = 18.sp,
+                modifier = Modifier.align(Alignment.CenterEnd).clickable { query = "" }.padding(10.dp))
+        }
+        if (all == null) Text("Загружаю список виджетов…", color = colors.onSurface.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
+        else if (all!!.isEmpty()) Text("На телефоне нет приложений с виджетами", color = colors.onSurface, modifier = Modifier.padding(16.dp))
+        else if (groups.orEmpty().isEmpty() && !(showOwnClock && !toToday)) Text("Ничего не найдено по «$query»", color = colors.onSurface.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
           // 1.3.9: the launcher's own widgets first.
-          if (!toToday) {
+          if (!toToday && showOwnClock) {
             item(key = "h:own") {
                 Text("СуперСмарт", color = colors.accent, fontFamily = fonts.heading, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
             }
@@ -209,7 +240,8 @@ fun WidgetPicker(toToday: Boolean = false, onDismiss: () -> Unit) {
             item(key = "h:$appName") {
                 Text(appName, color = colors.accent, fontFamily = fonts.heading, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp))
             }
-            items(providers, key = { it.provider.flattenToString() + it.profile.hashCode() }) { p ->
+            items(providers, key = { it.info.provider.flattenToString() + it.info.profile.hashCode() }) { e ->
+                val p = e.info
                 val preview by produceState<ImageBitmap?>(null, p.provider) {
                     value = withContext(Dispatchers.IO) {
                         try {
@@ -228,7 +260,7 @@ fun WidgetPicker(toToday: Boolean = false, onDismiss: () -> Unit) {
                     }
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(p.loadLabel(ctx.packageManager), color = colors.onSurface, fontFamily = fonts.body, fontSize = 16.sp, maxLines = 2)
+                        Text(e.label, color = colors.onSurface, fontFamily = fonts.body, fontSize = 16.sp, maxLines = 2)
                         Text("размер " + cells(p.minWidth, ctx) + "×" + cells(p.minHeight, ctx), color = colors.onSurface.copy(alpha = 0.6f), fontSize = 13.sp)
                     }
                 }
@@ -237,6 +269,8 @@ fun WidgetPicker(toToday: Boolean = false, onDismiss: () -> Unit) {
         }
     }
 }
+
+private class PickerEntry(val info: AppWidgetProviderInfo, val label: String, val key: SearchKey)
 
 private fun cells(px: Int, ctx: Context): Int = ((px / ctx.resources.displayMetrics.density + 30) / 70).toInt().coerceAtLeast(1)
 
