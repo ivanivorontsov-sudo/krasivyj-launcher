@@ -15,3 +15,11 @@ HSPLorg/ivanivorontsov/launcher/core/ReturnStyleKt;->**(**)**
 HSPLandroidx/compose/animation/core/Animatable;->**(**)**
 HSPLandroidx/compose/animation/core/TweenSpec;->**(**)**
 HSPLandroidx/compose/ui/graphics/drawscope/CanvasDrawScope;->**(**)**
+# 1.4.3: coroutines/flows that drive every animation frame and config collection, plus widget hosting paths.
+HSPLkotlinx/coroutines/**->**(**)**
+HSPLandroidx/lifecycle/**->**(**)**
+HSPLandroidx/activity/**->**(**)**
+HSPLorg/ivanivorontsov/launcher/ui/HomeWidgetsUiKt;->**(**)**
+HSPLorg/ivanivorontsov/launcher/ui/WidgetsKt;->**(**)**
+HSPLorg/ivanivorontsov/launcher/ui/PageFxKt;->**(**)**
+HSPLorg/ivanivorontsov/launcher/data/IconCache;->**(**)**

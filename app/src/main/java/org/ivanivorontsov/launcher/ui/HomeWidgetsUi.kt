@@ -135,8 +135,10 @@ private fun SystemWidgetView(w: HomeWidget, wPx: Int, hPx: Int) {
         }
         return
     }
-    val cfg by LauncherApp.instance.store.config.collectAsStateCompat()
-    if (cfg.diagNoWidgets) {
+    // 1.4.3: observe only the one flag; any other settings change no longer recomposes every widget on every page.
+    val cfgState = LauncherApp.instance.store.config.collectAsStateCompat()
+    val noWidgets by remember { androidx.compose.runtime.derivedStateOf { cfgState.value.diagNoWidgets } }
+    if (noWidgets) {
         Box(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).background(colors.onWallpaper.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
             Text(info.loadLabel(ctx.packageManager), color = colors.onWallpaper, fontSize = 13.sp)
         }

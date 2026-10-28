@@ -251,11 +251,26 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         }
     }
 
+    /**
+     * 1.4.3: duration of the launcher's own return flight. «Обычная» (default) is exactly the old value
+     * (returnDurationMs clamped to 150..1000). The faster modes apply only to the Home gesture/button path.
+     */
+    private fun returnMs(): Int {
+        val cfg = app.store.config.value
+        val d = cfg.returnDurationMs.coerceIn(150, 1000)
+        if (!homeIntentSinceStop) return d
+        return when (cfg.gestureReturnSpeed) {
+            1 -> (d * 0.6f).toInt().coerceIn(90, 600)
+            2 -> (d * 0.35f).toInt().coerceIn(60, 350)
+            else -> d
+        }
+    }
+
     /** 1.3.9: one place for "the return flight has certainly landed" (used by widgets, live tiles, theme refresh). */
     private fun afterLandingMs(): Long {
         val cfg = app.store.config.value
         val style = org.ivanivorontsov.launcher.core.resolveReturn(cfg.homeAnim, cfg.backAnim, fromBack = !homeIntentSinceStop)
-        return (org.ivanivorontsov.launcher.core.ReturnGuard.plannedMs(cfg.returnDurationMs, style) + 200L).coerceIn(480L, 1500L)
+        return (org.ivanivorontsov.launcher.core.ReturnGuard.plannedMs(returnMs(), style) + 200L).coerceIn(480L, 1500L)
     }
 
     /** 1.3.9: true while a return-to-home transition is running — refresh-rate re-requests wait until it ends. */
@@ -301,7 +316,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         ui.returning?.let { r ->
             returnStartedAt = SystemClock.uptimeMillis()
             val started = returnStartedAt
-            val limit = org.ivanivorontsov.launcher.core.ReturnGuard.deadlineMs(app.store.config.value.returnDurationMs, ui.returnStyle) + (if (waitForFocus()) FOCUS_WAIT_MS else 0L)
+            val limit = org.ivanivorontsov.launcher.core.ReturnGuard.deadlineMs(returnMs(), ui.returnStyle) + (if (waitForFocus()) FOCUS_WAIT_MS else 0L)
             window.decorView.postDelayed({ if (ui.returning === r && returnStartedAt == started) forceEndReturn("timeout") }, limit)
         }
         if (fxNow && fxKey != null && !app.store.config.value.diagNoAnim) android.view.Choreographer.getInstance().postFrameCallback { playIconFx(fxKey) }
@@ -391,6 +406,8 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
      */
     private fun waitForFocus(): Boolean {
         val cfg = app.store.config.value
+        // 1.4.3: in the faster gesture modes the flight starts right away instead of waiting up to 900 ms for focus.
+        if (cfg.gestureReturnSpeed > 0) return false
         return homeIntentSinceStop && cfg.homeAnim != org.ivanivorontsov.launcher.core.HomeAnim.SYSTEM && ui.returning != null && !window.decorView.hasWindowFocus()
     }
 
@@ -411,7 +428,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         }
         val gate = visible
         val key = ui.returning?.key
-        val timeout = org.ivanivorontsov.launcher.core.ReturnGuard.flightTimeoutMs(app.store.config.value.returnDurationMs, ui.returnStyle)
+        val timeout = org.ivanivorontsov.launcher.core.ReturnGuard.flightTimeoutMs(returnMs(), ui.returnStyle)
         ui.scope.launch {
           var finished = false
           try { finished = kotlinx.coroutines.withTimeoutOrNull(timeout) {
@@ -427,7 +444,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
             // 1.3.6: the setting is a real duration (150..1000 ms). Before it was a 0.6..1.6× speed factor on
             // springs with a 0.001 threshold, so "0.6" was the SLOWEST setting and the springs crawled for
             // another ~200 ms below visible change. Now: fast-out tweens, springs only for "Пружина".
-            val ms = app.store.config.value.returnDurationMs.coerceIn(150, 1000)
+            val ms = returnMs()
             val st = ui.returnStyle
             ui.returnTail.snapTo(0f)
             kotlinx.coroutines.coroutineScope {

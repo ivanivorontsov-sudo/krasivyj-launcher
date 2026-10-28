@@ -146,7 +146,10 @@ private fun WidgetCell(w: WidgetItem, index: Int, total: Int, edit: Boolean) {
                 },
                 update = { v: AppWidgetHostView ->
                     val wd = (v.width / density.density).toInt().takeIf { it > 0 } ?: 360
-                    @Suppress("DEPRECATION") v.updateAppWidgetSize(Bundle(), wd, w.heightDp, wd, w.heightDp)
+                    // 1.4.3: only on a real size change (as on home pages). Before, every recomposition sent the size
+                    // to the widget's app, which answered with fresh RemoteViews re-inflated on the main thread.
+                    val tag = wd * 10_000 + w.heightDp
+                    if (v.tag != tag) { v.tag = tag; @Suppress("DEPRECATION") v.updateAppWidgetSize(Bundle(), wd, w.heightDp, wd, w.heightDp) }
                 },
                 modifier = Modifier.fillMaxWidth().height(w.heightDp.dp),
             )

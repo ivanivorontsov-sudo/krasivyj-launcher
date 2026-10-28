@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import org.ivanivorontsov.launcher.data.gpu
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
@@ -148,7 +149,8 @@ fun rememberWallpaper(spec: ThemeSpec, wPx: Int, hPx: Int, tilePhoto: String?): 
                     file.outputStream().use { b.compress(Bitmap.CompressFormat.JPEG, 94, it) }
                 } catch (_: Throwable) {}
             }
-            WallImages(bmp.asImageBitmap(), Wallpapers.frosted(bmp).asImageBitmap(), tall, bmp).also { WallCache.key = key; WallCache.images = it }
+            // 1.4.3: drawn copies in GPU memory (same pixels; no texture re-upload after the launcher was trimmed).
+            WallImages(bmp.gpu().asImageBitmap(), Wallpapers.frosted(bmp).gpu().asImageBitmap(), tall, bmp).also { WallCache.key = key; WallCache.images = it }
         }
     }
     return img

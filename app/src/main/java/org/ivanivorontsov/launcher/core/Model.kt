@@ -83,6 +83,8 @@ data class LauncherConfig(
     val animSpeed: Float = 1f,
     /** 1.3.6: duration of the return-to-home animation in ms (150..1000). Replaces [animSpeed]. */
     val returnDurationMs: Int = 300,
+    /** 1.4.3: «Ускорить возврат жестом Домой»: 0 обычная (как раньше), 1 быстрая, 2 очень быстрая. Only the gesture/Home path. */
+    val gestureReturnSpeed: Int = 0,
     /** 1.3.7: «Эффект на значке после возврата домой» (plays after the system close animation). */
     val homeIconFx: IconFx = IconFx.RINGS,
     /** 1.3.7: diagnostics — «Счётчик кадров» overlay and «упрощённый дом» switches (each disables one suspect). */

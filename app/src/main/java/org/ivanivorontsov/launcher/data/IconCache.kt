@@ -34,6 +34,18 @@ import java.util.concurrent.ConcurrentHashMap
  * app-drawer jank reported by other launchers.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
+/**
+ * 1.4.3: in-memory copies live in GPU memory (Bitmap.Config.HARDWARE). The pixels are identical, but when ColorOS
+ * trims or freezes the launcher in the background, HWUI drops its texture cache; software bitmaps then had to be
+ * re-uploaded as textures during the first frames of the swipe-home animation. Hardware bitmaps need no upload.
+ * Only the in-memory copy changes: the disk PNG and the dominant colour are made from the software bitmap.
+ */
+fun ImageBitmap.gpu(): ImageBitmap = asAndroidBitmap().gpu().asImageBitmap()
+
+fun Bitmap.gpu(): Bitmap =
+    if (android.os.Build.VERSION.SDK_INT < 28 || config == Bitmap.Config.HARDWARE) this
+    else try { copy(Bitmap.Config.HARDWARE, false) ?: this } catch (_: Throwable) { this }
+
 class IconCache(private val context: Context) {
     private val maxBytes = (Runtime.getRuntime().maxMemory() / 7).toInt().coerceAtMost(96 * 1024 * 1024)
     private val cache = object : LruCache<String, ImageBitmap>(maxBytes) {
@@ -87,8 +99,8 @@ class IconCache(private val context: Context) {
     private fun obtain(r: Req): ImageBitmap? {
         val k = keyOf(r)
         cache.get(k)?.let { return it }
-        fromDisk(r)?.let { cache.put(k, it); return it }
-        return render(r)?.also { cache.put(k, it); toDisk(r, it) }
+        fromDisk(r)?.let { val g = it.gpu(); cache.put(k, g); return g }
+        return render(r)?.let { sw -> toDisk(r, sw); sw.gpu().also { cache.put(k, it) } }
     }
 
     suspend fun load(r: Req): ImageBitmap? {
