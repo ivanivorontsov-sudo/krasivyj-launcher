@@ -85,6 +85,13 @@ class Store(context: Context) {
 
     fun update(f: (LauncherConfig) -> LauncherConfig) = _config.update(f)
 
+    /** 1.4.6: update and persist right away (layout migrations must not depend on the debounced write). */
+    fun updateNow(f: (LauncherConfig) -> LauncherConfig) {
+        _config.update(f)
+        val v = _config.value
+        scope.launch { prefs.edit().putString(K_CONFIG, ConfigCodec.encode(v)).commit() }
+    }
+
     companion object {
         private const val K_THEME = "theme"; private const val K_CUSTOM = "custom"; private const val K_CONFIG = "config"
     }

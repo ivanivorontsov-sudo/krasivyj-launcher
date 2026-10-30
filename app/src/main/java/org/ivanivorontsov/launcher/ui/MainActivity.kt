@@ -533,7 +533,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     }
 
     override fun onPause() {
-        super.onPause(); wasResumed = false; ui.resumed = false; ui.menu = null
+        super.onPause(); wasResumed = false; ui.resumed = false; ui.menu = null; ui.appSearch = false
         // 1.3.9: another app opened while the card was still flying — drop the overlay now.
         if (ui.returning != null && returnArmed) forceEndReturn("pause")
         if (ui.drag.item != null) ui.cancelDrag()
@@ -710,6 +710,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     override fun homeMenu(anchor: Rect) {
         val spec = app.store.theme.value
         val e = ArrayList<MenuEntry>()
+        e += MenuEntry("Поиск") { ui.appSearch = true }
         e += MenuEntry("Темы и стиль") { openSettings("themes") }
         if (spec.layout == HomeLayout.TILES) {
             e += MenuEntry("Плитка: часы") { pinSpecialTile(TileKind.CLOCK) }

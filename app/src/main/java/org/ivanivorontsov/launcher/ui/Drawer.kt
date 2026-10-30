@@ -158,6 +158,27 @@ fun DrawerLayer(ui: UiState, apps: List<AppInfo>, config: LauncherConfig, wall: 
     }
 }
 
+/** 1.4.6: «Поиск» from the home long-press menu: all apps, also when every app lives on the home pages. */
+@Composable
+fun AppSearchOverlay(ui: UiState, apps: List<AppInfo>, config: LauncherConfig) {
+    val colors = LocalColors.current
+    var query by remember { mutableStateOf("") }
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) { try { focus.requestFocus(); keyboard?.show() } catch (_: Exception) {} }
+    val results = remember(query, apps, config.usage) {
+        if (query.isBlank()) apps.sortedBy { it.label.lowercase() } else SearchEngine.search(apps, query, { it.search }, { config.usage[it.key] ?: 0 })
+    }
+    Box(Modifier.fillMaxSize().background(colors.surface.copy(alpha = 0.97f)).pointerInput(Unit) { detectTapGestures { } }) {
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            SearchField(query, { query = it }, focus, placeholder = "Поиск приложений",
+                onGo = { results.firstOrNull()?.let { ui.appSearch = false; ui.actions?.launch(it, null) } ?: Device.webSearch(ui.actionsContext(), query) })
+            val bottomPad = WindowInsets.imeAnimationTarget.asPaddingValues().calculateBottomPadding().coerceAtLeast(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+            SearchResults(results, query.ifBlank { "" }, bottomPad)
+        }
+    }
+}
+
 private fun UiState.actionsContext() = org.ivanivorontsov.launcher.LauncherApp.instance
 
 @Composable

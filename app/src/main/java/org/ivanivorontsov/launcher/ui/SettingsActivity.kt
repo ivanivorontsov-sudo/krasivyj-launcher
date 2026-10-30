@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -196,9 +197,35 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
     }
 }
 
+/** 1.4.6: settings search jumps to a section: the list scrolls until [target] is composed, then it is brought into view. */
+private object Jump { var target by mutableStateOf<String?>(null); var flash by mutableStateOf<String?>(null) }
+
+@Composable
+private fun jumpListState(): androidx.compose.foundation.lazy.LazyListState {
+    val st = androidx.compose.foundation.lazy.rememberLazyListState()
+    val target = Jump.target
+    LaunchedEffect(target) {
+        if (target == null) return@LaunchedEffect
+        kotlinx.coroutines.delay(50)
+        var i = 0
+        while (Jump.target == target && i < st.layoutInfo.totalItemsCount) { st.scrollToItem(i); i++; androidx.compose.runtime.withFrameNanos { } }
+        Jump.target = null
+    }
+    return st
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    val req = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    val hit = Jump.target == title
+    val flash = Jump.flash == title
+    LaunchedEffect(hit) {
+        if (hit) { Jump.target = null; Jump.flash = title; kotlinx.coroutines.delay(60); req.bringIntoView(); kotlinx.coroutines.delay(1600); if (Jump.flash == title) Jump.flash = null }
+    }
+    Column(Modifier.fillMaxWidth().bringIntoViewRequester(req)
+        .background(if (flash) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else Color.Transparent)
+        .padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 6.dp))
         content()
     }
@@ -221,7 +248,25 @@ private fun MainScreen(go: (Screen) -> Unit) {
     val tick = SettingsActivity.resumeTick
     val isDefault = remember(tick) { Device.isDefaultLauncher(ctx) }
     val spec by LauncherApp.instance.store.theme.collectAsStateCompat()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    var query by remember { mutableStateOf("") }
+    val hits = remember(query) { SettingsIndex.search(query) }
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item {
+            androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true,
+                placeholder = { Text("Поиск по настройкам") },
+                trailingIcon = { if (query.isNotEmpty()) Text("✕", Modifier.clickable { query = "" }.padding(12.dp)) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+        }
+        if (query.isNotBlank()) {
+            if (hits.isEmpty()) item { Info("  Ничего не найдено") }
+            items(hits.size) { i ->
+                val e = hits[i]
+                val sc = Screen.valueOf(e.screen)
+                val hint = e.keys.filter { k -> query.lowercase().replace('ё', 'е').split(' ').filter { it.isNotBlank() }.any { k.lowercase().replace('ё', 'е').contains(it) } }.take(3).joinToString(" · ")
+                NavRow(if (e.section == null) sc.title else sc.title + " › " + e.section, hint.ifEmpty { null }) { Jump.target = e.section; go(sc) }
+            }
+            return@LazyColumn
+        }
         item {
             Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)).padding(16.dp)) {
                 Text(if (isDefault) "СуперСмарт — ваш лаунчер ✓" else "Сделайте СуперСмарт лаунчером по умолчанию", style = MaterialTheme.typography.titleMedium)
@@ -257,7 +302,7 @@ private fun ThemesScreen(openEditor: () -> Unit) {
     val spec by store.theme.collectAsStateCompat()
     val custom by store.custom.collectAsStateCompat()
     val all = remember(custom) { (listOfNotNull(custom) + Presets.all) }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 40.dp)) {
         items(all.chunked(2)) { pair ->
             Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 pair.forEach { t -> ThemePreview(t, t.id == spec.id, Modifier.weight(1f)) { store.setTheme(t) } }
@@ -274,8 +319,14 @@ private fun ThemesScreen(openEditor: () -> Unit) {
 private fun EditorScreen(openFonts: (String) -> Unit) {
     val store = LauncherApp.instance.store
     val spec by store.theme.collectAsStateCompat()
-    fun set(f: (ThemeSpec) -> ThemeSpec) = store.setCustom(f(spec).copy(name = "Мой стиль", description = "Собран в редакторе"))
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
+    fun set(f: (ThemeSpec) -> ThemeSpec) {
+        val cur = store.theme.value
+        val next = f(cur).copy(name = "Мой стиль", description = "Собран в редакторе").sanitized()
+        // 1.4.6: carry the current arrangement over to "custom" (and remap widgets) before the theme switches.
+        store.updateNow { it.forkForEdit(cur.id, "custom", cur.columns, cur.rows, next.columns, next.rows) }
+        store.setCustom(next)
+    }
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(bottom = 48.dp)) {
         item { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { ThemePreview(spec, false, Modifier.width(150.dp).padding(8.dp)) } }
         item { Section("Макет") {
             Chips(HomeLayout.entries, spec.layout, { it.title }) { v -> set { it.copy(layout = v) } }
@@ -367,7 +418,7 @@ private fun FontsScreen(initialTarget: String) {
         else -> spec.copy(clockFont = id, headingFont = id, bodyFont = id)
     }.copy(name = "Мой стиль", description = "Собран в редакторе"))
     val current = when (target) { "clock" -> spec.clockFont; "heading" -> spec.headingFont; else -> spec.bodyFont }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
                 Info("Все шрифты проверены программно: в каждом есть все 66 букв русского алфавита. Лицензия SIL OFL — в разделе «О приложении».")
@@ -401,7 +452,7 @@ private fun GesturesScreen() {
     val cfg by store.config.collectAsStateCompat()
     val tick = SettingsActivity.resumeTick
     val lockOn = remember(tick) { LockService.isEnabled }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Свайп вверх") { Chips(listOf(GestureAction.DRAWER, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.swipeUp, { it.title }) { v -> store.update { it.copy(swipeUp = v) } } } }
         item { Section("Свайп вниз") { Chips(listOf(GestureAction.NOTIFICATIONS, GestureAction.DRAWER, GestureAction.SETTINGS, GestureAction.NONE), cfg.swipeDown, { it.title }) { v -> store.update { it.copy(swipeDown = v) } } } }
         item { Section("Двойное касание") { Chips(listOfNotNull(GestureAction.LOCK.takeUnless { BuildConfig.PLAY }, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.doubleTap, { it.title }) { v -> store.update { it.copy(doubleTap = v) } } } }
@@ -422,7 +473,7 @@ private fun HiddenScreen() {
     val store = LauncherApp.instance.store
     val cfg by store.config.collectAsStateCompat()
     val apps by LauncherApp.instance.apps.apps.collectAsStateCompat()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Info("  Скрытые приложения не видны в меню, но находятся поиском.") }
         items(apps, key = { it.key }) { a ->
             Row(Modifier.fillMaxWidth().clickable { store.update { c -> c.copy(hidden = if (a.key in c.hidden) c.hidden - a.key else c.hidden + a.key) } }.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -438,7 +489,7 @@ private fun IconPacksScreen() {
     val store = LauncherApp.instance.store
     val cfg by store.config.collectAsStateCompat()
     val packs = remember { LauncherApp.instance.icons.packs.installed() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { NavRow((if (cfg.iconPack == null) "✓  " else "") + "Системные иконки") { store.update { it.copy(iconPack = null) } } }
         items(packs, key = { it.pkg }) { p -> NavRow((if (cfg.iconPack == p.pkg) "✓  " else "") + p.label, p.pkg) { store.update { it.copy(iconPack = p.pkg) } } }
         if (packs.isEmpty()) item { Info("  Наборы иконок не найдены. Подходят любые наборы для Nova/ADW из магазина приложений.") }
@@ -465,7 +516,7 @@ private fun LiveScreen() {
             if (f != null) store.update { it.copy(tileBackgroundUri = Uri.fromFile(f).toString() + "?t=" + System.currentTimeMillis()) }
         }
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Счётчики уведомлений на плитках") {
             Info(if (notif) "Включено ✓ (хранится только число уведомлений, текст не читается и не сохраняется)" else "Необязательно. Дайте СуперСмарт доступ к уведомлениям, чтобы плитки и иконки показывали число новых.")
             Button(onClick = { Device.openNotificationAccess(ctx) }) { Text(if (notif) "Настройки доступа" else "Разрешить") }
@@ -517,7 +568,7 @@ private fun DigitsScreen() {
         waitingForPermission = false
         if (android.provider.Settings.canDrawOverlays(ctx)) store.update { it.copy(digitOverlay = true) }
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Показ") {
             SwitchRow("Показывать цифры", cfg.digitOverlay) { on ->
                 if (!on) {
@@ -581,7 +632,7 @@ private fun SystemScreen() {
     val ctx = LocalContext.current
     val spec by LauncherApp.instance.store.theme.collectAsStateCompat()
     val scope = rememberCoroutineScope()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Честно о системном шрифте") {
             Info("Android не даёт обычным приложениям менять шрифт всей системы — для этого нужен root или фирменный магазин тем производителя. Поэтому СуперСмарт меняет шрифты везде, где рисует сам: часы, подписи, меню, виджеты и плитки.")
             Info("Кнопка ниже откроет экран шрифтов вашего телефона (${Device.oemName()}), если производитель его сделал; иначе — настройки экрана.")
@@ -612,7 +663,7 @@ private fun HomeScreenSettings() {
     val spec by store.theme.collectAsStateCompat()
     val installedApps by launcher.apps.apps.collectAsStateCompat()
     val own = cfg.hasOwnLayout(spec.id)
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Главный экран без меню приложений") {
             SwitchRow("Все приложения на главном экране", cfg.allAppsOnHome) { enabled ->
                 val keys = installedApps.filter { it.key !in cfg.hidden }.map { it.key }.distinct()
@@ -786,7 +837,7 @@ private fun SmoothScreen() {
     val maxHz = remember { Device.maxRefreshRate(ctx.window).toInt() }
     val ignoring = remember(tick) { Device.isIgnoringBatteryOptimizations(ctx) }
     val anim = remember(tick) { Device.animationsEnabled() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Частота экрана") {
             val activeHz = remember(tick) { Device.activeRefreshRate(ctx.window) }
             var taps by remember { mutableIntStateOf(0) }
@@ -829,7 +880,7 @@ private fun AboutScreen(openLicenses: () -> Unit) {
     val ctx = LocalContext.current
     var showOfl by remember { mutableStateOf(false) }
     val ofl = remember { try { ctx.assets.open("licenses/OFL-1.1.txt").bufferedReader().readText() } catch (_: Exception) { "" } }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 0.dp, 16.dp, 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = jumpListState(), contentPadding = PaddingValues(16.dp, 0.dp, 16.dp, 40.dp)) {
         item {
             Text("СуперСмарт ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleLarge)
             Info("Без интернета (нет разрешения INTERNET), без рекламы и трекеров. Все данные — на телефоне.")

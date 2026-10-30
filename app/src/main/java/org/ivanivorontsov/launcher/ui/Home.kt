@@ -308,6 +308,7 @@ fun LauncherRoot(ui: UiState) {
                         .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 3.dp))
             }
             ReturnWarmUp()
+            if (ui.appSearch) AppSearchOverlay(ui, visibleApps, config)
             MenuOverlay(ui)
             DragLayer(ui)
             StopBanner(ui, stop)
@@ -324,13 +325,14 @@ fun LauncherRoot(ui: UiState) {
             }
             LaunchedEffect(ui.homePresses) {
                 if (ui.homePresses == 0) return@LaunchedEffect
-                ui.menu = null; ui.tileEdit = null; ui.widgetEdit = false; ui.homeWidgetEdit = null; ui.cancelDrag()
+                ui.menu = null; ui.appSearch = false; ui.tileEdit = null; ui.widgetEdit = false; ui.homeWidgetEdit = null; ui.cancelDrag()
                 if (ui.openFolder != null) ui.openFolder = null
                 else if (ui.drawer.progress > 0f) ui.drawer.close()
                 else if (homePager.currentPage != t && spec.layout != HomeLayout.TILES) homePager.animateScrollToPage(t)
             }
-            BackHandler(enabled = ui.menu != null || ui.drawer.progress > 0f || ui.tileEdit != null || ui.widgetEdit || ui.homeWidgetEdit != null || ui.openFolder != null || ui.drag.item != null) {
+            BackHandler(enabled = ui.appSearch || ui.menu != null || ui.drawer.progress > 0f || ui.tileEdit != null || ui.widgetEdit || ui.homeWidgetEdit != null || ui.openFolder != null || ui.drag.item != null) {
                 when {
+                    ui.appSearch -> ui.appSearch = false
                     ui.drag.item != null -> ui.cancelDrag()
                     ui.homeWidgetEdit != null -> ui.homeWidgetEdit = null
                     ui.menu != null -> ui.menu = null
@@ -496,7 +498,14 @@ fun GridHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, wal
 @Composable
 private fun HomeItem(ui: UiState, id: String, layout: ScreenLayout, byKey: Map<String, AppInfo>, source: DragSource, showLabel: Boolean, modifier: Modifier = Modifier) {
     val spec = LocalSpec.current
-    Box(modifier.animatePlacement(ui.animations).launcherItemVisibility(ui, id), contentAlignment = Alignment.Center) {
+    val pager = LocalPageFx.current?.pager
+    // 1.4.6: while the pager moves, every cell is drawn from its own small GPU layer (icon + label rasterised once,
+    // then only transformed by the page effect: no text re-rasterisation under scale/rotation on large grids).
+    // Outside a swipe the layer is dropped again (Auto), so idle memory/overdraw on Mali GPUs stays as before.
+    val layer = if (pager == null) Modifier else Modifier.graphicsLayer {
+        compositingStrategy = if (pager.isScrollInProgress) androidx.compose.ui.graphics.CompositingStrategy.Offscreen else androidx.compose.ui.graphics.CompositingStrategy.Auto
+    }
+    Box(modifier.animatePlacement(ui.animations).then(layer).launcherItemVisibility(ui, id), contentAlignment = Alignment.Center) {
         Box(Modifier.folderTarget(ui, id)) {
             if (isFolderId(id)) layout.folders[id]?.let { FolderCell(it, spec.iconSizeDp.dp, showLabel, source) }
             else byKey[id]?.let { AppCell(it, spec.iconSizeDp.dp, showLabel, source = source) }

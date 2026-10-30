@@ -114,3 +114,21 @@ fun ScreenLayout.withClockWidget(cols: Int): ScreenLayout =
 
 /** Default span of a system widget from its minimum size in dp (Launcher3-like ~70 dp per cell). */
 fun cellsFor(dp: Int, max: Int): Int = ((dp + 30) / 70).coerceIn(1, max.coerceAtLeast(1))
+
+/**
+ * 1.4.6: grid size change (Launcher3 GridSizeMigrationUtil idea, simplified for our ordered layout).
+ * Item order, folders and dock are kept as is; only widget spans are remapped: a widget that filled the
+ * old width/height keeps filling the new one, others scale proportionally (rounded, at least 1 cell).
+ */
+fun ScreenLayout.remapGrid(oldCols: Int, oldRows: Int, newCols: Int, newRows: Int): ScreenLayout {
+    if ((oldCols == newCols && oldRows == newRows) || widgets.isEmpty()) return this
+    fun scale(span: Int, old: Int, new: Int): Int {
+        val o = old.coerceAtLeast(1); val n = new.coerceAtLeast(1)
+        if (span >= o) return n
+        return Math.round(span.toFloat() * n / o).coerceIn(1, n)
+    }
+    val next = widgets.mapValues { (_, w) ->
+        w.copy(spanX = scale(w.spanX, oldCols, newCols), spanY = scale(w.spanY, oldRows, newRows))
+    }
+    return if (next == widgets) this else copy(widgets = next)
+}

@@ -52,6 +52,8 @@ data class MenuState(val anchor: Rect, val app: AppInfo? = null, val tile: TileI
 class UiState(val scope: CoroutineScope) {
     val drawer = DrawerController(scope)
     var menu by mutableStateOf<MenuState?>(null)
+    /** 1.4.6: app search opened from the home long-press menu (works without the app drawer). */
+    var appSearch by mutableStateOf(false)
     var renameTarget by mutableStateOf<AppInfo?>(null)
     var widgetPicker by mutableStateOf(false)
     var homePresses by mutableIntStateOf(0)

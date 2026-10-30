@@ -158,6 +158,23 @@ data class LauncherConfig(
         return copy(layouts = layouts + (themeId to next), lastEdited = themeId)
     }
 
+    /**
+     * 1.4.6: the theme editor turns any preset into the "custom" theme. The custom theme must start from the
+     * arrangement the user is looking at ([fromTheme]), never from the seeded base (which re-created the
+     * original folders and lost the screen). Grid changes remap widget spans, see [remapGrid].
+     */
+    fun forkForEdit(fromTheme: String, toTheme: String, oldCols: Int, oldRows: Int, newCols: Int, newRows: Int): LauncherConfig {
+        val src = layoutFor(fromTheme)
+        val next = src.remapGrid(oldCols, oldRows, newCols, newRows)
+        if (fromTheme == toTheme && next == src && toTheme in layouts) return this
+        val fx = pageEffects[fromTheme]
+        return copy(
+            layouts = layouts + (toTheme to next),
+            lastEdited = toTheme,
+            pageEffects = if (fx != null && toTheme !in pageEffects) pageEffects + (toTheme to fx) else pageEffects,
+        )
+    }
+
     fun pageEffectFor(themeId: String, layout: HomeLayout): PageEffect =
         pageEffects[themeId] ?: if (layout == HomeLayout.GRID) PageEffect.CYLINDER else PageEffect.NONE
 
