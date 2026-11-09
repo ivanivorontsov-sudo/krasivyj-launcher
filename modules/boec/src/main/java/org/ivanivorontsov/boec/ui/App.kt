@@ -13,6 +13,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +32,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.ivanivorontsov.boec.alarm.AlarmScheduler
 import org.ivanivorontsov.boec.data.Store
@@ -166,12 +168,12 @@ private fun TabsScreen(nav: Nav) {
                 }
             }
         }
-        NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, modifier = Modifier) {
+        NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, modifier = Modifier.navigationBarsPadding()) {
             tabs.forEachIndexed { i, t ->
                 NavigationBarItem(
                     selected = nav.tab == i, onClick = { nav.tab = i },
                     icon = { Icon(t.icon, t.title, Modifier.size(24.dp)) },
-                    label = { Text(t.title, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
+                    label = { Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.onPrimary,
                         indicatorColor = MaterialTheme.colorScheme.primary,

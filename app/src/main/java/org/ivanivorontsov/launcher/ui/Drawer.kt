@@ -46,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -84,6 +85,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.ivanivorontsov.launcher.core.AlphabetIndex
 import org.ivanivorontsov.launcher.core.AppCategory
+import org.ivanivorontsov.launcher.core.DrawerOpen
 import org.ivanivorontsov.launcher.core.DrawerStyle
 import org.ivanivorontsov.launcher.core.HomeLayout
 import org.ivanivorontsov.launcher.core.LauncherConfig
@@ -96,13 +98,18 @@ import org.ivanivorontsov.launcher.data.Device
 fun DrawerLayer(ui: UiState, apps: List<AppInfo>, config: LauncherConfig, wall: WallImages?) {
     val spec = LocalSpec.current; val colors = LocalColors.current
     var query by remember { mutableStateOf("") }
+    var openTick by remember { mutableIntStateOf(0) }
     val focus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val drawer = ui.drawer
+    val scrollerEnabled = DrawerOpen.scrollerEnabled(drawer.progress)
     LaunchedEffect(Unit) {
         snapshotFlow { drawer.progress >= 0.999f }.distinctUntilChanged().collect { open ->
-            if (open && config.autoKeyboard) try { focus.requestFocus(); keyboard?.show() } catch (_: Exception) {}
+            if (open) {
+                openTick++
+                if (config.autoKeyboard) try { focus.requestFocus(); keyboard?.show() } catch (_: Exception) {}
+            }
         }
     }
     LaunchedEffect(Unit) {
@@ -147,12 +154,14 @@ fun DrawerLayer(ui: UiState, apps: List<AppInfo>, config: LauncherConfig, wall: 
                 placeholder = if (spec.drawer == DrawerStyle.LIBRARY) "Библиотека приложений" else "Поиск приложений",
                 onGo = { results.firstOrNull()?.let { ui.actions?.launch(it, null) } ?: Device.webSearch(ui.actionsContext(), query) })
             val bottomPad = WindowInsets.imeAnimationTarget.asPaddingValues().calculateBottomPadding().coerceAtLeast(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-            if (query.isNotBlank()) SearchResults(results, query, bottomPad)
-            else when (spec.drawer) {
-                DrawerStyle.GRID -> GridDrawer(apps, bottomPad)
-                DrawerStyle.LIST -> ListDrawer(apps, bottomPad, textOnly = spec.layout == HomeLayout.MINIMAL)
-                DrawerStyle.LIBRARY -> LibraryDrawer(apps, config, bottomPad)
-                DrawerStyle.TILES_LIST -> TilesListBody(apps, bottomPad)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                if (query.isNotBlank()) SearchResults(results, query, bottomPad)
+                else when (spec.drawer) {
+                    DrawerStyle.GRID -> GridDrawer(apps, bottomPad, scrollerEnabled, openTick)
+                    DrawerStyle.LIST -> ListDrawer(apps, bottomPad, textOnly = spec.layout == HomeLayout.MINIMAL, scrollerEnabled = scrollerEnabled, resetTick = openTick)
+                    DrawerStyle.LIBRARY -> LibraryDrawer(apps, config, bottomPad)
+                    DrawerStyle.TILES_LIST -> TilesListBody(apps, bottomPad, openTick)
+                }
             }
         }
     }
@@ -170,7 +179,7 @@ fun SearchField(value: String, onChange: (String) -> Unit, focus: FocusRequester
         contentAlignment = Alignment.CenterStart,
     ) {
         val textColor = if (spec.drawer == DrawerStyle.TILES_LIST) colors.background else colors.onSurface
-        if (value.isEmpty()) Text((if (spec.labelPrefix.isNotEmpty()) "$ grep " else "⌕  ") + spec.withCase(placeholder), color = textColor.copy(alpha = 0.55f), fontFamily = fonts.body, fontSize = 16.sp)
+        if (value.isEmpty()) Text((if (spec.labelPrefix.isNotEmpty()) "$ grep " else "⌕  ") + spec.withCase(placeholder), color = textColor.copy(alpha = 0.55f), fontFamily = fonts.body, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         BasicTextField(
             value, onChange, singleLine = true, modifier = Modifier.fillMaxWidth().focusRequester(focus),
             textStyle = androidx.compose.ui.text.TextStyle(color = textColor, fontFamily = fonts.body, fontSize = 17.sp),
@@ -185,7 +194,9 @@ fun SearchField(value: String, onChange: (String) -> Unit, focus: FocusRequester
 private fun SearchResults(results: List<AppInfo>, query: String, bottom: Dp) {
     val spec = LocalSpec.current; val colors = LocalColors.current
     val ctx = LocalContext.current
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottom + 12.dp)) {
+    val state = rememberLazyListState()
+    LaunchedEffect(query) { state.scrollToItem(DrawerOpen.INITIAL_INDEX) }
+    LazyColumn(state = state, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottom + 12.dp)) {
         items(results, key = { it.key }) { a -> AppRow(a, highlight = a === results.firstOrNull()) }
         item {
             Text("Найти в интернете: «$query»", style = labelStyle(colors.accent, 16.sp).copy(shadow = null),
@@ -221,10 +232,11 @@ fun AppRow(a: AppInfo, highlight: Boolean = false, textOnly: Boolean = false, ic
 }
 
 @Composable
-private fun GridDrawer(apps: List<AppInfo>, bottom: Dp) {
+private fun GridDrawer(apps: List<AppInfo>, bottom: Dp, scrollerEnabled: Boolean = true, resetTick: Int = 0) {
     val spec = LocalSpec.current
     val state = rememberLazyGridState()
     val letters = remember(apps) { firstIndexByLetter(apps) }
+    LaunchedEffect(resetTick) { if (resetTick > 0) state.scrollToItem(DrawerOpen.INITIAL_INDEX) }
     Box(Modifier.fillMaxSize()) {
         LazyVerticalGrid(GridCells.Fixed(spec.columns), state = state, modifier = Modifier.fillMaxSize().padding(end = 18.dp),
             contentPadding = PaddingValues(start = 8.dp, top = 4.dp, bottom = bottom + 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -232,7 +244,7 @@ private fun GridDrawer(apps: List<AppInfo>, bottom: Dp) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { AppCell(a, (spec.iconSizeDp - 4).dp, true, labelColor = LocalColors.current.onSurface) }
             }
         }
-        FastScroller(letters, Modifier.align(Alignment.CenterEnd)) { idx -> state.scrollToItem(idx) }
+        FastScroller(letters, Modifier.align(Alignment.CenterEnd), enabled = scrollerEnabled) { idx -> state.scrollToItem(idx) }
     }
 }
 
@@ -244,13 +256,14 @@ private fun firstIndexByLetter(apps: List<AppInfo>): List<Pair<String, Int>> {
 
 /** Rows list with letter headers + alphabet wave scroller (one-hand friendly). */
 @Composable
-private fun ListDrawer(apps: List<AppInfo>, bottom: Dp, textOnly: Boolean) {
+private fun ListDrawer(apps: List<AppInfo>, bottom: Dp, textOnly: Boolean, scrollerEnabled: Boolean = true, resetTick: Int = 0) {
     val spec = LocalSpec.current; val colors = LocalColors.current; val fonts = LocalFonts.current
     val state = rememberLazyListState()
     val groups = remember(apps) { apps.groupBy { it.letter }.toList() }
     val headerIndex = remember(groups) {
         var i = 0; groups.map { (l, items) -> (l to i).also { i += items.size + 1 } }
     }
+    LaunchedEffect(resetTick) { if (resetTick > 0) state.scrollToItem(DrawerOpen.INITIAL_INDEX) }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(state = state, modifier = Modifier.fillMaxSize().padding(end = 22.dp), contentPadding = PaddingValues(bottom = bottom + 16.dp)) {
             groups.forEach { (letter, items) ->
@@ -261,7 +274,7 @@ private fun ListDrawer(apps: List<AppInfo>, bottom: Dp, textOnly: Boolean) {
                 items(items, key = { it.key }, contentType = { 2 }) { a -> AppRow(a, textOnly = textOnly) }
             }
         }
-        FastScroller(headerIndex, Modifier.align(Alignment.CenterEnd)) { idx -> state.scrollToItem(idx) }
+        FastScroller(headerIndex, Modifier.align(Alignment.CenterEnd), enabled = scrollerEnabled) { idx -> state.scrollToItem(idx) }
     }
 }
 
@@ -271,7 +284,7 @@ private fun ListDrawer(apps: List<AppInfo>, bottom: Dp, textOnly: Boolean) {
  * lambdas, so sliding never recomposes the list.
  */
 @Composable
-fun FastScroller(letters: List<Pair<String, Int>>, modifier: Modifier = Modifier, scrollTo: suspend (Int) -> Unit) {
+fun FastScroller(letters: List<Pair<String, Int>>, modifier: Modifier = Modifier, enabled: Boolean = true, scrollTo: suspend (Int) -> Unit) {
     if (letters.size < 2) return
     val colors = LocalColors.current; val fonts = LocalFonts.current
     val haptic = LocalHapticFeedback.current
@@ -288,10 +301,12 @@ fun FastScroller(letters: List<Pair<String, Int>>, modifier: Modifier = Modifier
         Column(
             Modifier.fillMaxHeight().width(28.dp).align(Alignment.CenterEnd)
                 .androidxOnSize { heightPx = it }
-                .pointerInput(letters) {
+                .pointerInput(letters, enabled) {
+                    if (!enabled) return@pointerInput
                     detectTapGestures(onPress = { o -> touchY = o.y; pick(o.y); tryAwaitRelease(); touchY = -1f; current = null })
                 }
-                .pointerInput(letters) {
+                .pointerInput(letters, enabled) {
+                    if (!enabled) return@pointerInput
                     detectVerticalDragGestures(onDragStart = { o -> touchY = o.y; pick(o.y) }, onDragEnd = { touchY = -1f; current = null }, onDragCancel = { touchY = -1f; current = null }) { ch, _ ->
                         touchY = ch.position.y.coerceIn(0f, heightPx); pick(touchY)
                     }
@@ -399,10 +414,11 @@ private fun MiniCluster(apps: List<AppInfo>, onClick: () -> Unit) {
 // ------------------------------------------------- tile-style list with letter squares and jump grid
 
 @Composable
-fun TilesListBody(apps: List<AppInfo>, bottom: Dp) {
+fun TilesListBody(apps: List<AppInfo>, bottom: Dp, resetTick: Int = 0) {
     val spec = LocalSpec.current; val colors = LocalColors.current; val fonts = LocalFonts.current
     val anim = LocalAnimations.current
     val state = rememberLazyListState()
+    LaunchedEffect(resetTick) { if (resetTick > 0) state.scrollToItem(DrawerOpen.INITIAL_INDEX) }
     val scope = rememberCoroutineScope()
     var jump by remember { mutableStateOf(false) }
     val groups = remember(apps) { AlphabetIndex.sortAndGroup(apps) { it.label } }

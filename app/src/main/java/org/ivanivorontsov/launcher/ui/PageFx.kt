@@ -3,10 +3,12 @@ package org.ivanivorontsov.launcher.ui
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import org.ivanivorontsov.launcher.core.AnimGuard
 import org.ivanivorontsov.launcher.core.PageEffect
 import kotlin.math.PI
 import kotlin.math.abs
@@ -41,16 +43,17 @@ private fun bend(pos: Float): Float {
 
 /** Whole-page transform. Apply to the root of a pager page. */
 fun Modifier.pageEffect(effect: PageEffect, pager: PagerState, page: Int, itemsDoIt: Boolean = false): Modifier {
-    if (effect == PageEffect.NONE) return this
-    if (effect.perItem() && itemsDoIt) return this.zIndexFor(pager, page)
-    if (effect == PageEffect.WAVE) return this
+    val fx = AnimGuard.safeEffect(effect)
+    if (fx == PageEffect.NONE) return this
+    if (fx.perItem() && itemsDoIt) return this.zIndexFor(pager, page)
+    if (fx == PageEffect.WAVE) return this
     // Pages nearer to the centre draw on top (cube/stack/cylinder back faces).
     return this.zIndexFor(pager, page).graphicsLayer {
         val raw = page - pager.position()
         // 1.3.4: only the current page and the incoming neighbour may draw. Pages kept composed by the
         // pager (or a far page such as the first one) are fully hidden, so nothing ghosts on top.
         if (abs(raw) >= 1f) { alpha = 0f; return@graphicsLayer }
-        pageLayer(effect, raw)
+        pageLayer(fx, raw)
     }
 }
 
@@ -149,9 +152,14 @@ internal fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
             alpha = 1f - c
         }
         PageEffect.FADE -> {
-            // Pages do not move at all: one dissolves into the other.
+            // Cross-fade without an offscreen copy of hardware bitmaps. The default
+            // compositing strategy promoted each fading page (icons live in
+            // Bitmap.Config.HARDWARE since 1.4.3) to a full-screen layer; stacking two
+            // such layers at the same pixels hung HWUI on some Mali GPUs, so HOME
+            // never became ready and the launcher could not be chosen as default.
+            compositingStrategy = CompositingStrategy.ModulateAlpha
             translationX = -o * size.width
-            alpha = 1f - a.coerceAtMost(1f)
+            alpha = (1f - a.coerceAtMost(1f)).coerceIn(0f, 1f)
         }
         PageEffect.WHEEL -> {
             // Ferris wheel: pages swing around a hub high above the screen.

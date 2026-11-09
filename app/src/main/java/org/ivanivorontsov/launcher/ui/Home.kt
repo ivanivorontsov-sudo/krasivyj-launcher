@@ -202,7 +202,7 @@ fun LauncherRoot(ui: UiState) {
     ui.onFolderHover = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
 
     LauncherTheme(spec, animations) {
-      CompositionLocalProvider(LocalUi provides ui, LocalAppsByKey provides byKey, LocalPageEffect provides (if (animations) config.pageEffectFor(spec.id, spec.layout) else org.ivanivorontsov.launcher.core.PageEffect.NONE)) {
+      CompositionLocalProvider(LocalUi provides ui, LocalAppsByKey provides byKey, LocalPageEffect provides (if (animations) org.ivanivorontsov.launcher.core.AnimGuard.safeEffect(config.pageEffectFor(spec.id, spec.layout)) else org.ivanivorontsov.launcher.core.PageEffect.NONE)) {
         val density = LocalDensity.current
         BoxWithConstraints(Modifier.fillMaxSize().dragTracker(ui)) {
             val wPx = with(density) { maxWidth.roundToPx() }; val hPx = with(density) { maxHeight.roundToPx() }
@@ -726,6 +726,7 @@ fun MenuOverlay(ui: UiState) {
                 m.entries.forEachIndexed { i, e ->
                     if (i == 0 && m.app != null) HorizontalDivider(color = colors.onSurface.copy(alpha = 0.1f))
                     Text(spec.withCase(e.label), style = labelStyle(if (e.danger) Color(0xFFFF453A) else colors.onSurface, 16.sp).copy(shadow = null, fontFamily = LocalFonts.current.body),
+                        maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth().clickable { ui.menu = null; e.onClick() }.padding(horizontal = 18.dp, vertical = 12.dp))
                 }
             }

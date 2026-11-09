@@ -24,3 +24,4 @@ app/build/
 /screens/
 modules/*/build/
 .kotlin/
+notes-app/build/

@@ -11,7 +11,7 @@ android {
     defaultConfig {
         minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
-        buildConfigField("String", "VERSION_NAME", "\"1.1.0\"")
+        buildConfigField("String", "VERSION_NAME", "\"1.1.1\"")
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -3,6 +3,8 @@ package org.ivanivorontsov.launcher.core
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 @Serializable enum class TileSize(val w: Int, val h: Int, val title: String) {
     SMALL(1, 1, "маленькая"), MEDIUM(2, 2, "средняя"), WIDE(4, 2, "широкая");
@@ -138,10 +140,28 @@ data class LauncherConfig(
 
     fun baseLayout(): ScreenLayout = base ?: ScreenLayout(home = home, dock = dock, tiles = tiles, favorites = minimalFavorites)
 
-    /** Moves legacy 1.0 fields into [base]. */
-    fun migrated(): LauncherConfig =
-        if (base != null) this
+    /** Moves legacy 1.0 fields into [base], then clamps every numeric/map field. */
+    fun migrated(): LauncherConfig {
+        val moved = if (base != null) this
         else copy(base = baseLayout().normalized(), home = emptyList(), dock = emptyList(), tiles = emptyList(), minimalFavorites = emptyList())
+        return moved.sanitized()
+    }
+
+    /**
+     * Validates a config loaded after any number of skipped versions. Unknown JSON keys are
+     * already ignored by [ConfigCodec]; this clamps numbers and drops empty map keys so an
+     * old or half-written file can never crash layout or start a broken animation.
+     */
+    fun sanitized(): LauncherConfig = copy(
+        animSpeed = animSpeed.coerceIn(0.4f, 2f),
+        returnDurationMs = returnDurationMs.coerceIn(150, 1000),
+        gestureReturnSpeed = gestureReturnSpeed.coerceIn(0, 2),
+        clockZoneCount = clockZoneCount.coerceIn(1, 3),
+        digitSizeSp = digitSizeSp.coerceIn(24, 200),
+        digitAlpha = digitAlpha.coerceIn(0.15f, 1f),
+        clockZones = clockZones.take(3).map { it.copy(zoneId = it.zoneId.take(64), label = it.label.take(40)) },
+        pageEffects = pageEffects.filterKeys { it.length in 1..64 },
+    )
 
     /** The arrangement shown for [themeId]: its own, else the most recently edited one, else the shared base. */
     fun layoutFor(themeId: String): ScreenLayout = layouts[themeId] ?: lastEdited?.let { layouts[it] } ?: baseLayout()
@@ -192,8 +212,44 @@ data class LauncherConfig(
 
 object ConfigCodec {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false; coerceInputValues = true }
+    private val animationKeys = setOf(
+        "pageEffects", "homeAnim", "backAnim", "unlockAnim", "homeIconFx",
+        "animSpeed", "returnDurationMs", "gestureReturnSpeed",
+    )
+    private val layoutKeys = setOf(
+        "base", "layouts", "home", "dock", "tiles", "minimalFavorites", "hidden",
+        "renamed", "usage", "knownApps", "widgets", "seeded", "autoAddNew", "lastEdited", "iconPack",
+    )
     fun encode(c: LauncherConfig): String = json.encodeToString(c)
-    fun decode(s: String?): LauncherConfig = try { (s?.let { json.decodeFromString<LauncherConfig>(it) } ?: LauncherConfig()).migrated() } catch (_: Exception) { LauncherConfig().migrated() }
+    fun decode(s: String?): LauncherConfig = try {
+        parse(s).migrated()
+    } catch (_: Exception) {
+        LauncherConfig().migrated()
+    }
+
+    private fun parse(s: String?): LauncherConfig {
+        if (s.isNullOrBlank()) return LauncherConfig()
+        return try {
+            json.decodeFromString<LauncherConfig>(s)
+        } catch (_: Exception) {
+            recover(s) ?: LauncherConfig()
+        }
+    }
+
+    /**
+     * If a skipped-version file has an animation field the current decoder cannot read,
+     * drop those fields and keep the user's layout. A total failure still returns defaults.
+     */
+    internal fun recover(s: String): LauncherConfig? {
+        val obj = try { json.parseToJsonElement(s).jsonObject } catch (_: Exception) { return null }
+        fun attempt(drop: Set<String>): LauncherConfig? {
+            val filtered = JsonObject(obj.filterKeys { it !in drop })
+            return try { json.decodeFromString<LauncherConfig>(filtered.toString()) } catch (_: Exception) { null }
+        }
+        attempt(animationKeys)?.let { return it }
+        val kept = JsonObject(obj.filterKeys { it in layoutKeys })
+        return try { json.decodeFromString<LauncherConfig>(kept.toString()) } catch (_: Exception) { null }
+    }
 }
 
 /** Places tiles in a grid of [columns] units, first-fit, top-to-bottom like the classic tile start screen. */

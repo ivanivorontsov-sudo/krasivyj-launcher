@@ -61,4 +61,24 @@ class ModelTest {
         assertEquals(AppCategory.FINANCE, Categorizer.categorize("ru.sberbankmobile", "СберБанк", -1))
         assertEquals(AppCategory.OTHER, Categorizer.categorize("com.qwe.rty", "Qwerty", -1))
     }
+
+    @Test fun configSanitizesOutOfRangeValues() {
+        val raw = LauncherConfig(returnDurationMs = 12, gestureReturnSpeed = 9, animSpeed = 8f, digitSizeSp = 8, digitAlpha = 5f, clockZoneCount = 0)
+        val s = raw.sanitized()
+        assertEquals(150, s.returnDurationMs)
+        assertEquals(2, s.gestureReturnSpeed)
+        assertEquals(2f, s.animSpeed, 0.001f)
+        assertEquals(24, s.digitSizeSp)
+        assertEquals(1f, s.digitAlpha, 0.001f)
+        assertEquals(1, s.clockZoneCount)
+    }
+
+    @Test fun configRecoverKeepsLayoutIfAnimationJsonIsBroken() {
+        val broken = """{"home":["keep-me"],"dock":["dock-1"],"pageEffects":{"cupertino":"THIS_IS_NOT_AN_EFFECT"},"seeded":true}"""
+        val c = ConfigCodec.decode(broken)
+        assertEquals(listOf("keep-me"), c.baseLayout().home)
+        assertEquals(listOf("dock-1"), c.baseLayout().dock)
+        assertTrue(c.seeded)
+        assertTrue(c.pageEffects.isEmpty() || c.pageEffects.values.all { it in PageEffect.entries })
+    }
 }

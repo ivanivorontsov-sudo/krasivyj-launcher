@@ -184,6 +184,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         setContent {
             CompositionLocalProvider(LocalActions provides this) { LauncherRoot(ui) }
         }
+        AnimGuardHost.attach(this, app.store)
         handleGestureContract(intent)
         // 1.3.6: «Автоповорот лаунчера» — applied immediately whenever the setting changes.
         lifecycleScope.launch {
@@ -413,6 +414,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
 
     private fun beginReturnFlight(force: Boolean = false) {
         if (ui.returning == null || returnArmed || resumeUptime == 0L) return
+        if (!window.decorView.isAttachedToWindow) return
         if (!force && homeIntentSinceStop && app.store.config.value.homeAnim != org.ivanivorontsov.launcher.core.HomeAnim.SYSTEM && !window.decorView.hasWindowFocus()) return
         if (SystemClock.uptimeMillis() - resumeUptime < 40) return
         returnArmed = true

@@ -119,7 +119,7 @@ fun TodayScreen() {
                             val r = s.reminders.firstOrNull { it.id == next.reminderId }
                             val t = Instant.ofEpochMilli(next.atMillis).atZone(ZoneId.systemDefault())
                             val day = when (t.toLocalDate().toEpochDay() - today) { 0L -> "сегодня"; 1L -> "завтра"; else -> ReminderMath.DAY_SHORT[t.dayOfWeek.value - 1] }
-                            Text("$day %02d:%02d · ${r?.title ?: ""}".format(t.hour, t.minute), style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                            Text("$day %02d:%02d · ${r?.title ?: ""}".format(t.hour, t.minute), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             if (next.mode == org.ivanivorontsov.boec.model.AlertMode.CALL) Text("придёт как входящий звонок", style = MaterialTheme.typography.bodySmall, color = Ember)
                         }
                     }

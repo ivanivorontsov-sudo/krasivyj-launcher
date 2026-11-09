@@ -14,8 +14,8 @@ val ksProps = Properties().apply {
 }
 fun signingValue(key: String, env: String): String? = System.getenv(env) ?: ksProps.getProperty(key)
 
-val appVersionCode = (System.getenv("VERSION_CODE") ?: "1400").toInt()
-val appVersionName = System.getenv("VERSION_NAME") ?: "1.4.0"
+val appVersionCode = (System.getenv("VERSION_CODE") ?: "1460").toInt()
+val appVersionName = System.getenv("VERSION_NAME") ?: "1.4.6"
 
 android {
     namespace = "org.ivanivorontsov.launcher"

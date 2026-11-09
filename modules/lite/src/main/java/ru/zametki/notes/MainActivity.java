@@ -80,14 +80,30 @@ public class MainActivity extends Activity {
         this.density = getResources().getDisplayMetrics().density;
         this.prefs = getSharedPreferences("mod_notes", 0);
         load();
+        prepareWindow();
+        showList();
+    }
+
+    void prepareWindow() {
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
-        int i = Build.VERSION.SDK_INT >= 23 ? 8192 : 0;
-        if (Build.VERSION.SDK_INT >= 26) {
-            i |= 16;
-        }
-        getWindow().getDecorView().setSystemUiVisibility(i);
-        showList();
+        androidx.core.view.WindowInsetsControllerCompat bars =
+            androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        bars.setAppearanceLightStatusBars(true);
+        bars.setAppearanceLightNavigationBars(true);
+    }
+
+    void applyScreenInsets(View root) {
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            androidx.core.graphics.Insets bars = insets.getInsets(
+                androidx.core.view.WindowInsetsCompat.Type.systemBars()
+                    | androidx.core.view.WindowInsetsCompat.Type.displayCutout()
+                    | androidx.core.view.WindowInsetsCompat.Type.ime());
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return androidx.core.view.WindowInsetsCompat.CONSUMED;
+        });
+        androidx.core.view.ViewCompat.requestApplyInsets(root);
     }
 
     int dp(int i) {
@@ -199,10 +215,13 @@ public class MainActivity extends Activity {
         LinearLayout linearLayout = new LinearLayout(this);
         linearLayout.setOrientation(1);
         frameLayout.addView(linearLayout, new FrameLayout.LayoutParams(MATCH, MATCH));
-        TextView tv = tv("Заметки", 30, INK, true);
+        int titleSp = getResources().getConfiguration().fontScale > 1.15f ? 24 : 30;
+        TextView tv = tv("Заметки", titleSp, INK, true);
+        tv.setMaxLines(2);
         tv.setPadding(dp(20), dp(16), dp(20), 0);
         linearLayout.addView(tv, new LinearLayout.LayoutParams(MATCH, WRAP));
         this.countView = tv("", 13, SUB, false);
+        this.countView.setMaxLines(3);
         this.countView.setPadding(dp(20), dp(2), dp(20), 0);
         linearLayout.addView(this.countView, new LinearLayout.LayoutParams(MATCH, WRAP));
         EditText editText = new EditText(this);
@@ -211,6 +230,7 @@ public class MainActivity extends Activity {
         editText.setHintTextColor(SUB);
         editText.setTextColor(INK);
         editText.setTextSize(15.0f);
+        editText.setEllipsize(TextUtils.TruncateAt.END);
         editText.setBackground(box(CARD, 14, LINE));
         editText.setPadding(dp(16), dp(12), dp(16), dp(12));
         editText.setText(this.query);
@@ -299,6 +319,7 @@ public class MainActivity extends Activity {
             }
         });
         setContentView(frameLayout);
+        applyScreenInsets(frameLayout);
         refresh();
     }
 
@@ -531,6 +552,7 @@ public class MainActivity extends Activity {
             }
         });
         setContentView(linearLayout);
+        applyScreenInsets(linearLayout);
         if (this.isNew) {
             this.titleEt.requestFocus();
             this.titleEt.postDelayed(new Runnable() { // from class: ru.zametki.notes.MainActivity.13

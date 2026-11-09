@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 
@@ -74,12 +75,12 @@ class ModulesActivity : ComponentActivity() {
 private fun Hub() {
     val ctx = LocalContext.current
     LazyColumn(
-        Modifier.fillMaxSize().systemBarsPadding(),
+        Modifier.fillMaxSize().systemBarsPadding().displayCutoutPadding(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
-            Text("СуперСмарт · Модули", style = MaterialTheme.typography.headlineSmall)
+            Text("СуперСмарт · Модули", style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text("Встроенные приложения. Их значки есть и в меню приложений — оттуда их можно перетащить на главный экран или в папку.",
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
         }
@@ -106,8 +107,8 @@ private fun ModuleCard(m: SuperModule, onClick: () -> Unit) {
             if (icon != null) Image(icon, null, Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)))
             else Box(Modifier.size(48.dp))
             Column(Modifier.padding(start = 14.dp).weight(1f)) {
-                Text(m.title, style = MaterialTheme.typography.titleMedium)
-                Text(m.about, style = MaterialTheme.typography.bodySmall)
+                Text(m.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(m.about, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
         }
     }

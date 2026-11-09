@@ -62,6 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -173,7 +174,7 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { back() }.padding(horizontal = 14.dp))
-            Text(screen.title, style = MaterialTheme.typography.headlineSmall)
+            Text(screen.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
         Box(Modifier.weight(1f).navigationBarsPadding()) {
             when (screen) {
@@ -207,8 +208,8 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 @Composable
 private fun NavRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 20.dp, vertical = 14.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)) }
+        Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f), maxLines = 3, overflow = TextOverflow.Ellipsis) }
     }
 }
 
