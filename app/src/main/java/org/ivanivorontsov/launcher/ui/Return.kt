@@ -15,7 +15,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import org.ivanivorontsov.launcher.core.ReturnSpot
 import org.ivanivorontsov.launcher.core.ScreenLayout
+import org.ivanivorontsov.launcher.core.chooseReturnSpot
 import kotlin.math.roundToInt
 
 /**
@@ -45,10 +47,28 @@ fun ReturnOverlay(ui: UiState, layout: ScreenLayout) {
         val e = t.coerceAtLeast(0f)
         val screen = Rect(Offset.Zero, size)
         fun onScreen(b: Rect?) = b != null && b.width > 0f && b.overlaps(screen) && screen.contains(b.center)
-        val ids = listOfNotNull(r.key, layout.folderOf(r.key), "t_" + r.key)
-        val target = ids.firstNotNullOfOrNull { ui.iconBounds[it]?.bounds()?.takeIf(::onScreen) } ?: r.fallback?.takeIf(::onScreen)
-        // No visible icon (other page, hidden, drawer) → no card: never fly into a made-up spot.
-        val end = target ?: return@Canvas
+        val folderId = r.folderId
+        val inner = folderId?.let { ui.folderIconBounds[r.key]?.bounds()?.takeIf(::onScreen) }
+        val launch = r.fallback?.takeIf(::onScreen)
+        val gridFolder = folderId?.let { ui.iconBounds[it]?.bounds()?.takeIf(::onScreen) }
+        val home = if (folderId == null) {
+            listOfNotNull(r.key, layout.folderOf(r.key), "t_" + r.key)
+                .firstNotNullOfOrNull { ui.iconBounds[it]?.bounds()?.takeIf(::onScreen) }
+        } else null
+        val end = when (chooseReturnSpot(
+            launchedFromFolder = folderId != null,
+            folderOpen = folderId != null && ui.openFolder == folderId,
+            hasInner = inner != null,
+            hasLaunchBounds = launch != null,
+            hasGridFolder = gridFolder != null,
+            hasHomeIcon = home != null,
+        )) {
+            ReturnSpot.INNER -> inner
+            ReturnSpot.LAUNCH_BOUNDS -> launch
+            ReturnSpot.GRID_FOLDER -> gridFolder
+            ReturnSpot.HOME_ICON -> home
+            null -> null
+        } ?: return@Canvas
         // The card begins slightly inset (like an app window that has started to shrink) — no full-screen pop.
         val startRect = Rect(size.width * 0.04f, size.height * 0.03f, size.width * 0.96f, size.height * 0.97f)
         val rect = Rect(
@@ -62,7 +82,7 @@ fun ReturnOverlay(ui: UiState, layout: ScreenLayout) {
             else -> end.minDimension * 0.32f
         }
         val corner = (screenCorner + (endCorner - screenCorner) * e.coerceAtMost(1f)).coerceAtMost(rect.minDimension / 2f)
-        val fade = if (target == null) (1f - e).coerceIn(0f, 1f) else 1f
+        val fade = 1f
         // Fade in during the first 10 %, hand over to the real icon after 60 %.
         val cardAlpha = (minOf(t / 0.1f, if (t < 0.6f) 1f else 1f - (t - 0.6f) / 0.35f)).coerceIn(0f, 1f) * fade
         drawRoundRect(base.copy(alpha = cardAlpha), rect.topLeft, rect.size, CornerRadius(corner))

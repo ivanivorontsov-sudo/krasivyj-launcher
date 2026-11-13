@@ -22,6 +22,20 @@ data class WidgetItem(val widgetId: Int, val heightDp: Int = 180)
     LOCK("Заблокировать экран"), SETTINGS("Настройки лаунчера"), WIDGETS("Виджеты")
 }
 
+/** What the optional always-on-top digits show. Off until the user enables the overlay. */
+@Serializable enum class DigitMode(val title: String) {
+    APP("Время в приложении"),
+    CLOCK("Часы"),
+    TODAY("Экран сегодня"),
+}
+
+/** Where the digit overlay sits. Touches pass through it in every position. */
+@Serializable enum class DigitAnchor(val title: String) {
+    TOP("Сверху"),
+    CENTER("По центру"),
+    BOTTOM("Снизу"),
+}
+
 /** Everything the user arranged, persisted as JSON. Pure model so it is unit-testable. */
 @Serializable
 data class LauncherConfig(
@@ -60,6 +74,16 @@ data class LauncherConfig(
     val allAppsOnHome: Boolean = false,
     /** 1.2: page-turn effect per theme id (absent = the theme's default, see [pageEffectFor]). */
     val pageEffects: Map<String, PageEffect> = emptyMap(),
+    /**
+     * Huge black digits drawn above other apps. Stays false until the user turns it on,
+     * and the overlay permission is not requested before that.
+     */
+    val digitOverlay: Boolean = false,
+    val digitMode: DigitMode = DigitMode.APP,
+    val digitAnchor: DigitAnchor = DigitAnchor.TOP,
+    val digitSizeSp: Int = 72,
+    val digitAlpha: Float = 1f,
+    val digitOutline: Boolean = true,
 ) {
     fun baseLayout(): ScreenLayout = base ?: ScreenLayout(home = home, dock = dock, tiles = tiles, favorites = minimalFavorites)
 

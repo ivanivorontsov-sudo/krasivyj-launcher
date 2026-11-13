@@ -28,7 +28,10 @@ class LockService : AccessibilityService() {
         e ?: return
         val pkg = e.packageName?.toString() ?: return
         val isState = e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-        if (isState && pkg != "com.android.systemui" && pkg !in ime) StopGuard.lastForeground = pkg
+        if (isState && pkg != "com.android.systemui" && pkg !in ime) {
+            StopGuard.lastForeground = pkg
+            ForegroundClock.note(pkg)
+        }
         if (isState && StopGuard.isForbidden(pkg)) {
             val now = SystemClock.uptimeMillis()
             if (now - lastHome > 400) {
@@ -43,11 +46,16 @@ class LockService : AccessibilityService() {
             val now = SystemClock.uptimeMillis()
             if (!isState && now - lastScan < 250) return
             lastScan = now
+            // Class-name hit does not need a node walk, and must not run for any package but Settings.
+            if (isSettingsDeviceAdminPage(pkg, e.className, "")) {
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                StopGuard.store.log(org.ivanivorontsov.launcher.stop.core.HistoryEntry.TAMPER, "Попытка открыть управление администратором устройства")
+                return
+            }
             val root = runCatching { rootInActiveWindow }.getOrNull() ?: return
 
-            // Device Admin cannot veto deactivation by itself. In strict mode, immediately
-            // leave its management page, even during grace periods for other permissions.
-            if (isDeviceAdminManagement(root)) {
+            // Title fallback only on com.android.settings. Other guarded packages are not kicked for this.
+            if (pkg == "com.android.settings" && isSettingsDeviceAdminPage(pkg, null, deviceAdminTitle(root))) {
                 performGlobalAction(GLOBAL_ACTION_HOME)
                 StopGuard.store.log(org.ivanivorontsov.launcher.stop.core.HistoryEntry.TAMPER, "Попытка открыть управление администратором устройства")
                 return
@@ -70,13 +78,13 @@ class LockService : AccessibilityService() {
         return hit
     }
 
-    private fun isDeviceAdminManagement(root: AccessibilityNodeInfo): Boolean {
-        var hit = false
+    private fun deviceAdminTitle(root: AccessibilityNodeInfo): String {
+        val buf = StringBuilder()
         walk(root, 0) { t ->
-            if (DEVICE_ADMIN_TITLES.any { t.contains(it, ignoreCase = true) }) hit = true
-            hit
+            buf.append('\n').append(t)
+            false
         }
-        return hit
+        return buf.toString()
     }
 
     private fun walk(n: AccessibilityNodeInfo?, depth: Int, f: (String) -> Boolean): Boolean {
@@ -107,8 +115,19 @@ class LockService : AccessibilityService() {
         val DEV_TITLES = listOf("Для разработчиков", "Параметры разработчика", "Developer options", "Режим разработчика")
         val DEVICE_ADMIN_TITLES = listOf(
             "Администраторы устройства", "Администратор устройства", "Администрирование устройства",
-            "Приложения-администраторы", "Управление администраторами", "Администраторы",
+            "Приложения-администраторы", "Управление администраторами",
             "Device admin apps", "Device administrators", "Device admin", "Manage device admins",
         )
     }
+}
+
+/**
+ * Strict-mode device-admin kick. Only `com.android.settings`, and only when the window class
+ * contains `DeviceAdmin` or the page text is an admin-management title. Any other package is ignored.
+ */
+internal fun isSettingsDeviceAdminPage(packageName: String, className: CharSequence?, pageText: String): Boolean {
+    if (packageName != "com.android.settings") return false
+    if (className?.toString()?.contains("DeviceAdmin", ignoreCase = true) == true) return true
+    if (pageText.isEmpty()) return false
+    return LockService.DEVICE_ADMIN_TITLES.any { pageText.contains(it, ignoreCase = true) }
 }
