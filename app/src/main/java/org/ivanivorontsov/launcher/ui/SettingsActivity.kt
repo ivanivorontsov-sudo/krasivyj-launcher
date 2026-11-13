@@ -36,6 +36,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -163,6 +165,12 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
     var screen by remember { mutableStateOf(when (start) { "themes" -> Screen.THEMES; "home" -> Screen.HOME; "search" -> Screen.SEARCH; else -> Screen.MAIN }) }
     var fontTarget by remember { mutableStateOf("all") }
     var licText by remember { mutableStateOf<String?>(null) }
+    var pendingSearchItem by remember { mutableIntStateOf(-1) }
+    val openSearchResult: (SettingSearchEntry) -> Unit = { entry ->
+        pendingSearchItem = entry.itemIndex
+        screen = entry.screen
+    }
+    val consumeSearchItem: () -> Unit = { pendingSearchItem = -1 }
     val back: () -> Unit = {
         when {
             screen == Screen.MAIN -> close()
@@ -176,30 +184,42 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { back() }.padding(horizontal = 14.dp))
             Text(screen.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            if (screen != Screen.SEARCH) {
+            if (screen != Screen.SEARCH && screen != Screen.MAIN) {
                 TextButton(onClick = { screen = Screen.SEARCH }) { Text("Поиск") }
             }
         }
         Box(Modifier.weight(1f).navigationBarsPadding()) {
             when (screen) {
-                Screen.MAIN -> MainScreen { screen = it }
-                Screen.SEARCH -> SearchSettingsScreen { screen = it }
-                Screen.HOME -> HomeScreenSettings()
+                Screen.MAIN -> MainScreen(openSearchResult)
+                Screen.SEARCH -> SearchSettingsScreen(openSearchResult)
+                Screen.HOME -> HomeScreenSettings(pendingSearchItem, consumeSearchItem)
                 Screen.THEMES -> ThemesScreen { screen = Screen.EDITOR }
-                Screen.EDITOR -> EditorScreen(openFonts = { fontTarget = it; screen = Screen.FONTS })
+                Screen.EDITOR -> EditorScreen(openFonts = { fontTarget = it; screen = Screen.FONTS }, targetItem = pendingSearchItem, onTargetConsumed = consumeSearchItem)
                 Screen.FONTS -> FontsScreen(fontTarget)
-                Screen.GESTURES -> GesturesScreen()
+                Screen.GESTURES -> GesturesScreen(pendingSearchItem, consumeSearchItem)
                 Screen.HIDDEN -> HiddenScreen()
                 Screen.ICONS -> IconPacksScreen()
-                Screen.LIVE -> LiveScreen()
-                Screen.DIGITS -> DigitsScreen()
-                Screen.SYSTEM -> SystemScreen()
-                Screen.SMOOTH -> SmoothScreen()
+                Screen.LIVE -> LiveScreen(pendingSearchItem, consumeSearchItem)
+                Screen.DIGITS -> DigitsScreen(pendingSearchItem, consumeSearchItem)
+                Screen.SYSTEM -> SystemScreen(pendingSearchItem, consumeSearchItem)
+                Screen.SMOOTH -> SmoothScreen(pendingSearchItem, consumeSearchItem)
                 Screen.ABOUT -> AboutScreen(openLicenses = { licText = null; screen = Screen.LICENSES })
                 Screen.LICENSES -> LicensesScreen(licText) { licText = it }
             }
         }
     }
+}
+
+@Composable
+private fun rememberSearchListState(targetItem: Int, onTargetConsumed: () -> Unit): LazyListState {
+    val state = rememberLazyListState()
+    LaunchedEffect(targetItem) {
+        if (targetItem >= 0) {
+            state.animateScrollToItem(targetItem)
+            onTargetConsumed()
+        }
+    }
+    return state
 }
 
 @Composable
@@ -222,7 +242,7 @@ private fun NavRow(title: String, subtitle: String? = null, onClick: () -> Unit)
 private fun Info(text: String) = Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f), modifier = Modifier.padding(vertical = 4.dp))
 
 @Composable
-private fun MainScreen(go: (Screen) -> Unit) {
+private fun MainScreen(go: (SettingSearchEntry) -> Unit) {
     val ctx = LocalContext.current as ComponentActivity
     val tick = SettingsActivity.resumeTick
     val isDefault = remember(tick) { Device.isDefaultLauncher(ctx) }
@@ -245,7 +265,7 @@ private fun MainScreen(go: (Screen) -> Unit) {
                 item { Info("Ничего не найдено. Попробуйте другое слово.") }
             } else {
                 items(results, key = { it.screen.name }) { entry ->
-                    NavRow(entry.title, entry.subtitle) { go(entry.screen) }
+                    NavRow(entry.title, entry.subtitle) { go(entry) }
                 }
             }
         } else {
@@ -284,6 +304,8 @@ private data class SettingSearchEntry(
     val subtitle: String,
     val keywords: String,
     val screen: Screen,
+    /** Index of the LazyColumn item that contains the actual control, not a menu row. */
+    val itemIndex: Int,
 )
 
 private fun findSettingResults(query: String): List<SettingSearchEntry> {
@@ -291,29 +313,67 @@ private fun findSettingResults(query: String): List<SettingSearchEntry> {
         .split(Regex("\\s+")).filter { it.isNotBlank() }
     if (words.isEmpty()) return emptyList()
     return settingSearchEntries.filter { entry ->
-        val haystack = "${entry.title} ${entry.subtitle} ${entry.keywords}".lowercase().replace('ё', 'е')
+        val haystack = "\${entry.title} \${entry.subtitle} \${entry.keywords}".lowercase().replace('ё', 'е')
         words.all { haystack.contains(it) }
-    }
+    }.distinctBy { "\${it.screen.name}:\${it.itemIndex}:\${it.title}" }
 }
 
-private val settingSearchEntries = listOf(
-    SettingSearchEntry("Главный экран", "Виджеты, папки, новые приложения, сетка и анимации", "домой рабочий стол иконки приложения папки виджеты часы сегодня страницы док автодобавление перемещение перелистывание возврат скорость", Screen.HOME),
-    SettingSearchEntry("Темы и обои", "Готовые темы и оформление", "тема темы стиль обои фон цвет оформление", Screen.THEMES),
-    SettingSearchEntry("Свой стиль", "Макет, цвета, шрифты, иконки, плитки и эффекты", "макет сетка столбцы ряды док плитки прозрачность акцент тёмная светлая blur размытие иконки размер подписи скругление анимация движение", Screen.EDITOR),
-    SettingSearchEntry("Шрифты", "Шрифты часов, заголовков и текста", "шрифт шрифты буквы кириллица часы заголовки текст начертание", Screen.FONTS),
-    SettingSearchEntry("Жесты", "Свайпы, двойное касание и действия", "свайп вверх вниз двойное касание блокировка поиск приложения уведомления шторка жест", Screen.GESTURES),
-    SettingSearchEntry("Скрытые приложения", "Показать или скрыть приложения", "скрыть скрытые показывать приложение список меню невидимые", Screen.HIDDEN),
-    SettingSearchEntry("Набор иконок", "Пакеты значков приложений", "иконки значки набор пак пакет icon pack", Screen.ICONS),
-    SettingSearchEntry("Живые плитки и разрешения", "Фото, календарь и счётчики уведомлений", "плитка живые фото календарь уведомления разрешение доступ счетчик", Screen.LIVE),
-    SettingSearchEntry("Цифры поверх приложений", "Экранное время и часы поверх окон", "цифры экранное время поверх приложений оверлей таймер часы", Screen.DIGITS),
-    SettingSearchEntry("Системный шрифт и обои", "Настройки оформления всего телефона", "системный шрифт телефон обои экрана блокировки material you", Screen.SYSTEM),
-    SettingSearchEntry("Плавность и батарея", "Частота обновления и фоновая работа", "плавность батарея герц гц 144 120 90 60 частота обновления экран фон энергосбережение", Screen.SMOOTH),
-    SettingSearchEntry("О приложении", "Версия и сведения о СуперСмарт", "версия обновление о программе приложение информация", Screen.ABOUT),
-    SettingSearchEntry("Лицензии", "Открытые библиотеки и шрифты", "лицензия лицензии библиотеки open source шрифты", Screen.LICENSES),
-)
+private val settingSearchEntries = buildList {
+    // Главный экран.
+    add(SettingSearchEntry("Все приложения на главном экране", "Главный экран · Главный экран без меню приложений", "приложения список меню плитки убрать drawer", Screen.HOME, 0))
+    add(SettingSearchEntry("Экран «Сегодня» и виджеты", "Главный экран · Виджеты и экран «Сегодня»", "сегодня виджет виджеты календарь часы слева", Screen.HOME, 1))
+    add(SettingSearchEntry("Автоматически добавлять новые приложения", "Главный экран · Новые приложения", "новые приложения установка добавлять автоматически", Screen.HOME, 2))
+    add(SettingSearchEntry("Эффект перелистывания страниц", "Главный экран · Перелистывание страниц", "листание перелистывание страницы эффект куб карусель анимация", Screen.HOME, 3))
+    add(SettingSearchEntry("Перетаскивание двумя или тремя пальцами", "Главный экран · Перетаскивание", "перетаскивание пальцы перенос иконок", Screen.HOME, 4))
+    add(SettingSearchEntry("Анимации «Домой» и «Назад»", "Главный экран · Анимации «Домой» и «Назад»", "анимация домой назад сворачивание возврат эффект иконка", Screen.HOME, 5))
+    add(SettingSearchEntry("Длительность анимации возврата", "Главный экран · Анимации «Домой» и «Назад»", "длительность скорость анимации возврат домой", Screen.HOME, 5))
+    add(SettingSearchEntry("Ускорение возврата жестом «Домой»", "Главный экран · Анимации «Домой» и «Назад»", "быстрая очень быстрая жест домой скорость", Screen.HOME, 5))
+    add(SettingSearchEntry("Часовые пояса часов", "Главный экран · Часы: часовые пояса", "часы время второй часовой пояс город", Screen.HOME, 6))
+    add(SettingSearchEntry("Диагностика зависаний и фризов", "Главный экран · Диагностика фризов", "диагностика фризы зависания тормозит счётчик кадров отчёт", Screen.HOME, 7))
+    add(SettingSearchEntry("Анимация при разблокировке", "Главный экран · Анимация при разблокировке", "разблокировка анимация экран блокировки", Screen.HOME, 8))
+    add(SettingSearchEntry("Автоповорот лаунчера", "Главный экран · Поворот экрана", "поворот автоповорот ориентация горизонтально", Screen.HOME, 9))
+    add(SettingSearchEntry("Анимация возврата в иконку", "Главный экран · Возврат на главный экран", "сворачивание приложение приземление иконка возврат", Screen.HOME, 10))
+
+    // Жесты.
+    add(SettingSearchEntry("Действие свайпа вверх", "Жесты · Свайп вверх", "свайп вверх жест меню приложение настройки уведомления", Screen.GESTURES, 0))
+    add(SettingSearchEntry("Действие свайпа вниз", "Жесты · Свайп вниз", "свайп вниз жест меню приложение настройки уведомления", Screen.GESTURES, 1))
+    add(SettingSearchEntry("Действие двойного касания", "Жесты · Двойное касание", "двойное касание тап блокировка настройка уведомления", Screen.GESTURES, 2))
+    if (!BuildConfig.PLAY) add(SettingSearchEntry("Блокировка двойным касанием", "Жесты · Блокировка двойным касанием", "блокировка экран спец возможности доступность служба", Screen.GESTURES, 3))
+    add(SettingSearchEntry("Открывать клавиатуру в меню приложений", "Жесты · Клавиатура", "клавиатура автоматически поиск ввод", Screen.GESTURES, if (BuildConfig.PLAY) 3 else 4))
+
+    // Внешний вид.
+    add(SettingSearchEntry("Макет и меню приложений", "Свой стиль · Макет", "макет сетка список плитки меню drawer", Screen.EDITOR, 1))
+    add(SettingSearchEntry("Шрифт часов, заголовков и текста", "Свой стиль · Шрифты", "шрифт шрифты часы заголовки текст буквы", Screen.EDITOR, 2))
+    add(SettingSearchEntry("Цвета и тёмная тема", "Свой стиль · Цвета", "цвета акцент тёмная светлая тема material you", Screen.EDITOR, 3))
+    add(SettingSearchEntry("Цвета из обоев", "Свой стиль · Цвета", "динамический цвет обои material you", Screen.EDITOR, 3))
+    add(SettingSearchEntry("Обои, затемнение и размытие", "Свой стиль · Обои", "обои фон затемнение прозрачность размытие blur", Screen.EDITOR, 4))
+    add(SettingSearchEntry("Форма и размер иконок", "Свой стиль · Иконки", "иконки значки форма размер подписи скругление", Screen.EDITOR, 5))
+    add(SettingSearchEntry("Сетка: столбцы и ряды", "Свой стиль · Сетка", "сетка столбцы ряды док часы индикатор страниц", Screen.EDITOR, 6))
+    add(SettingSearchEntry("Настройки плиток", "Свой стиль · Плитки", "плитки промежутки шесть в ряд прозрачность", Screen.EDITOR, 7))
+    add(SettingSearchEntry("Анимации и эффекты интерфейса", "Свой стиль · Движение и эффекты", "анимация движение эффект наложение неон наклон", Screen.EDITOR, 8))
+    add(SettingSearchEntry("Список шрифтов", "Шрифты · Выбор шрифта", "шрифт шрифты выбрать рукописный кириллица", Screen.FONTS, 0))
+
+    // Живые плитки и разрешения.
+    add(SettingSearchEntry("Счётчики уведомлений на плитках", "Живые плитки и разрешения · Счётчики уведомлений", "уведомления значки счётчик сообщения badges", Screen.LIVE, 0))
+    add(SettingSearchEntry("Фото на плитке", "Живые плитки и разрешения · Плитка «Фото»", "фото галерея изображение картинки разрешение", Screen.LIVE, 1))
+    add(SettingSearchEntry("Календарь на плитке", "Живые плитки и разрешения · Плитка «Календарь»", "календарь события разрешение", Screen.LIVE, 2))
+    add(SettingSearchEntry("Фон прозрачных плиток", "Живые плитки и разрешения · Фон прозрачных плиток", "фон фото плитки обои прозрачность", Screen.LIVE, 3))
+
+    // Цифры поверх приложений.
+    add(SettingSearchEntry("Показывать цифры поверх приложений", "Цифры поверх приложений · Показ", "цифры таймер экранное время оверлей поверх окон", Screen.DIGITS, 0))
+    add(SettingSearchEntry("Что показывать: время приложения или часы", "Цифры поверх приложений · Что показывать", "время приложение часы сегодня режим", Screen.DIGITS, 1))
+    add(SettingSearchEntry("Положение, размер и обводка цифр", "Цифры поверх приложений · Вид", "положение размер прозрачность непрозрачность обводка", Screen.DIGITS, 2))
+
+    // Общие системные параметры.
+    add(SettingSearchEntry("Системный шрифт телефона", "Системный шрифт и обои · Честно о системном шрифте", "системный шрифт телефон android", Screen.SYSTEM, 0))
+    add(SettingSearchEntry("Установить обои темы на телефон", "Системный шрифт и обои · Обои темы", "обои экран блокировки рабочий стол material you", Screen.SYSTEM, 1))
+    add(SettingSearchEntry("Максимальная частота экрана", "Плавность и батарея · Частота экрана", "герц гц 60 90 120 144 частота обновления экран плавность", Screen.SMOOTH, 0))
+    add(SettingSearchEntry("Системные анимации", "Плавность и батарея · Анимации", "системные анимации выключить включить", Screen.SMOOTH, 1))
+    add(SettingSearchEntry("Фоновая работа и оптимизация батареи", "Плавность и батарея · Фоновая работа", "батарея фон энергосбережение оптимизация выгружать автозапуск", Screen.SMOOTH, 2))
+}
 
 @Composable
-private fun SearchSettingsScreen(go: (Screen) -> Unit) {
+private fun SearchSettingsScreen(go: (SettingSearchEntry) -> Unit) {
     var query by remember { mutableStateOf("") }
     val results = remember(query) { findSettingResults(query) }
     Column(Modifier.fillMaxSize()) {
@@ -325,12 +385,14 @@ private fun SearchSettingsScreen(go: (Screen) -> Unit) {
             placeholder = { Text("Например: жесты, частота экрана, шрифт") },
             singleLine = true,
         )
-        if (results.isEmpty()) {
+        if (query.isBlank()) {
+            Info("Введите название параметра — поиск приведёт прямо к его настройке.")
+        } else if (results.isEmpty()) {
             Info("Ничего не найдено. Попробуйте другое слово.")
         } else {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
-                items(results, key = { it.screen.name }) { entry ->
-                    NavRow(entry.title, entry.subtitle) { go(entry.screen) }
+                items(results, key = { "\${it.screen.name}:\${it.itemIndex}:\${it.title}" }) { entry ->
+                    NavRow(entry.title, entry.subtitle) { go(entry) }
                 }
             }
         }
@@ -357,11 +419,12 @@ private fun ThemesScreen(openEditor: () -> Unit) {
 /** Every edit produces a “custom” theme that applies live to the home screen behind. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun EditorScreen(openFonts: (String) -> Unit) {
+private fun EditorScreen(openFonts: (String) -> Unit, targetItem: Int, onTargetConsumed: () -> Unit) {
     val store = LauncherApp.instance.store
     val spec by store.theme.collectAsStateCompat()
     fun set(f: (ThemeSpec) -> ThemeSpec) = store.setCustom(f(spec).copy(name = "Мой стиль", description = "Собран в редакторе"))
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
+    val listState = rememberSearchListState(targetItem, onTargetConsumed)
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
         item { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { ThemePreview(spec, false, Modifier.width(150.dp).padding(8.dp)) } }
         item { Section("Макет") {
             Chips(HomeLayout.entries, spec.layout, { it.title }) { v -> set { it.copy(layout = v) } }
@@ -481,13 +544,14 @@ private fun FontsScreen(initialTarget: String) {
 }
 
 @Composable
-private fun GesturesScreen() {
+private fun GesturesScreen(targetItem: Int, onTargetConsumed: () -> Unit) {
     val ctx = LocalContext.current
     val store = LauncherApp.instance.store
     val cfg by store.config.collectAsStateCompat()
     val tick = SettingsActivity.resumeTick
     val lockOn = remember(tick) { LockService.isEnabled }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    val listState = rememberSearchListState(targetItem, onTargetConsumed)
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Свайп вверх") { Chips(listOf(GestureAction.DRAWER, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.swipeUp, { it.title }) { v -> store.update { it.copy(swipeUp = v) } } } }
         item { Section("Свайп вниз") { Chips(listOf(GestureAction.NOTIFICATIONS, GestureAction.DRAWER, GestureAction.SETTINGS, GestureAction.NONE), cfg.swipeDown, { it.title }) { v -> store.update { it.copy(swipeDown = v) } } } }
         item { Section("Двойное касание") { Chips(listOfNotNull(GestureAction.LOCK.takeUnless { BuildConfig.PLAY }, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.doubleTap, { it.title }) { v -> store.update { it.copy(doubleTap = v) } } } }
@@ -532,7 +596,7 @@ private fun IconPacksScreen() {
 }
 
 @Composable
-private fun LiveScreen() {
+private fun LiveScreen(targetItem: Int, onTargetConsumed: () -> Unit) {
     val ctx = LocalContext.current
     val store = LauncherApp.instance.store
     val live = LauncherApp.instance.live
@@ -551,7 +615,8 @@ private fun LiveScreen() {
             if (f != null) store.update { it.copy(tileBackgroundUri = Uri.fromFile(f).toString() + "?t=" + System.currentTimeMillis()) }
         }
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    val listState = rememberSearchListState(targetItem, onTargetConsumed)
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Счётчики уведомлений на плитках") {
             Info(if (notif) "Включено ✓ (хранится только число уведомлений, текст не читается и не сохраняется)" else "Необязательно. Дайте СуперСмарт доступ к уведомлениям, чтобы плитки и иконки показывали число новых.")
             Button(onClick = { Device.openNotificationAccess(ctx) }) { Text(if (notif) "Настройки доступа" else "Разрешить") }
@@ -591,7 +656,7 @@ private fun copyDownscaled(ctx: android.content.Context, uri: Uri): File? = try 
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DigitsScreen() {
+private fun DigitsScreen(targetItem: Int, onTargetConsumed: () -> Unit) {
     val ctx = LocalContext.current as ComponentActivity
     val store = LauncherApp.instance.store
     val cfg by store.config.collectAsStateCompat()
@@ -603,7 +668,8 @@ private fun DigitsScreen() {
         waitingForPermission = false
         if (android.provider.Settings.canDrawOverlays(ctx)) store.update { it.copy(digitOverlay = true) }
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    val listState = rememberSearchListState(targetItem, onTargetConsumed)
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Показ") {
             SwitchRow("Показывать цифры", cfg.digitOverlay) { on ->
                 if (!on) {
@@ -663,11 +729,12 @@ private fun DigitsScreen() {
 }
 
 @Composable
-private fun SystemScreen() {
+private fun SystemScreen(targetItem: Int, onTargetConsumed: () -> Unit) {
     val ctx = LocalContext.current
     val spec by LauncherApp.instance.store.theme.collectAsStateCompat()
     val scope = rememberCoroutineScope()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    val listState = rememberSearchListState(targetItem, onTargetConsumed)
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Честно о системном шрифте") {
             Info("Android не даёт обычным приложениям менять шрифт всей системы — для этого нужен root или фирменный магазин тем производителя. Поэтому СуперСмарт меняет шрифты везде, где рисует сам: часы, подписи, меню, виджеты и плитки.")
             Info("Кнопка ниже откроет экран шрифтов вашего телефона (${Device.oemName()}), если производитель его сделал; иначе — настройки экрана.")
@@ -691,14 +758,15 @@ private fun SystemScreen() {
 }
 
 @Composable
-private fun HomeScreenSettings() {
+private fun HomeScreenSettings(targetItem: Int, onTargetConsumed: () -> Unit) {
     val launcher = LauncherApp.instance
     val store = launcher.store
     val cfg by store.config.collectAsStateCompat()
     val spec by store.theme.collectAsStateCompat()
     val installedApps by launcher.apps.apps.collectAsStateCompat()
     val own = cfg.hasOwnLayout(spec.id)
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    val listState = rememberSearchListState(targetItem, onTargetConsumed)
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Главный экран без меню приложений") {
             SwitchRow("Все приложения на главном экране", cfg.allAppsOnHome) { enabled ->
                 val keys = installedApps.filter { it.key !in cfg.hidden }.map { it.key }.distinct()
@@ -864,7 +932,7 @@ private fun SortIntoFoldersButton(themeId: String, installedApps: List<AppInfo>)
 }
 
 @Composable
-private fun SmoothScreen() {
+private fun SmoothScreen(targetItem: Int, onTargetConsumed: () -> Unit) {
     val ctx = LocalContext.current as ComponentActivity
     val store = LauncherApp.instance.store
     val cfg by store.config.collectAsStateCompat()
@@ -872,7 +940,8 @@ private fun SmoothScreen() {
     val maxHz = remember { Device.maxRefreshRate(ctx.window).toInt() }
     val ignoring = remember(tick) { Device.isIgnoringBatteryOptimizations(ctx) }
     val anim = remember(tick) { Device.animationsEnabled() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    val listState = rememberSearchListState(targetItem, onTargetConsumed)
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Частота экрана") {
             val activeHz = remember(tick) { Device.activeRefreshRate(ctx.window) }
             var taps by remember { mutableIntStateOf(0) }
