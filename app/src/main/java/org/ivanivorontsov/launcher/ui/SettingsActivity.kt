@@ -176,6 +176,9 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { back() }.padding(horizontal = 14.dp))
             Text(screen.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (screen != Screen.SEARCH) {
+                TextButton(onClick = { screen = Screen.SEARCH }) { Text("Поиск") }
+            }
         }
         Box(Modifier.weight(1f).navigationBarsPadding()) {
             when (screen) {
@@ -224,33 +227,55 @@ private fun MainScreen(go: (Screen) -> Unit) {
     val tick = SettingsActivity.resumeTick
     val isDefault = remember(tick) { Device.isDefaultLauncher(ctx) }
     val spec by LauncherApp.instance.store.theme.collectAsStateCompat()
+    var query by remember { mutableStateOf("") }
+    val results = remember(query) { findSettingResults(query) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item {
-            Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)).padding(16.dp)) {
-                Text(if (isDefault) "СуперСмарт — ваш лаунчер ✓" else "Сделайте СуперСмарт лаунчером по умолчанию", style = MaterialTheme.typography.titleMedium)
-                Info(if (isDefault) "Ярлыки приложений, жесты и кнопка «Домой» работают." else "Тогда кнопка «Домой» откроет СуперСмарт, и заработают ярлыки приложений по долгому нажатию.")
-                if (!isDefault) Button(onClick = { Device.openDefaultLauncherChooser(ctx) }) { Text("Выбрать СуперСмарт") }
-            }
+            androidx.compose.material3.OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                label = { Text("Поиск настроек") },
+                placeholder = { Text("Например: жесты, шрифт, частота экрана") },
+                singleLine = true,
+            )
         }
-        item {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Presets.all.take(8).forEach { t -> ThemePreview(t, t.id == spec.id, Modifier.width(118.dp)) { LauncherApp.instance.store.setTheme(t) } }
+        if (query.isNotBlank()) {
+            if (results.isEmpty()) {
+                item { Info("Ничего не найдено. Попробуйте другое слово.") }
+            } else {
+                items(results, key = { it.screen.name }) { entry ->
+                    NavRow(entry.title, entry.subtitle) { go(entry.screen) }
+                }
             }
+        } else {
+            item {
+                Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)).padding(16.dp)) {
+                    Text(if (isDefault) "СуперСмарт — ваш лаунчер ✓" else "Сделайте СуперСмарт лаунчером по умолчанию", style = MaterialTheme.typography.titleMedium)
+                    Info(if (isDefault) "Ярлыки приложений, жесты и кнопка «Домой» работают." else "Тогда кнопка «Домой» откроет СуперСмарт, и заработают ярлыки приложений по долгому нажатию.")
+                    if (!isDefault) Button(onClick = { Device.openDefaultLauncherChooser(ctx) }) { Text("Выбрать СуперСмарт") }
+                }
+            }
+            item {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Presets.all.take(8).forEach { t -> ThemePreview(t, t.id == spec.id, Modifier.width(118.dp)) { LauncherApp.instance.store.setTheme(t) } }
+                }
+            }
+            item { NavRow("Все темы", "${Presets.all.size} готовых тем с живым предпросмотром") { go(Screen.THEMES) } }
+            item { NavRow("Главный экран", "Перетаскивание и папки, эффекты перелистывания, новые приложения, анимация возврата к иконке") { go(Screen.HOME) } }
+            if (!BuildConfig.PLAY) item { NavRow("Стоп-экран", "Лимит экранного времени, расписание, запрещённые приложения, пароль") { ctx.startActivity(android.content.Intent(ctx, org.ivanivorontsov.launcher.stop.StopActivity::class.java)) } }
+            item { NavRow("Свой стиль", "Шрифты, цвета, форма иконок, сетка, анимации, обои") { go(Screen.EDITOR) } }
+            item { NavRow("Шрифты", "${org.ivanivorontsov.launcher.ui.FontCatalog.all.size} шрифтов с кириллицей, в том числе рукописные") { go(Screen.FONTS) } }
+            item { NavRow("Системный шрифт и обои", "Что можно поменять во всём телефоне") { go(Screen.SYSTEM) } }
+            item { NavRow("Жесты", if (BuildConfig.PLAY) "Свайпы и двойное касание" else "Свайпы, двойное касание для блокировки") { go(Screen.GESTURES) } }
+            item { NavRow("Живые плитки и разрешения", "Фото, календарь, счётчики уведомлений") { go(Screen.LIVE) } }
+            if (!BuildConfig.PLAY) item { NavRow("Цифры поверх приложений", "Крупный чёрный счётчик времени. Выключен, пока сами не включите") { go(Screen.DIGITS) } }
+            item { NavRow("Скрытые приложения") { go(Screen.HIDDEN) } }
+            item { NavRow("Набор иконок") { go(Screen.ICONS) } }
+            item { NavRow("Плавность и батарея", "Частота экрана, фоновая работа (${Device.oemName()})") { go(Screen.SMOOTH) } }
+            item { NavRow("О приложении", "Версия ${BuildConfig.VERSION_NAME}, лицензии") { go(Screen.ABOUT) } }
+            item { NavRow("Лицензии", "Шрифты и библиотеки с полными текстами лицензий") { go(Screen.LICENSES) } }
         }
-        item { NavRow("Все темы", "${Presets.all.size} готовых тем с живым предпросмотром") { go(Screen.THEMES) } }
-        item { NavRow("Главный экран", "Перетаскивание и папки, эффекты перелистывания, новые приложения, анимация возврата к иконке") { go(Screen.HOME) } }
-        if (!BuildConfig.PLAY) item { NavRow("Стоп-экран", "Лимит экранного времени, расписание, запрещённые приложения, пароль") { ctx.startActivity(android.content.Intent(ctx, org.ivanivorontsov.launcher.stop.StopActivity::class.java)) } }
-        item { NavRow("Свой стиль", "Шрифты, цвета, форма иконок, сетка, анимации, обои") { go(Screen.EDITOR) } }
-        item { NavRow("Шрифты", "${org.ivanivorontsov.launcher.ui.FontCatalog.all.size} шрифтов с кириллицей, в том числе рукописные") { go(Screen.FONTS) } }
-        item { NavRow("Системный шрифт и обои", "Что можно поменять во всём телефоне") { go(Screen.SYSTEM) } }
-        item { NavRow("Жесты", if (BuildConfig.PLAY) "Свайпы и двойное касание" else "Свайпы, двойное касание для блокировки") { go(Screen.GESTURES) } }
-        item { NavRow("Живые плитки и разрешения", "Фото, календарь, счётчики уведомлений") { go(Screen.LIVE) } }
-        if (!BuildConfig.PLAY) item { NavRow("Цифры поверх приложений", "Крупный чёрный счётчик времени. Выключен, пока сами не включите") { go(Screen.DIGITS) } }
-        item { NavRow("Скрытые приложения") { go(Screen.HIDDEN) } }
-        item { NavRow("Набор иконок") { go(Screen.ICONS) } }
-        item { NavRow("Плавность и батарея", "Частота экрана, фоновая работа (${Device.oemName()})") { go(Screen.SMOOTH) } }
-        item { NavRow("О приложении", "Версия ${BuildConfig.VERSION_NAME}, лицензии") { go(Screen.ABOUT) } }
-        item { NavRow("Лицензии", "Шрифты и библиотеки с полными текстами лицензий") { go(Screen.LICENSES) } }
     }
 }
 
@@ -260,6 +285,16 @@ private data class SettingSearchEntry(
     val keywords: String,
     val screen: Screen,
 )
+
+private fun findSettingResults(query: String): List<SettingSearchEntry> {
+    val words = query.trim().lowercase().replace('ё', 'е')
+        .split(Regex("\\s+")).filter { it.isNotBlank() }
+    if (words.isEmpty()) return emptyList()
+    return settingSearchEntries.filter { entry ->
+        val haystack = "${entry.title} ${entry.subtitle} ${entry.keywords}".lowercase().replace('ё', 'е')
+        words.all { haystack.contains(it) }
+    }
+}
 
 private val settingSearchEntries = listOf(
     SettingSearchEntry("Главный экран", "Виджеты, папки, новые приложения, сетка и анимации", "домой рабочий стол иконки приложения папки виджеты часы сегодня страницы док автодобавление перемещение перелистывание возврат скорость", Screen.HOME),
@@ -280,14 +315,7 @@ private val settingSearchEntries = listOf(
 @Composable
 private fun SearchSettingsScreen(go: (Screen) -> Unit) {
     var query by remember { mutableStateOf("") }
-    val results = remember(query) {
-        val normalized = query.trim().lowercase().replace('ё', 'е')
-        val words = normalized.split(Regex("\\s+")).filter { it.isNotBlank() }
-        settingSearchEntries.filter { entry ->
-            val haystack = "${entry.title} ${entry.subtitle} ${entry.keywords}".lowercase().replace('ё', 'е')
-            words.all { haystack.contains(it) }
-        }
-    }
+    val results = remember(query) { findSettingResults(query) }
     Column(Modifier.fillMaxSize()) {
         androidx.compose.material3.OutlinedTextField(
             value = query,
