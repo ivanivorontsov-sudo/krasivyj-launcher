@@ -2,7 +2,7 @@ name: Build signed APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/1.4.7]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -24,14 +24,22 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Version from tag / run number
+      - name: Version from tag / release branch / run number
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+            VERSION_NAME="${GITHUB_REF_NAME#v}"
+            IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION_NAME"
+            MAJOR=${MAJOR:-0}; MINOR=${MINOR:-0}; PATCH=${PATCH:-0}
+            VERSION_CODE=$((MAJOR * 1000 + MINOR * 100 + PATCH * 10))
+          elif [[ "$GITHUB_REF" == "refs/heads/release/1.4.7" ]]; then
+            VERSION_NAME=1.4.7
+            VERSION_CODE=1470
           else
-            echo "VERSION_NAME=1.0.${GITHUB_RUN_NUMBER}-ci" >> "$GITHUB_ENV"
+            VERSION_NAME=1.0.${GITHUB_RUN_NUMBER}-ci
+            VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))
           fi
-          echo "VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
 
       - name: Restore release keystore (dedicated key, never debug)
         if: github.event_name != 'pull_request'
@@ -44,29 +52,40 @@ jobs:
           echo "SIGNING_STORE_FILE=keystore/uyut-upload.jks" >> "$GITHUB_ENV"
 
       - name: Unit tests
-        run: ./gradlew --stacktrace testDebugUnitTest
+        run: |
+          if [[ "$GITHUB_REF" == "refs/heads/release/1.4.7" || "$GITHUB_REF" == refs/tags/v* ]]; then
+            ./gradlew --stacktrace testFullDebugUnitTest
+          else
+            ./gradlew --stacktrace testDebugUnitTest
+          fi
 
-      - name: Assemble signed release
+      - name: Assemble signed release APKs
         if: github.event_name != 'pull_request'
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
-          ./gradlew --stacktrace assembleRelease
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk "dist/uyut-launcher-${VERSION_NAME}.apk"
+          if [[ "$GITHUB_REF" == "refs/heads/release/1.4.7" || "$GITHUB_REF" == refs/tags/v* ]]; then
+            ./gradlew --stacktrace assembleFullRelease assembleNowisdomRelease assembleLightRelease
+            cp app/build/outputs/apk/full/release/app-full-release.apk "dist/SuperSmart-${VERSION_NAME}-full.apk"
+            cp app/build/outputs/apk/nowisdom/release/app-nowisdom-release.apk "dist/SuperSmart-${VERSION_NAME}-bez-mudrosti.apk"
+            cp app/build/outputs/apk/light/release/app-light-release.apk "dist/SuperSmart-${VERSION_NAME}-legkij.apk"
+          else
+            ./gradlew --stacktrace assembleRelease
+            cp app/build/outputs/apk/release/app-release.apk "dist/uyut-launcher-${VERSION_NAME}.apk"
+          fi
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          "$BT/apksigner" verify --print-certs "dist/uyut-launcher-${VERSION_NAME}.apk" | tee dist/signature.txt
-          ls -l dist
+          for APK in dist/*.apk; do
+            "$BT/apksigner" verify --print-certs "$APK" | tee "$APK.signature.txt"
+            grep -i "SHA-256 digest: 73b837775d17eb48ca098de362d1dc1bc529ec351f82e67999444425868bce35" "$APK.signature.txt" \
+              || { echo "::error::APK is not signed with the dedicated release key: $APK"; exit 1; }
+          done
+          (cd dist && sha256sum ./*.apk > SHA256SUMS)
+          ls -lh dist
 
-      - name: Check signing certificate
-        if: github.event_name != 'pull_request'
-        run: |
-          grep -i "SHA-256 digest: 73b837775d17eb48ca098de362d1dc1bc529ec351f82e67999444425868bce35" dist/signature.txt \
-            || { echo "::error::APK is not signed with the dedicated release key"; exit 1; }
-
-      # Always keep a directly downloadable APK on the latest release, even if Actions artifact storage is full.
+      # Keep the latest main-branch build directly downloadable.
       - name: Publish latest Android APK
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -79,7 +98,6 @@ jobs:
             gh release create latest "$APK" --title "Уют — последняя сборка" --notes "Последний подписанный APK лаунчера Уют. Собран GitHub Actions из main."
           fi
 
-      # Artifact storage quota is exhausted until 2026-11-01: never fail the build because of it.
       - name: Upload artifact (best effort)
         if: github.event_name != 'pull_request'
         continue-on-error: true
@@ -89,14 +107,26 @@ jobs:
           path: dist/*.apk
           retention-days: 7
 
-      - name: Publish GitHub Release
+      - name: Publish GitHub Release from tag
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          APK="dist/uyut-launcher-${VERSION_NAME}.apk"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "$APK" --clobber
+            gh release upload "$GITHUB_REF_NAME" dist/*.apk dist/SHA256SUMS --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "$APK" --title "Уют ${VERSION_NAME}" --notes-file RELEASE_NOTES.md
+            gh release create "$GITHUB_REF_NAME" dist/*.apk dist/SHA256SUMS --title "СуперСмарт ${VERSION_NAME}" --notes-file RELEASE_NOTES.md
+          fi
+
+      # The release branch is used once to produce v1.4.7 from the last published source.
+      - name: Publish v1.4.7 from release branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/release/1.4.7'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=v1.4.7
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.apk dist/SHA256SUMS --clobber
+          else
+            gh release create "$TAG" dist/*.apk dist/SHA256SUMS --title "СуперСмарт 1.4.7" --notes-file RELEASE_NOTES.md --target "$GITHUB_SHA"
           fi
