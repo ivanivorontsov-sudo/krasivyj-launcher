@@ -190,7 +190,7 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
         }
         Box(Modifier.weight(1f).navigationBarsPadding()) {
             when (screen) {
-                Screen.MAIN -> MainScreen(openSearchResult)
+                Screen.MAIN -> MainScreen(goToScreen = { screen = it }, openSetting = openSearchResult)
                 Screen.SEARCH -> SearchSettingsScreen(openSearchResult)
                 Screen.HOME -> HomeScreenSettings(pendingSearchItem, consumeSearchItem)
                 Screen.THEMES -> ThemesScreen { screen = Screen.EDITOR }
@@ -242,7 +242,7 @@ private fun NavRow(title: String, subtitle: String? = null, onClick: () -> Unit)
 private fun Info(text: String) = Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f), modifier = Modifier.padding(vertical = 4.dp))
 
 @Composable
-private fun MainScreen(go: (SettingSearchEntry) -> Unit) {
+private fun MainScreen(goToScreen: (Screen) -> Unit, openSetting: (SettingSearchEntry) -> Unit) {
     val ctx = LocalContext.current as ComponentActivity
     val tick = SettingsActivity.resumeTick
     val isDefault = remember(tick) { Device.isDefaultLauncher(ctx) }
@@ -265,7 +265,7 @@ private fun MainScreen(go: (SettingSearchEntry) -> Unit) {
                 item { Info("Ничего не найдено. Попробуйте другое слово.") }
             } else {
                 items(results, key = { "${it.screen.name}:${it.itemIndex}:${it.title}" }) { entry ->
-                    NavRow(entry.title, entry.subtitle) { go(entry) }
+                    NavRow(entry.title, entry.subtitle) { openSetting(entry) }
                 }
             }
         } else {
@@ -281,20 +281,20 @@ private fun MainScreen(go: (SettingSearchEntry) -> Unit) {
                     Presets.all.take(8).forEach { t -> ThemePreview(t, t.id == spec.id, Modifier.width(118.dp)) { LauncherApp.instance.store.setTheme(t) } }
                 }
             }
-            item { NavRow("Все темы", "${Presets.all.size} готовых тем с живым предпросмотром") { go(Screen.THEMES) } }
-            item { NavRow("Главный экран", "Перетаскивание и папки, эффекты перелистывания, новые приложения, анимация возврата к иконке") { go(Screen.HOME) } }
+            item { NavRow("Все темы", "${Presets.all.size} готовых тем с живым предпросмотром") { goToScreen(Screen.THEMES) } }
+            item { NavRow("Главный экран", "Перетаскивание и папки, эффекты перелистывания, новые приложения, анимация возврата к иконке") { goToScreen(Screen.HOME) } }
             if (!BuildConfig.PLAY) item { NavRow("Стоп-экран", "Лимит экранного времени, расписание, запрещённые приложения, пароль") { ctx.startActivity(android.content.Intent(ctx, org.ivanivorontsov.launcher.stop.StopActivity::class.java)) } }
-            item { NavRow("Свой стиль", "Шрифты, цвета, форма иконок, сетка, анимации, обои") { go(Screen.EDITOR) } }
-            item { NavRow("Шрифты", "${org.ivanivorontsov.launcher.ui.FontCatalog.all.size} шрифтов с кириллицей, в том числе рукописные") { go(Screen.FONTS) } }
-            item { NavRow("Системный шрифт и обои", "Что можно поменять во всём телефоне") { go(Screen.SYSTEM) } }
-            item { NavRow("Жесты", if (BuildConfig.PLAY) "Свайпы и двойное касание" else "Свайпы, двойное касание для блокировки") { go(Screen.GESTURES) } }
-            item { NavRow("Живые плитки и разрешения", "Фото, календарь, счётчики уведомлений") { go(Screen.LIVE) } }
-            if (!BuildConfig.PLAY) item { NavRow("Цифры поверх приложений", "Крупный чёрный счётчик времени. Выключен, пока сами не включите") { go(Screen.DIGITS) } }
-            item { NavRow("Скрытые приложения") { go(Screen.HIDDEN) } }
-            item { NavRow("Набор иконок") { go(Screen.ICONS) } }
-            item { NavRow("Плавность и батарея", "Частота экрана, фоновая работа (${Device.oemName()})") { go(Screen.SMOOTH) } }
-            item { NavRow("О приложении", "Версия ${BuildConfig.VERSION_NAME}, лицензии") { go(Screen.ABOUT) } }
-            item { NavRow("Лицензии", "Шрифты и библиотеки с полными текстами лицензий") { go(Screen.LICENSES) } }
+            item { NavRow("Свой стиль", "Шрифты, цвета, форма иконок, сетка, анимации, обои") { goToScreen(Screen.EDITOR) } }
+            item { NavRow("Шрифты", "${org.ivanivorontsov.launcher.ui.FontCatalog.all.size} шрифтов с кириллицей, в том числе рукописные") { goToScreen(Screen.FONTS) } }
+            item { NavRow("Системный шрифт и обои", "Что можно поменять во всём телефоне") { goToScreen(Screen.SYSTEM) } }
+            item { NavRow("Жесты", if (BuildConfig.PLAY) "Свайпы и двойное касание" else "Свайпы, двойное касание для блокировки") { goToScreen(Screen.GESTURES) } }
+            item { NavRow("Живые плитки и разрешения", "Фото, календарь, счётчики уведомлений") { goToScreen(Screen.LIVE) } }
+            if (!BuildConfig.PLAY) item { NavRow("Цифры поверх приложений", "Крупный чёрный счётчик времени. Выключен, пока сами не включите") { goToScreen(Screen.DIGITS) } }
+            item { NavRow("Скрытые приложения") { goToScreen(Screen.HIDDEN) } }
+            item { NavRow("Набор иконок") { goToScreen(Screen.ICONS) } }
+            item { NavRow("Плавность и батарея", "Частота экрана, фоновая работа (${Device.oemName()})") { goToScreen(Screen.SMOOTH) } }
+            item { NavRow("О приложении", "Версия ${BuildConfig.VERSION_NAME}, лицензии") { goToScreen(Screen.ABOUT) } }
+            item { NavRow("Лицензии", "Шрифты и библиотеки с полными текстами лицензий") { goToScreen(Screen.LICENSES) } }
         }
     }
 }
