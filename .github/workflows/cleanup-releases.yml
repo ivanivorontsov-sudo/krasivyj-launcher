@@ -27,3 +27,15 @@ jobs:
             esac
             gh release delete "$tag" --yes --cleanup-tag
           done < <(gh release list --limit 100 --json tagName --jq '.[].tagName')
+
+          latest_asset="$(gh release view latest --json assets --jq '.assets[].name' | grep -E '^uyut-launcher-.*\.apk$' | sort -V | tail -n 1)"
+          if [ -z "$latest_asset" ]; then
+            echo "::error::No APK found in the latest updater release"
+            exit 1
+          fi
+          while IFS= read -r asset; do
+            [ -z "$asset" ] && continue
+            [ "$asset" = "$latest_asset" ] && continue
+            gh release delete-asset latest "$asset" --yes
+          done < <(gh release view latest --json assets --jq '.assets[].name')
+          echo "Preserved current updater APK: $latest_asset"
