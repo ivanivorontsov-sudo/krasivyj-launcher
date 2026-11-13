@@ -313,9 +313,9 @@ private fun findSettingResults(query: String): List<SettingSearchEntry> {
         .split(Regex("\\s+")).filter { it.isNotBlank() }
     if (words.isEmpty()) return emptyList()
     return settingSearchEntries.filter { entry ->
-        val haystack = "\${entry.title} \${entry.subtitle} \${entry.keywords}".lowercase().replace('ё', 'е')
+        val haystack = "${entry.title} ${entry.subtitle} ${entry.keywords}".lowercase().replace('ё', 'е')
         words.all { haystack.contains(it) }
-    }.distinctBy { "\${it.screen.name}:\${it.itemIndex}:\${it.title}" }
+    }.distinctBy { "${it.screen.name}:${it.itemIndex}:${it.title}" }
 }
 
 private val settingSearchEntries = buildList {
