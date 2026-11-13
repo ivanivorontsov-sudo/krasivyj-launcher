@@ -154,12 +154,13 @@ class SettingsActivity : ComponentActivity() {
 
 private enum class Screen(val title: String) {
     MAIN("СуперСмарт"), HOME("Главный экран"), THEMES("Темы"), EDITOR("Свой стиль"), FONTS("Шрифты"), GESTURES("Жесты"), HIDDEN("Скрытые приложения"),
-    ICONS("Набор иконок"), LIVE("Живые плитки и разрешения"), DIGITS("Цифры поверх приложений"), SYSTEM("Системный шрифт и обои"), SMOOTH("Плавность и батарея"), ABOUT("О приложении"), LICENSES("Лицензии")
+    ICONS("Набор иконок"), LIVE("Живые плитки и разрешения"), DIGITS("Цифры поверх приложений"), SYSTEM("Системный шрифт и обои"), SMOOTH("Плавность и батарея"), ABOUT("О приложении"), LICENSES("Лицензии"),
+    SEARCH("Поиск настроек")
 }
 
 @Composable
 private fun SettingsRoot(start: String?, close: () -> Unit) {
-    var screen by remember { mutableStateOf(when (start) { "themes" -> Screen.THEMES; "home" -> Screen.HOME; else -> Screen.MAIN }) }
+    var screen by remember { mutableStateOf(when (start) { "themes" -> Screen.THEMES; "home" -> Screen.HOME; "search" -> Screen.SEARCH; else -> Screen.MAIN }) }
     var fontTarget by remember { mutableStateOf("all") }
     var licText by remember { mutableStateOf<String?>(null) }
     val back: () -> Unit = {
@@ -179,6 +180,7 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
         Box(Modifier.weight(1f).navigationBarsPadding()) {
             when (screen) {
                 Screen.MAIN -> MainScreen { screen = it }
+                Screen.SEARCH -> SearchSettingsScreen { screen = it }
                 Screen.HOME -> HomeScreenSettings()
                 Screen.THEMES -> ThemesScreen { screen = Screen.EDITOR }
                 Screen.EDITOR -> EditorScreen(openFonts = { fontTarget = it; screen = Screen.FONTS })
@@ -249,6 +251,61 @@ private fun MainScreen(go: (Screen) -> Unit) {
         item { NavRow("Плавность и батарея", "Частота экрана, фоновая работа (${Device.oemName()})") { go(Screen.SMOOTH) } }
         item { NavRow("О приложении", "Версия ${BuildConfig.VERSION_NAME}, лицензии") { go(Screen.ABOUT) } }
         item { NavRow("Лицензии", "Шрифты и библиотеки с полными текстами лицензий") { go(Screen.LICENSES) } }
+    }
+}
+
+private data class SettingSearchEntry(
+    val title: String,
+    val subtitle: String,
+    val keywords: String,
+    val screen: Screen,
+)
+
+private val settingSearchEntries = listOf(
+    SettingSearchEntry("Главный экран", "Виджеты, папки, новые приложения, сетка и анимации", "домой рабочий стол иконки приложения папки виджеты часы сегодня страницы док автодобавление перемещение перелистывание возврат скорость", Screen.HOME),
+    SettingSearchEntry("Темы и обои", "Готовые темы и оформление", "тема темы стиль обои фон цвет оформление", Screen.THEMES),
+    SettingSearchEntry("Свой стиль", "Макет, цвета, шрифты, иконки, плитки и эффекты", "макет сетка столбцы ряды док плитки прозрачность акцент тёмная светлая blur размытие иконки размер подписи скругление анимация движение", Screen.EDITOR),
+    SettingSearchEntry("Шрифты", "Шрифты часов, заголовков и текста", "шрифт шрифты буквы кириллица часы заголовки текст начертание", Screen.FONTS),
+    SettingSearchEntry("Жесты", "Свайпы, двойное касание и действия", "свайп вверх вниз двойное касание блокировка поиск приложения уведомления шторка жест", Screen.GESTURES),
+    SettingSearchEntry("Скрытые приложения", "Показать или скрыть приложения", "скрыть скрытые показывать приложение список меню невидимые", Screen.HIDDEN),
+    SettingSearchEntry("Набор иконок", "Пакеты значков приложений", "иконки значки набор пак пакет icon pack", Screen.ICONS),
+    SettingSearchEntry("Живые плитки и разрешения", "Фото, календарь и счётчики уведомлений", "плитка живые фото календарь уведомления разрешение доступ счетчик", Screen.LIVE),
+    SettingSearchEntry("Цифры поверх приложений", "Экранное время и часы поверх окон", "цифры экранное время поверх приложений оверлей таймер часы", Screen.DIGITS),
+    SettingSearchEntry("Системный шрифт и обои", "Настройки оформления всего телефона", "системный шрифт телефон обои экрана блокировки material you", Screen.SYSTEM),
+    SettingSearchEntry("Плавность и батарея", "Частота обновления и фоновая работа", "плавность батарея герц гц 144 120 90 60 частота обновления экран фон энергосбережение", Screen.SMOOTH),
+    SettingSearchEntry("О приложении", "Версия и сведения о СуперСмарт", "версия обновление о программе приложение информация", Screen.ABOUT),
+    SettingSearchEntry("Лицензии", "Открытые библиотеки и шрифты", "лицензия лицензии библиотеки open source шрифты", Screen.LICENSES),
+)
+
+@Composable
+private fun SearchSettingsScreen(go: (Screen) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val results = remember(query) {
+        val normalized = query.trim().lowercase().replace('ё', 'е')
+        val words = normalized.split(Regex("\\s+")).filter { it.isNotBlank() }
+        settingSearchEntries.filter { entry ->
+            val haystack = "${entry.title} ${entry.subtitle} ${entry.keywords}".lowercase().replace('ё', 'е')
+            words.all { haystack.contains(it) }
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        androidx.compose.material3.OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            label = { Text("Найти настройку") },
+            placeholder = { Text("Например: жесты, частота экрана, шрифт") },
+            singleLine = true,
+        )
+        if (results.isEmpty()) {
+            Info("Ничего не найдено. Попробуйте другое слово.")
+        } else {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+                items(results, key = { it.screen.name }) { entry ->
+                    NavRow(entry.title, entry.subtitle) { go(entry.screen) }
+                }
+            }
+        }
     }
 }
 
