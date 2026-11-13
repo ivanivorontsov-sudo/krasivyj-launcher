@@ -264,7 +264,7 @@ private fun MainScreen(go: (SettingSearchEntry) -> Unit) {
             if (results.isEmpty()) {
                 item { Info("Ничего не найдено. Попробуйте другое слово.") }
             } else {
-                items(results, key = { it.screen.name }) { entry ->
+                items(results, key = { "${it.screen.name}:${it.itemIndex}:${it.title}" }) { entry ->
                     NavRow(entry.title, entry.subtitle) { go(entry) }
                 }
             }
