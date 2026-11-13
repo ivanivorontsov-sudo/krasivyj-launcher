@@ -296,7 +296,9 @@ fun LauncherRoot(ui: UiState) {
                     HomeLayout.TILES -> TilesHome(ui, config, layout, byKey, visibleApps, wall)
                 }
             }
-            if (spec.layout != HomeLayout.TILES && !config.allAppsOnHome) DrawerLayer(ui, visibleApps, config, wall)
+            // Keep the search drawer available in every home layout, including TILES.
+            // It remains translated off-screen while closed and is opened by the existing drawer/search gestures.
+            DrawerLayer(ui, visibleApps, config, wall)
 
             OverlayEffect(spec.overlay)
             FolderOverlay(ui, layout)
