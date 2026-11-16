@@ -24,7 +24,7 @@ jobs:
           gh release list --limit 100 --json tagName,name,publishedAt \
             --jq '.[] | [.tagName, (.name // ""), (.publishedAt // "")] | @tsv'
 
-          latest_asset="$(gh release view latest --json assets --jq '.assets[].name' | grep -E '^uyut-launcher-.*\\.apk$' | sort -V | tail -n 1 || true)"
+          latest_asset="$(gh release view latest --json assets --jq '.assets[].name' | grep -E '^uyut-launcher-.*\.apk$' | sort -V | tail -n 1 || true)"
           if [[ -z "$latest_asset" ]]; then
             echo "::error::В релизе latest не найден APK лаунчера"
             exit 1
