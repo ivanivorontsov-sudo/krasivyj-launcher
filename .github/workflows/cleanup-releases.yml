@@ -1,4 +1,4 @@
-name: Clean superseded releases
+name: Release integrity audit
 
 on:
   push:
@@ -8,34 +8,27 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  cleanup:
+  audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Keep the current SuperSmart release and updater alias
+      - name: Audit release inventory without modifying releases
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          while IFS= read -r tag; do
-            [ -z "$tag" ] && continue
-            case "$tag" in
-              v1.4.7|latest) continue ;;
-            esac
-            gh release delete "$tag" --yes --cleanup-tag
-          done < <(gh release list --limit 100 --json tagName --jq '.[].tagName')
+          set -Eeuo pipefail
+          echo "Опубликованные релизы (ничего не удаляется):"
+          gh release list --limit 100 --json tagName,name,publishedAt \
+            --jq '.[] | [.tagName, (.name // ""), (.publishedAt // "")] | @tsv'
 
-          latest_asset="$(gh release view latest --json assets --jq '.assets[].name' | grep -E '^uyut-launcher-.*\.apk$' | sort -V | tail -n 1)"
-          if [ -z "$latest_asset" ]; then
-            echo "::error::No APK found in the latest updater release"
+          latest_asset="$(gh release view latest --json assets --jq '.assets[].name' | grep -E '^uyut-launcher-.*\\.apk$' | sort -V | tail -n 1 || true)"
+          if [[ -z "$latest_asset" ]]; then
+            echo "::error::В релизе latest не найден APK лаунчера"
             exit 1
           fi
-          while IFS= read -r asset; do
-            [ -z "$asset" ] && continue
-            [ "$asset" = "$latest_asset" ] && continue
-            gh release delete-asset latest "$asset" --yes
-          done < <(gh release view latest --json assets --jq '.assets[].name')
-          echo "Preserved current updater APK: $latest_asset"
+
+          echo "Проверен APK в latest: $latest_asset"
+          echo "Режим только для чтения: релизы, теги и файлы не изменяются."
