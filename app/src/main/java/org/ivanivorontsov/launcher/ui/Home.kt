@@ -429,7 +429,19 @@ private fun AppPage(ui: UiState, keys: List<String>, layout: ScreenLayout, byKey
                     else {
                         // Column centre relative to the page centre: the cylinder/wave bends each column separately.
                         val cx = insetPx + col * cw + cw / 2f - pageW / 2f
-                        p.placeWithLayer(x, y) { itemPageLayer(fx, cx, 0f, pageW, c.maxHeight.toFloat()) }
+                        // Sort cylinder columns by their depth, not by their original grid order.
+                        // This prevents rear-facing columns from being drawn over the front of the drum.
+                        val pos = fx.pager.currentPage + fx.pager.currentPageOffsetFraction
+                        val bend = if (fx.effect == org.ivanivorontsov.launcher.core.PageEffect.CYLINDER) {
+                            val f = kotlin.math.abs(pos - pos.roundToInt())
+                            val t = (f * 4f).coerceIn(0f, 1f)
+                            t * t * (3f - 2f * t)
+                        } else 0f
+                        val theta = if (bend > 0.001f) (cx + (fx.page - pos) * pageW) * (2f * bend / pageW) else 0f
+                        val depthOrder = if (bend > 0.001f) kotlin.math.cos(theta) else 0f
+                        p.placeWithLayer(x, y, zIndex = depthOrder) {
+                            itemPageLayer(fx, cx, 0f, pageW, c.maxHeight.toFloat())
+                        }
                     }
                 }
             }
