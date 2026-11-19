@@ -55,8 +55,20 @@ private fun Modifier.zIndexFor(pager: PagerState, page: Int): Modifier =
     this.then(Modifier.zIndex(-abs(page - pager.currentPage).toFloat()))
 
 private fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
-    val a = abs(o)
+    // A graphics layer is retained between frames. Reset every mutable transform before
+    // applying the current direction, otherwise STACK/FLIP/CYLINDER can leave stale
+    // translation, alpha or scale when the swipe reverses or settles.
+    translationX = 0f
+    translationY = 0f
+    scaleX = 1f
+    scaleY = 1f
+    rotationX = 0f
+    rotationY = 0f
+    rotationZ = 0f
+    alpha = 1f
+    transformOrigin = TransformOrigin.Center
     cameraDistance = 14f * density
+    val a = abs(o)
     when (effect) {
         PageEffect.CUBE -> {
             transformOrigin = TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
@@ -100,6 +112,19 @@ private fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
  * page width (px). Called from the page's placement layer block, so it only reads the scroll state at draw.
  */
 fun GraphicsLayerScope.itemPageLayer(fx: PageFx, cx: Float, cy: Float, w: Float, h: Float) {
+    // placeWithLayer reuses the same layer while the pager moves. In particular, do not
+    // return at rest with the previous frame's 3D transform still attached: that is the
+    // source of the one-way trails and the "ghost" columns after reversing a swipe.
+    translationX = 0f
+    translationY = 0f
+    scaleX = 1f
+    scaleY = 1f
+    rotationX = 0f
+    rotationY = 0f
+    rotationZ = 0f
+    alpha = 1f
+    transformOrigin = TransformOrigin.Center
+    cameraDistance = 8f * density
     val pos = fx.pager.position()
     val o = fx.page - pos
     when (fx.effect) {
