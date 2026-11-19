@@ -89,11 +89,15 @@ private fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
             scaleX = s; scaleY = s
             alpha = 1f - 0.6f * a.coerceAtMost(1f)
         }
-        PageEffect.STACK -> if (o > 0f) {
+        PageEffect.STACK -> {
+            // Keep the card stack symmetric: the pager places pages on either side of the
+            // viewport. Counteract that placement in both directions, otherwise the reverse
+            // swipe exposes an untransformed page and leaves a visual after-image.
+            val depth = a.coerceAtMost(1f)
             translationX = -o * size.width
-            val s = 1f - 0.14f * o.coerceAtMost(1f)
+            val s = 1f - 0.14f * depth
             scaleX = s; scaleY = s
-            alpha = 1f - 0.5f * o.coerceAtMost(1f)
+            alpha = 1f - 0.5f * depth
         }
         // Pages without per-item content (widgets page, tiles, text lists) get a page-level cylinder.
         PageEffect.CYLINDER -> {
