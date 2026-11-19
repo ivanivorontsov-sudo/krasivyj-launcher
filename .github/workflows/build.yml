@@ -54,9 +54,9 @@ jobs:
       - name: Unit tests
         run: |
           if [[ "$GITHUB_REF" == "refs/heads/release/1.4.8" || "$GITHUB_REF" == refs/tags/v* ]]; then
-            ./gradlew --stacktrace testFullDebugUnitTest
+            ./gradlew --stacktrace :app:testFullDebugUnitTest
           else
-            ./gradlew --stacktrace testDebugUnitTest
+            ./gradlew --stacktrace :app:testFullDebugUnitTest
           fi
 
       - name: Assemble signed release APKs
