@@ -2,7 +2,7 @@ name: Build signed APK
 
 on:
   push:
-    branches: [main, release/1.4.7]
+    branches: [main, release/1.4.8]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -31,9 +31,9 @@ jobs:
             IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION_NAME"
             MAJOR=${MAJOR:-0}; MINOR=${MINOR:-0}; PATCH=${PATCH:-0}
             VERSION_CODE=$((MAJOR * 1000 + MINOR * 100 + PATCH * 10))
-          elif [[ "$GITHUB_REF" == "refs/heads/release/1.4.7" ]]; then
-            VERSION_NAME=1.4.7
-            VERSION_CODE=1470
+          elif [[ "$GITHUB_REF" == "refs/heads/release/1.4.8" ]]; then
+            VERSION_NAME=1.4.8
+            VERSION_CODE=1480
           else
             VERSION_NAME=1.0.${GITHUB_RUN_NUMBER}-ci
             VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))
@@ -53,7 +53,7 @@ jobs:
 
       - name: Unit tests
         run: |
-          if [[ "$GITHUB_REF" == "refs/heads/release/1.4.7" || "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [[ "$GITHUB_REF" == "refs/heads/release/1.4.8" || "$GITHUB_REF" == refs/tags/v* ]]; then
             ./gradlew --stacktrace testFullDebugUnitTest
           else
             ./gradlew --stacktrace testDebugUnitTest
@@ -67,7 +67,7 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           mkdir -p dist
-          if [[ "$GITHUB_REF" == "refs/heads/release/1.4.7" || "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [[ "$GITHUB_REF" == "refs/heads/release/1.4.8" || "$GITHUB_REF" == refs/tags/v* ]]; then
             ./gradlew --stacktrace assembleFullRelease assembleNowisdomRelease assembleLightRelease
             cp app/build/outputs/apk/full/release/app-full-release.apk "dist/SuperSmart-${VERSION_NAME}-full.apk"
             cp app/build/outputs/apk/nowisdom/release/app-nowisdom-release.apk "dist/SuperSmart-${VERSION_NAME}-bez-mudrosti.apk"
@@ -118,15 +118,15 @@ jobs:
             gh release create "$GITHUB_REF_NAME" dist/*.apk dist/SHA256SUMS --title "СуперСмарт ${VERSION_NAME}" --notes-file RELEASE_NOTES.md
           fi
 
-      # The release branch is used once to produce v1.4.7 from the last published source.
-      - name: Publish v1.4.7 from release branch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/release/1.4.7'
+      # The release branch is used once to produce v1.4.8 from the last published source.
+      - name: Publish v1.4.8 from release branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/release/1.4.8'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG=v1.4.7
+          TAG=v1.4.8
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/*.apk dist/SHA256SUMS --clobber
           else
-            gh release create "$TAG" dist/*.apk dist/SHA256SUMS --title "СуперСмарт 1.4.7" --notes-file RELEASE_NOTES.md --target "$GITHUB_SHA"
+            gh release create "$TAG" dist/*.apk dist/SHA256SUMS --title "СуперСмарт 1.4.8" --notes-file RELEASE_NOTES.md --target "$GITHUB_SHA"
           fi
