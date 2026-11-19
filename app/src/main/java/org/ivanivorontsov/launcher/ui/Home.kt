@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -111,18 +112,27 @@ class WallImages(val full: ImageBitmap, val frosted: ImageBitmap, val tall: Bool
 private object WallCache {
     @Volatile var key: String? = null
     @Volatile var images: WallImages? = null
+    val epoch = MutableStateFlow(0)
+}
+
+/** Drop the cached bitmap so the next frame paints the theme that was just selected. */
+internal fun bumpWallpaperEpoch() {
+    WallCache.key = null
+    WallCache.images = null
+    WallCache.epoch.value = WallCache.epoch.value + 1
 }
 
 @Composable
 fun rememberWallpaper(spec: ThemeSpec, wPx: Int, hPx: Int, tilePhoto: String?): WallImages? {
     val ctx = LocalContext.current
+    val epoch by WallCache.epoch.collectAsStateCompat()
     val tall = spec.layout == HomeLayout.TILES && spec.tileFill == TileFill.TRANSPARENT
     val needs = Wallpapers.hasGenerated(spec) || tall
-    val key = "${spec.wallpaper}|${spec.wallpaperColors}|${spec.wallpaperDim}|${spec.id}|$wPx|$hPx|$tall|$tilePhoto|v2"
+    val key = "${spec.wallpaper}|${spec.wallpaperColors}|${spec.wallpaperDim}|${spec.id}|$wPx|$hPx|$tall|$tilePhoto|v3|$epoch"
     val cached = if (WallCache.key == key) WallCache.images else null
-    val img by produceState(cached, key, needs) {
+    val img by produceState(cached, key, needs, wPx, hPx) {
         if (!needs || wPx <= 0 || hPx <= 0) { value = null; return@produceState }
-        if (value != null) return@produceState
+        if (value != null && WallCache.key == key) return@produceState
         value = withContext(Dispatchers.Default) {
             val h = if (tall) (hPx * 1.45f).toInt() else hPx
             val file = java.io.File(ctx.cacheDir, "wall_" + Integer.toHexString(key.hashCode()) + ".jpg")
@@ -199,13 +209,27 @@ fun LauncherRoot(ui: UiState) {
                 else 1 + layout.pages(spec.columns * (spec.rows - clockRows), spec.columns * spec.rows).size + (if (dragging) 1 else 0)
             val countState = androidx.compose.runtime.rememberUpdatedState(pageCount)
             val homePager = rememberPagerState(initialPage = 1) { countState.value }
+            // One-shot. Keyed on Unit plus the flag stored on UiState, which outlives pause/resume.
+            // A later composition (pager rebuild, theme tweak) sees hasAnimatedIn and snaps to 1
+            // instead of fading the grid out and back in over the wallpaper.
+            LaunchedEffect(Unit) {
+                if (ui.hasAnimatedIn) {
+                    if (ui.enter.value != 1f) ui.enter.snapTo(1f)
+                    return@LaunchedEffect
+                }
+                ui.hasAnimatedIn = true
+                if (ui.animations) ui.enter.animateTo(1f, MotionSpecs.enter(spec.motion, true))
+                else ui.enter.snapTo(1f)
+            }
             val homeModifier = Modifier.fillMaxSize().graphicsLayer {
                 val p = ui.drawer.progress
+                val e = ui.enter.value.coerceIn(0f, 1f)
                 // 1.2: while an app folds back into its icon, the grid zooms in from 94 % (like Pixel).
+                // That zoom is not the enter fade: enter stays at 1 when coming back from an app.
                 val z = ui.homeZoom.value
-                val s = (1f - 0.06f * p) * (0.94f + 0.06f * z)
+                val s = (1f - 0.06f * p) * (0.94f + 0.06f * z) * (0.92f + 0.08f * e)
                 scaleX = s; scaleY = s
-                alpha = 1f - p
+                alpha = (1f - p) * e
             }
             Box(homeModifier.homeGestures(ui, config, hPx.toFloat(), spec.layout != HomeLayout.TILES)) {
                 when (spec.layout) {

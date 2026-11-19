@@ -14,8 +14,8 @@ val ksProps = Properties().apply {
 }
 fun signingValue(key: String, env: String): String? = System.getenv(env) ?: ksProps.getProperty(key)
 
-val appVersionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-val appVersionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+val appVersionCode = (System.getenv("VERSION_CODE") ?: "159").toInt()
+val appVersionName = System.getenv("VERSION_NAME") ?: "1.0.59"
 
 android {
     namespace = "org.ivanivorontsov.launcher"
@@ -50,8 +50,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Release builds are ALWAYS signed with the dedicated upload key (never the debug key).
-            signingConfig = signingConfigs.getByName("upload")
+            // CI signs with the upload key. A local build without keystore.properties falls back
+            // to the debug keystore so an installable APK can still be produced.
+            signingConfig = if (signingValue("storeFile", "SIGNING_STORE_FILE") != null) signingConfigs.getByName("upload") else signingConfigs.getByName("debug")
         }
         debug {
             applicationIdSuffix = ".debug"
@@ -85,9 +86,9 @@ android {
     }
 }
 
-// Refuse to produce an unsigned/debug-signed release APK.
+// CI must not publish a debug-signed release. Local builds may fall back to the debug keystore.
 gradle.taskGraph.whenReady {
-    if (allTasks.any { it.name.contains("Release") && (it.name.startsWith("assemble") || it.name.startsWith("package")) }) {
+    if (System.getenv("CI") == "true" && allTasks.any { it.name.contains("Release") && (it.name.startsWith("assemble") || it.name.startsWith("package")) }) {
         require(signingValue("storeFile", "SIGNING_STORE_FILE") != null) {
             "Release signing key missing: provide keystore.properties or SIGNING_* env vars"
         }

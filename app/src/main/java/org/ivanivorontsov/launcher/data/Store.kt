@@ -29,6 +29,9 @@ class Store(context: Context) {
     val custom: StateFlow<ThemeSpec?> = _custom
     private val _config = MutableStateFlow(ConfigCodec.decode(prefs.getString(K_CONFIG, null)))
     val config: StateFlow<LauncherConfig> = _config
+    /** Raw pref text last applied to memory, so resume can skip a JSON decode of an unchanged theme. */
+    private var seenTheme: String? = prefs.getString(K_THEME, null)
+    private var seenCustom: String? = prefs.getString(K_CUSTOM, null)
 
     init {
         scope.launch { _config.drop(1).debounce(350).collect { prefs.edit().putString(K_CONFIG, ConfigCodec.encode(it)).apply() } }
@@ -38,15 +41,20 @@ class Store(context: Context) {
     // write runs, and must never reload an older theme after SettingsActivity closes.
     fun setTheme(t: ThemeSpec) {
         val s = t.sanitized()
-        prefs.edit().putString(K_THEME, ThemeCodec.encode(s)).apply()
+        val encoded = ThemeCodec.encode(s)
+        seenTheme = encoded
+        prefs.edit().putString(K_THEME, encoded).apply()
         _theme.value = s
     }
 
     fun setCustom(t: ThemeSpec) {
         val s = t.sanitized().copy(id = "custom")
+        val encoded = ThemeCodec.encode(s)
+        seenTheme = encoded
+        seenCustom = encoded
         prefs.edit()
-            .putString(K_CUSTOM, ThemeCodec.encode(s))
-            .putString(K_THEME, ThemeCodec.encode(s))
+            .putString(K_CUSTOM, encoded)
+            .putString(K_THEME, encoded)
             .apply()
         _custom.value = s
         _theme.value = s
@@ -54,12 +62,21 @@ class Store(context: Context) {
 
     /**
      * Re-read theme preferences when the home activity becomes visible again.
-     * This also covers Android recreating the activity/store while the settings task
-     * was active. Returns true when the active theme actually changed.
+     * Returns true when the active theme actually changed.
+     *
+     * The common path (coming back from an app) compares the raw pref strings and does
+     * no JSON work. A pref write that this process already applied is also ignored if
+     * `apply()` has not flushed yet, so resume cannot reload a stale theme.
      */
     fun refreshThemeFromPreferences(): Boolean {
-        val saved = ThemeCodec.decode(prefs.getString(K_THEME, null)) ?: Presets.cupertino
-        val custom = ThemeCodec.decode(prefs.getString(K_CUSTOM, null))
+        val raw = prefs.getString(K_THEME, null)
+        val customRaw = prefs.getString(K_CUSTOM, null)
+        if (raw == seenTheme && customRaw == seenCustom) return false
+        if (seenTheme != null && ThemeCodec.encode(_theme.value) == seenTheme) return false
+        val saved = ThemeCodec.decode(raw) ?: Presets.cupertino
+        val custom = ThemeCodec.decode(customRaw)
+        seenTheme = raw
+        seenCustom = customRaw
         val changed = _theme.value != saved
         _custom.value = custom
         if (changed) _theme.value = saved
