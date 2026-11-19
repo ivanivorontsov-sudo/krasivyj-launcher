@@ -165,14 +165,16 @@ fun SearchField(value: String, onChange: (String) -> Unit, focus: FocusRequester
     val spec = LocalSpec.current; val colors = LocalColors.current; val fonts = LocalFonts.current
     val shape = if (spec.drawer == DrawerStyle.TILES_LIST) RoundedCornerShape(0.dp) else RoundedCornerShape(spec.cornerDp.coerceAtMost(22).dp)
     Box(
-        Modifier.padding(horizontal = 16.dp, vertical = 10.dp).fillMaxWidth().height(46.dp).clip(shape)
+        // Wider outer hit area and taller field: the editable target covers the whole pill,
+        // not just the text's intrinsic line-height.
+        Modifier.padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth().height(52.dp).clip(shape)
             .background(colors.onSurface.copy(alpha = if (spec.drawer == DrawerStyle.TILES_LIST) 0.9f else 0.1f)).padding(horizontal = 16.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         val textColor = if (spec.drawer == DrawerStyle.TILES_LIST) colors.background else colors.onSurface
         if (value.isEmpty()) Text((if (spec.labelPrefix.isNotEmpty()) "$ grep " else "⌕  ") + spec.withCase(placeholder), color = textColor.copy(alpha = 0.55f), fontFamily = fonts.body, fontSize = 16.sp)
         BasicTextField(
-            value, onChange, singleLine = true, modifier = Modifier.fillMaxWidth().focusRequester(focus),
+            value, onChange, singleLine = true, modifier = Modifier.fillMaxWidth().fillMaxHeight().focusRequester(focus),
             textStyle = androidx.compose.ui.text.TextStyle(color = textColor, fontFamily = fonts.body, fontSize = 17.sp),
             cursorBrush = SolidColor(colors.accent),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go, autoCorrectEnabled = false),
