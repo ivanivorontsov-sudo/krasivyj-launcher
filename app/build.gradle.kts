@@ -14,20 +14,25 @@ val ksProps = Properties().apply {
 }
 fun signingValue(key: String, env: String): String? = System.getenv(env) ?: ksProps.getProperty(key)
 
-val appVersionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-val appVersionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+val appVersionCode = (System.getenv("VERSION_CODE") ?: "1480").toInt()
+val appVersionName = System.getenv("VERSION_NAME") ?: "1.4.8"
 
 android {
     namespace = "org.ivanivorontsov.launcher"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "org.ivanivorontsov.launcher"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
         resourceConfigurations += listOf("ru", "en")
+        // СуперСмарт: «Мудрость» ships ONNX Runtime native libs — phones only (+x86_64 for emulator tests).
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            if (project.hasProperty("withX86")) abiFilters += "x86_64"
+        }
     }
 
     signingConfigs {
@@ -45,13 +50,38 @@ android {
         }
     }
 
+    flavorDimensions += "dist"
+    productFlavors {
+        // Full APK (sideload): everything, incl. «Стоп-экран», screen lock, DNS filter, digit overlay.
+        create("full") { dimension = "dist"; buildConfigField("boolean", "PLAY", "false"); buildConfigField("boolean", "HAS_MUDROST", "true"); buildConfigField("boolean", "HAS_MODULES", "true"); buildConfigField("boolean", "HAS_BOOK", "true") }
+        // Google Play: same package, without Play-restricted parts (see src/play/AndroidManifest.xml).
+        create("play") { dimension = "dist"; buildConfigField("boolean", "PLAY", "true"); buildConfigField("boolean", "HAS_MUDROST", "true"); buildConfigField("boolean", "HAS_MODULES", "true"); buildConfigField("boolean", "HAS_BOOK", "true") }
+        // Sideload, installs next to the main app: all modules except «Мудрость», reader without the bundled book.
+        create("nowisdom") {
+            dimension = "dist"; versionNameSuffix = "-nowisdom"
+            buildConfigField("boolean", "PLAY", "false"); buildConfigField("boolean", "HAS_MUDROST", "false"); buildConfigField("boolean", "HAS_MODULES", "true"); buildConfigField("boolean", "HAS_BOOK", "false")
+        }
+        // Sideload «Лёгкий»: only the launcher itself, no built-in modules, no «Мудрость», no book.
+        create("light") {
+            dimension = "dist"; versionNameSuffix = "-light"
+            buildConfigField("boolean", "PLAY", "false"); buildConfigField("boolean", "HAS_MUDROST", "false"); buildConfigField("boolean", "HAS_MODULES", "false"); buildConfigField("boolean", "HAS_BOOK", "false")
+        }
+    }
+
+    sourceSets {
+        getByName("full") { assets.srcDir("src/withBook/assets") }
+        getByName("play") { assets.srcDir("src/withBook/assets") }
+    }
+
     buildTypes {
         release {
+            ndk { debugSymbolLevel = "SYMBOL_TABLE" }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Release builds are ALWAYS signed with the dedicated upload key (never the debug key).
-            signingConfig = signingConfigs.getByName("upload")
+            // CI signs with the upload key. A local build without keystore.properties falls back
+            // to the debug keystore so an installable APK can still be produced.
+            signingConfig = if (signingValue("storeFile", "SIGNING_STORE_FILE") != null) signingConfigs.getByName("upload") else signingConfigs.getByName("debug")
         }
         debug {
             applicationIdSuffix = ".debug"
@@ -75,7 +105,9 @@ android {
         resources {
             excludes += listOf("/META-INF/{AL2.0,LGPL2.1}", "/META-INF/*.version", "DebugProbesKt.bin", "kotlin-tooling-metadata.json", "/kotlin/**")
         }
+        jniLibs { useLegacyPackaging = true }
     }
+    androidResources { noCompress += listOf("onnx", "bin") }
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
@@ -85,9 +117,9 @@ android {
     }
 }
 
-// Refuse to produce an unsigned/debug-signed release APK.
+// CI must not publish a debug-signed release. Local builds may fall back to the debug keystore.
 gradle.taskGraph.whenReady {
-    if (allTasks.any { it.name.contains("Release") && (it.name.startsWith("assemble") || it.name.startsWith("package")) }) {
+    if (System.getenv("CI") == "true" && allTasks.any { it.name.contains("Release") && (it.name.startsWith("assemble") || it.name.startsWith("package")) }) {
         require(signingValue("storeFile", "SIGNING_STORE_FILE") != null) {
             "Release signing key missing: provide keystore.properties or SIGNING_* env vars"
         }
@@ -110,7 +142,13 @@ dependencies {
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-    debugImplementation("androidx.metrics:metrics-performance:1.0.0-beta01")
+    // СуперСмарт modules
+    // «Мудрость» only in the main builds; other modules in all but «Лёгкий».
+    for (cfg in listOf("fullImplementation", "playImplementation")) add(cfg, project(":modules:mudrost"))
+    for (cfg in listOf("fullImplementation", "playImplementation", "nowisdomImplementation")) {
+        add(cfg, project(":modules:kodeks")); add(cfg, project(":modules:boec")); add(cfg, project(":modules:lite"))
+    }
+    implementation("androidx.metrics:metrics-performance:1.0.0-beta01")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.0.21")
