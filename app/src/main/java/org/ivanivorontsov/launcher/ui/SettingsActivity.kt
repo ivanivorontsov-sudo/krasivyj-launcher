@@ -44,6 +44,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -72,6 +73,7 @@ import kotlinx.coroutines.withContext
 import org.ivanivorontsov.launcher.BuildConfig
 import org.ivanivorontsov.launcher.LauncherApp
 import org.ivanivorontsov.launcher.core.AccentPalette
+import org.ivanivorontsov.launcher.core.SettingsIndex
 import org.ivanivorontsov.launcher.core.HomeCategories
 import org.ivanivorontsov.launcher.core.ClockStyle
 import org.ivanivorontsov.launcher.core.DigitAnchor
@@ -170,14 +172,58 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
         }
         Unit
     }
-    BackHandler { back() }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchOpen by remember { mutableStateOf(false) }
+    val showSearchField = screen == Screen.MAIN || searchOpen || searchQuery.isNotBlank()
+    fun openEntry(entry: SettingsIndex.Entry) {
+        searchQuery = ""
+        searchOpen = false
+        when (entry.screen) {
+            SettingsIndex.Screens.STOP -> { /* opened from SettingsSearchResults */ }
+            SettingsIndex.Screens.THEMES -> screen = Screen.THEMES
+            SettingsIndex.Screens.HOME -> screen = Screen.HOME
+            SettingsIndex.Screens.EDITOR -> screen = Screen.EDITOR
+            SettingsIndex.Screens.FONTS -> screen = Screen.FONTS
+            SettingsIndex.Screens.GESTURES -> screen = Screen.GESTURES
+            SettingsIndex.Screens.HIDDEN -> screen = Screen.HIDDEN
+            SettingsIndex.Screens.ICONS -> screen = Screen.ICONS
+            SettingsIndex.Screens.LIVE -> screen = Screen.LIVE
+            SettingsIndex.Screens.DIGITS -> if (!BuildConfig.PLAY) screen = Screen.DIGITS
+            SettingsIndex.Screens.SYSTEM -> screen = Screen.SYSTEM
+            SettingsIndex.Screens.SMOOTH -> screen = Screen.SMOOTH
+            SettingsIndex.Screens.ABOUT -> screen = Screen.ABOUT
+            SettingsIndex.Screens.LICENSES -> screen = Screen.LICENSES
+            else -> screen = Screen.MAIN
+        }
+    }
+    BackHandler { if (searchQuery.isNotBlank() || searchOpen) { searchQuery = ""; searchOpen = false } else back() }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { back() }.padding(horizontal = 14.dp))
-            Text(screen.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { if (searchQuery.isNotBlank() || searchOpen) { searchQuery = ""; searchOpen = false } else back() }.padding(horizontal = 14.dp))
+            Text(if (showSearchField && searchQuery.isNotBlank()) "Поиск" else screen.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            // Keep the action after the weighted title so a long title cannot push search off the screen (1.4.6 overflow fix).
+            if (!showSearchField) {
+                Text("Найти", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.clickable { searchOpen = true }.padding(horizontal = 14.dp, vertical = 8.dp))
+            }
+        }
+        if (showSearchField) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                placeholder = { Text("Поиск настроек") },
+                singleLine = true,
+            )
         }
         Box(Modifier.weight(1f).navigationBarsPadding()) {
-            when (screen) {
+            if (searchQuery.isNotBlank()) {
+                SettingsSearchResults(searchQuery) { entry ->
+                    if (entry.screen == SettingsIndex.Screens.STOP) {
+                        // opened below via LocalContext in the results composable
+                    }
+                    openEntry(entry)
+                }
+            } else when (screen) {
                 Screen.MAIN -> MainScreen { screen = it }
                 Screen.HOME -> HomeScreenSettings()
                 Screen.THEMES -> ThemesScreen { screen = Screen.EDITOR }
@@ -189,9 +235,27 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
                 Screen.LIVE -> LiveScreen()
                 Screen.DIGITS -> DigitsScreen()
                 Screen.SYSTEM -> SystemScreen()
-                Screen.SMOOTH -> SmoothScreen()
                 Screen.ABOUT -> AboutScreen(openLicenses = { licText = null; screen = Screen.LICENSES })
                 Screen.LICENSES -> LicensesScreen(licText) { licText = it }
+                Screen.SMOOTH -> SmoothScreen()
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSearchResults(query: String, onPick: (SettingsIndex.Entry) -> Unit) {
+    val ctx = LocalContext.current
+    val hits = remember(query) { SettingsIndex.search(query, includePlayRestricted = !BuildConfig.PLAY) }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+        if (hits.isEmpty()) {
+            item { Text("Ничего не найдено", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.padding(20.dp)) }
+        } else items(hits, key = { it.id }) { entry ->
+            NavRow(entry.title, entry.subtitle.ifBlank { null }) {
+                if (entry.screen == SettingsIndex.Screens.STOP) {
+                    ctx.startActivity(android.content.Intent(ctx, org.ivanivorontsov.launcher.stop.StopActivity::class.java))
+                }
+                onPick(entry)
             }
         }
     }
