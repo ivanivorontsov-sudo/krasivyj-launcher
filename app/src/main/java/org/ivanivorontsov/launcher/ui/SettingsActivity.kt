@@ -634,7 +634,23 @@ private fun HomeScreenSettings() {
             val arrangeCtx = LocalContext.current
             Spacer(Modifier.height(8.dp))
             Button(onClick = { arrangeCtx.startActivity(org.ivanivorontsov.launcher.ai.AiArrangeActivity.intent(arrangeCtx, spec.id)) }, modifier = Modifier.fillMaxWidth()) { Text("Расставить с ИИ") }
-            Info("Опишите словами, как расставить приложения: по папкам, по порядку, по категориям, что на доке и на страницах. Можно через тот же веб-чат, что и в клавиатуре (вход запоминается, без ключей API), или составить раскладку прямо на телефоне.")
+            Info("Опишите словами, как расставить приложения и что изменить в настройках: порядок и папки (папки — только если вы их просите), тема, анимация, сетка, иконки, док, жесты, пояса часов. Можно через тот же веб-чат, что и в клавиатуре (вход запоминается, без ключей API), или разобрать запрос прямо на телефоне. Изменения применяются только после подтверждения «было → станет».")
+            val undoStore = remember(arrangeCtx) { org.ivanivorontsov.launcher.ai.LayoutUndoStore(arrangeCtx) }
+            if (undoStore.hasAny()) {
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = {
+                    if (undoStore.restore(store, spec.id)) {
+                        Toast.makeText(arrangeCtx, "Вернула предыдущую раскладку и настройки.", Toast.LENGTH_SHORT).show()
+                    }
+                }, modifier = Modifier.fillMaxWidth()) { Text("Вернуть предыдущую раскладку") }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = {
+                val keys = installedApps.filter { it.key !in cfg.hidden }.map { it.key }.distinct()
+                store.update { org.ivanivorontsov.launcher.core.AiLayout.enableAllAppsOnHome(it, spec.id, keys) }
+                Toast.makeText(arrangeCtx, "Все приложения снова на главном экране.", Toast.LENGTH_SHORT).show()
+            }, modifier = Modifier.fillMaxWidth()) { Text("Показать все приложения на главном") }
+            Info("Если после расстановки с ИИ пропали приложения, эта кнопка включит режим «все на главном» и допишет недостающие. «Вернуть предыдущую раскладку» откатывает и раскладку, и настройки (в том числе бэкап из 1.4.9).")
         } }
         item { Section("Виджеты и экран «Сегодня»") {
             var ask by remember { mutableStateOf(false) }

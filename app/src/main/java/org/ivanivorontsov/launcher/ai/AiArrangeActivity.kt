@@ -49,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -58,6 +59,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.ivanivorontsov.launcher.LauncherApp
 import org.ivanivorontsov.launcher.core.AiLayout
+import org.ivanivorontsov.launcher.core.LauncherConfig
+import org.ivanivorontsov.launcher.core.AiSettings
+import org.ivanivorontsov.launcher.core.AiPreview
+import org.ivanivorontsov.launcher.core.AiComposer
 import org.ivanivorontsov.launcher.core.HomeCategories
 import org.ivanivorontsov.launcher.core.ScreenLayout
 import org.ivanivorontsov.launcher.data.AppInfo
@@ -68,9 +73,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Lets the user describe a home-screen layout in Russian, gets a structured plan from a
- * signed-in web chat (same engines as the keyboard) or from Pollinations, shows a preview,
- * and applies it with one-step undo. A local category fallback is always available.
+ * Lets the user describe a home-screen layout and any launcher settings in Russian, gets a
+ * structured plan from a signed-in web chat (same engines as the keyboard) or from Pollinations,
+ * shows an opaque confirmation with «было → станет», and applies it with one-step undo.
+ * A local parser covers common phrases when the model is unavailable.
  */
 class AiArrangeActivity : ComponentActivity() {
 
@@ -98,40 +104,116 @@ class AiArrangeActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         var prompt by remember { mutableStateOf("") }
         var sourceIdx by remember { mutableIntStateOf(prefsIdx()) }
-        var status by remember { mutableStateOf("Опишите, как расставить приложения: папки, порядок, док, категории, страницы.") }
+        var status by remember { mutableStateOf("Опишите, как расставить приложения и что изменить в настройках: пояса часов, тема, анимация, сетка, док, жесты.") }
         var busy by remember { mutableStateOf(false) }
-        var preview by remember { mutableStateOf<AiLayout.Application?>(null) }
+        var preview by remember { mutableStateOf<AiPreview?>(null) }
         var showChat by remember { mutableStateOf(false) }
         var menu by remember { mutableStateOf(false) }
-        var hasUndo by remember { mutableStateOf(undo.has(themeId)) }
+        var hasUndo by remember { mutableStateOf(undo.hasAny()) }
         val apps = remember { catalog(app.apps.apps.value, cfg.usage) }
         val source = ChatEngine.SOURCES[sourceIdx.coerceIn(ChatEngine.SOURCES.indices)]
+        val dark = spec.dark
+        val bg = if (dark) Color(0xFF121212) else Color(0xFFF7F7F4)
+        val fg = if (dark) Color(0xFFF5F5F5) else Color(0xFF121212)
+        val card = if (dark) Color(0xFF1E1E1E) else Color(0xFFFFFFFF)
+        val muted = if (dark) Color(0xFFB8B8B8) else Color(0xFF3C3C3C)
+        val warn = if (dark) Color(0xFFFFB4A8) else Color(0xFF8B1D1D)
 
         fun runLocal(reason: String? = null) {
-            val result = AiLayout.localFallback(apps, cfg.layoutFor(themeId), spec.columns.coerceIn(4, 7), spec.columns, spec.rows, prompt)
+            val result = AiComposer.compose(prompt, apps, cfg.layoutFor(themeId), cfg, spec, modelText = null, maxDock = spec.columns.coerceIn(4, 7), columns = spec.columns, rows = spec.rows)
             preview = result
             status = (reason?.let { "$it\n" } ?: "") + summarize(result)
+        }
+
+        fun restorePrevious() {
+            if (!undo.restore(store, themeId)) return
+            hasUndo = false
+            Toast.makeText(this@AiArrangeActivity, "Вернула предыдущую раскладку и настройки.", Toast.LENGTH_SHORT).show()
+            finish()
+        }
+
+        fun showAllOnHome() {
+            val keys = apps.map { it.key }
+            store.update { AiLayout.enableAllAppsOnHome(it, themeId, keys) }
+            Toast.makeText(this@AiArrangeActivity, "Все приложения снова на главном экране.", Toast.LENGTH_SHORT).show()
+            finish()
+        }
+
+        if (preview != null) {
+            val plan = preview!!
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .background(bg)
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text("Подтвердите изменения", style = MaterialTheme.typography.titleLarge, color = fg)
+                Text(
+                    "Ничего не применяется, пока вы не нажмёте «Применить». Потом можно вернуть всё одним нажатием.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = muted,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
+                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(card)
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    ConfirmBody(plan, apps, cfg.layoutFor(themeId), fg, muted, warn, spec.columns, spec.rows)
+                }
+                if (plan.settings.changes.isEmpty() && plan.arrangement == null && plan.settings.unsupported.isNotEmpty()) {
+                    Text("Менять нечего: запрос не поддерживается.", color = warn, modifier = Modifier.padding(top = 8.dp))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                    Button(
+                        onClick = {
+                            if (!plan.hasWork || (plan.settings.changes.isEmpty() && plan.arrangement == null && plan.settings.widget == null)) {
+                                Toast.makeText(this@AiArrangeActivity, "Нечего применять.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            undo.save(themeId, cfg.layoutFor(themeId), cfg, spec)
+                            val next = AiComposer.configToApply(plan, themeId, apps.map { it.key })
+                            store.update { next }
+                            if (plan.settings.themeChanged) store.setTheme(plan.settings.nextTheme)
+                            hasUndo = true
+                            Toast.makeText(this@AiArrangeActivity, "Готово. Можно вернуть предыдущую раскладку.", Toast.LENGTH_SHORT).show()
+                            finish()
+                        },
+                        enabled = plan.hasWork && (plan.settings.changes.isNotEmpty() || plan.arrangement != null || plan.settings.widget != null),
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Применить") }
+                    OutlinedButton(onClick = { preview = null; status = "Предпросмотр отменён." }, modifier = Modifier.weight(1f)) { Text("Отмена") }
+                }
+            }
+            return
         }
 
         Column(
             Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(bg)
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            Text("Расставить с ИИ", style = MaterialTheme.typography.titleLarge)
+            Text("Расставить с ИИ", style = MaterialTheme.typography.titleLarge, color = fg)
             Text(
-                "Нейросеть поймёт запрос на русском и предложит раскладку. Вход в чат запоминается на этом телефоне, отдельные ключи API не нужны — так же, как в клавиатуре.",
+                "Нейросеть поймёт запрос на русском: порядок приложений, папки (только если вы их просите), тема, анимация, сетка, иконки, док, жесты, часовые пояса виджета часов. Вход в чат запоминается на этом телефоне, отдельные ключи API не нужны.",
                 style = MaterialTheme.typography.bodyMedium,
+                color = muted,
                 modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
             )
             OutlinedTextField(
                 value = prompt,
                 onValueChange = { prompt = it },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
-                placeholder = { Text("Например: на док — телефон, сообщения, браузер. Соцсети в папку «Общение», игры — в «Игры». Остальное по категориям на втором экране.") },
+                placeholder = { Text("Например: на первое место банки, на второе заказ еды и доставку, на третье всё остальное. Добавь пояса Москвы и Владивостока, часы карточкой.") },
                 maxLines = 8,
             )
             Spacer(Modifier.height(8.dp))
@@ -156,13 +238,13 @@ class AiArrangeActivity : ComponentActivity() {
                 }
             }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 8.dp))
-            Text(status, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 6.dp))
+            Text(status, style = MaterialTheme.typography.bodyMedium, color = fg, modifier = Modifier.padding(vertical = 6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = {
                         if (busy) return@Button
                         if (prompt.isBlank() && source.id != "local") {
-                            status = "Напишите, как расставить приложения."
+                            status = "Напишите, чего вы хотите."
                             return@Button
                         }
                         busy = true
@@ -171,14 +253,14 @@ class AiArrangeActivity : ComponentActivity() {
                         scope.launch {
                             try {
                                 val result = when (source.id) {
-                                    "local" -> AiLayout.localFallback(apps, cfg.layoutFor(themeId), spec.columns.coerceIn(4, 7), spec.columns, spec.rows, prompt)
-                                    "pollinations" -> requestPollinations(prompt, apps, spec.columns, spec.rows, cfg.layoutFor(themeId))
-                                    else -> requestChat(source, prompt, apps, spec.columns, spec.rows, cfg.layoutFor(themeId))
+                                    "local" -> AiComposer.compose(prompt, apps, cfg.layoutFor(themeId), cfg, spec, null, spec.columns.coerceIn(4, 7), spec.columns, spec.rows)
+                                    "pollinations" -> requestPollinations(prompt, apps, spec.columns, spec.rows, cfg.layoutFor(themeId), cfg, spec)
+                                    else -> requestChat(source, prompt, apps, spec.columns, spec.rows, cfg.layoutFor(themeId), cfg, spec)
                                 }
                                 preview = result
                                 status = summarize(result)
                             } catch (e: Exception) {
-                                runLocal("Не удалось получить ответ (${e.message ?: e.javaClass.simpleName}). Показала местную раскладку.")
+                                runLocal("Не удалось получить ответ (${e.message ?: e.javaClass.simpleName}). Показала местный разбор.")
                             } finally {
                                 busy = false
                             }
@@ -189,48 +271,16 @@ class AiArrangeActivity : ComponentActivity() {
                 ) { Text(if (source.id == "local") "Составить" else "Спросить") }
                 OutlinedButton(onClick = { finish() }, enabled = !busy) { Text("Закрыть") }
             }
-
-            val plan = preview
-            if (plan != null) {
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .padding(top = 12.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                        .padding(12.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    Text("Предпросмотр", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(6.dp))
-                    PreviewBody(plan.layout, apps)
-                    if (plan.resolved.unmatched.isNotEmpty()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text("Не нашла на телефоне: " + plan.resolved.unmatched.joinToString(", "), fontSize = 13.sp)
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    Button(onClick = {
-                        undo.save(themeId, plan.previous)
-                        store.update { it.copy(layouts = it.layouts + (themeId to plan.layout), lastEdited = themeId) }
-                        hasUndo = true
-                        Toast.makeText(this@AiArrangeActivity, "Раскладка применена. Можно отменить.", Toast.LENGTH_SHORT).show()
-                        finish()
-                    }, modifier = Modifier.weight(1f)) { Text("Применить") }
-                    OutlinedButton(onClick = { preview = null; status = "Предпросмотр отменён." }, modifier = Modifier.weight(1f)) { Text("Отмена") }
-                }
-            } else {
-                Spacer(Modifier.weight(1f))
-            }
+            Spacer(Modifier.height(8.dp))
             if (hasUndo) {
-                TextButton(onClick = {
-                    val previous = undo.consume(themeId) ?: return@TextButton
-                    store.update { it.copy(layouts = it.layouts + (themeId to previous), lastEdited = themeId) }
-                    hasUndo = false
-                    Toast.makeText(this@AiArrangeActivity, "Вернула предыдущую раскладку.", Toast.LENGTH_SHORT).show()
-                    finish()
-                }) { Text("Отменить последнюю расстановку") }
+                Button(onClick = { restorePrevious() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Вернуть предыдущую раскладку")
+                }
             }
+            OutlinedButton(onClick = { showAllOnHome() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                Text("Показать все приложения на главном")
+            }
+            Spacer(Modifier.weight(1f))
             if (showChat && source.url != null) {
                 Box(
                     Modifier
@@ -243,24 +293,79 @@ class AiArrangeActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun PreviewBody(layout: ScreenLayout, apps: List<AiLayout.CatalogApp>) {
+    private fun ConfirmBody(
+        plan: AiPreview,
+        apps: List<AiLayout.CatalogApp>,
+        previous: ScreenLayout,
+        fg: Color,
+        muted: Color,
+        warn: Color,
+        columns: Int,
+        rows: Int,
+    ) {
+        if (plan.settings.changes.isNotEmpty()) {
+            Text("Настройки", style = MaterialTheme.typography.titleMedium, color = fg)
+            Spacer(Modifier.height(6.dp))
+            plan.settings.changes.forEach { c ->
+                Text("${c.label}: ${c.from} → ${c.to}", fontSize = 16.sp, color = fg, modifier = Modifier.padding(vertical = 3.dp))
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+        if (plan.settings.unsupported.isNotEmpty()) {
+            Text("Не поддерживается", style = MaterialTheme.typography.titleMedium, color = warn)
+            Spacer(Modifier.height(6.dp))
+            plan.settings.unsupported.forEach { Text("  • $it", fontSize = 16.sp, color = warn, modifier = Modifier.padding(vertical = 2.dp)) }
+            Spacer(Modifier.height(12.dp))
+        }
+        if (plan.arrangement != null || plan.settings.widget != null) {
+            Text("Рабочий стол", style = MaterialTheme.typography.titleMedium, color = fg)
+            Spacer(Modifier.height(6.dp))
+            PreviewBody(plan.layout, apps, columns, rows, fg, muted)
+            val unmatched = plan.arrangement?.resolved?.unmatched.orEmpty()
+            if (unmatched.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text("Не нашла на телефоне: " + unmatched.joinToString(", "), fontSize = 14.sp, color = muted)
+            }
+            val before = previous.placedApps().toSet()
+            val after = plan.layout.placedApps().toSet()
+            val gone = before - after
+            if (gone.isNotEmpty()) {
+                val names = apps.associate { it.key to it.label }
+                Text("Пропали бы (этого быть не должно): " + gone.joinToString { names[it] ?: it }, fontSize = 14.sp, color = warn)
+            }
+        } else if (plan.settings.changes.isEmpty()) {
+            Text("Изменений раскладки нет.", color = muted, fontSize = 15.sp)
+        }
+    }
+
+    @Composable
+    private fun PreviewBody(layout: ScreenLayout, apps: List<AiLayout.CatalogApp>, columns: Int, rows: Int, fg: Color, muted: Color) {
         val names = apps.associate { it.key to it.label }
         fun label(id: String) = when {
             org.ivanivorontsov.launcher.core.isFolderId(id) -> {
                 val f = layout.folders[id]
-                "📁 ${f?.name ?: id} (" + (f?.apps?.joinToString { names[it] ?: it } ?: "") + ")"
+                "Папка «${f?.name ?: id}»: " + (f?.apps?.joinToString { names[it] ?: it } ?: "")
             }
-            org.ivanivorontsov.launcher.core.isWidgetId(id) -> "🧩 виджет"
+            org.ivanivorontsov.launcher.core.isWidgetId(id) -> {
+                val w = layout.widgets[id]
+                if (id == org.ivanivorontsov.launcher.core.CLOCK_WIDGET) {
+                    "Виджет часов${w?.let { " ${it.spanX}×${it.spanY}" } ?: ""}"
+                } else "Виджет"
+            }
             else -> names[id] ?: id
         }
         if (layout.dock.isNotEmpty()) {
-            Text("Док: " + layout.dock.joinToString { label(it) }, fontSize = 15.sp)
-            Spacer(Modifier.height(6.dp))
+            Text("Док: " + layout.dock.joinToString { label(it) }, fontSize = 16.sp, color = fg)
+            Spacer(Modifier.height(8.dp))
+        } else {
+            Text("Док: без изменений или пуст", fontSize = 15.sp, color = muted)
+            Spacer(Modifier.height(8.dp))
         }
-        val pages = layout.home.chunked(20).ifEmpty { listOf(emptyList()) }
+        val cap = (columns * rows).coerceAtLeast(1)
+        val pages = layout.home.chunked(cap).ifEmpty { listOf(emptyList()) }
         pages.forEachIndexed { i, items ->
-            Text("Страница ${i + 1}", style = MaterialTheme.typography.titleSmall)
-            items.forEach { Text("  • " + label(it), fontSize = 14.sp) }
+            Text("Страница ${i + 1}", style = MaterialTheme.typography.titleSmall, color = fg, modifier = Modifier.padding(top = 4.dp))
+            items.forEach { Text("  • " + label(it), fontSize = 15.sp, color = fg, modifier = Modifier.padding(vertical = 1.dp)) }
             Spacer(Modifier.height(6.dp))
         }
     }
@@ -310,15 +415,16 @@ class AiArrangeActivity : ComponentActivity() {
         columns: Int,
         rows: Int,
         current: ScreenLayout,
-    ): AiLayout.Application {
+        config: LauncherConfig,
+        theme: org.ivanivorontsov.launcher.core.ThemeSpec,
+    ): AiPreview {
         val prompt = AiLayout.buildPrompt(apps, request, columns, rows, columns.coerceIn(4, 7))
         val body = withContext(Dispatchers.IO) { pollinationsChat(prompt) }
         return try {
-            AiLayout.applyPlan(current, AiLayout.parse(body), apps, columns.coerceIn(4, 7), columns, rows)
+            AiComposer.compose(request, apps, current, config, theme, body, columns.coerceIn(4, 7), columns, rows)
         } catch (e: Exception) {
-            AiLayout.localFallback(apps, current, columns.coerceIn(4, 7), columns, rows, request).also {
-                statusFallback("Pollinations ответила, но JSON не разобрать (${e.message}).")
-            }
+            statusFallback("Pollinations ответила, но JSON не разобрать (${e.message}).")
+            AiComposer.compose(request, apps, current, config, theme, null, columns.coerceIn(4, 7), columns, rows)
         }
     }
 
@@ -334,18 +440,16 @@ class AiArrangeActivity : ComponentActivity() {
         columns: Int,
         rows: Int,
         current: ScreenLayout,
-    ): AiLayout.Application {
+        config: LauncherConfig,
+        theme: org.ivanivorontsov.launcher.core.ThemeSpec,
+    ): AiPreview {
         val prompt = AiLayout.buildPrompt(apps, request, columns, rows, columns.coerceIn(4, 7))
         val url = source.url ?: throw IllegalStateException("Нет адреса чата")
         val reply = withContext(Dispatchers.Main) { driveChat(url, prompt) }
         if (reply.isNullOrBlank()) {
-            return AiLayout.localFallback(apps, current, columns.coerceIn(4, 7), columns, rows, request)
+            return AiComposer.compose(request, apps, current, config, theme, null, columns.coerceIn(4, 7), columns, rows)
         }
-        return try {
-            AiLayout.applyPlan(current, AiLayout.parse(reply), apps, columns.coerceIn(4, 7), columns, rows)
-        } catch (_: Exception) {
-            AiLayout.localFallback(apps, current, columns.coerceIn(4, 7), columns, rows, request)
-        }
+        return AiComposer.compose(request, apps, current, config, theme, reply, columns.coerceIn(4, 7), columns, rows)
     }
 
     private suspend fun driveChat(url: String, prompt: String): String? {
@@ -453,12 +557,19 @@ class AiArrangeActivity : ComponentActivity() {
         }
     }
 
-    private fun summarize(result: AiLayout.Application): String {
-        val r = result.resolved
-        val folders = result.layout.folders.size
-        val home = result.layout.home.count { !org.ivanivorontsov.launcher.core.isWidgetId(it) }
-        val miss = if (r.unmatched.isEmpty()) "" else " Не опознала: ${r.unmatched.joinToString(", ")}."
-        return "Предпросмотр: док ${r.dock.size}, на экране $home, папок $folders.$miss Нажмите «Применить» или «Отмена»."
+    private fun summarize(result: AiPreview): String {
+        val bits = ArrayList<String>()
+        if (result.settings.changes.isNotEmpty()) bits += "настроек ${result.settings.changes.size}"
+        if (result.arrangement != null) {
+            val r = result.arrangement.resolved
+            val folders = result.layout.folders.size
+            val home = result.layout.home.count { !org.ivanivorontsov.launcher.core.isWidgetId(it) }
+            bits += "док ${r.dock.size}, на экране $home, папок $folders"
+            if (r.unmatched.isNotEmpty()) bits += "не опознала: ${r.unmatched.joinToString(", ")}"
+        }
+        if (result.settings.unsupported.isNotEmpty()) bits += "не поддерживается: ${result.settings.unsupported.size}"
+        val head = if (bits.isEmpty()) "Изменений нет" else "Предпросмотр: " + bits.joinToString("; ")
+        return "$head. Нажмите «Применить» или «Отмена»."
     }
 
     private fun prefs() = getSharedPreferences("ai_layout", MODE_PRIVATE)

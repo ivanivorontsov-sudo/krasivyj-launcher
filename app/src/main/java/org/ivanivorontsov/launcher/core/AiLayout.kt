@@ -55,6 +55,246 @@ object AiLayout {
         val previous: ScreenLayout,
     )
 
+    enum class AppKind { BANK, FOOD_DELIVERY, OTHER }
+
+    data class OrderGroup(val raw: String, val kind: AppKind? = null)
+
+    /** Combined model reply: arrangement plus optional setting changes. */
+    data class Request(
+        val plan: Plan,
+        val settings: List<AiSettings.Input> = emptyList(),
+        val unsupported: List<String> = emptyList(),
+    ) {
+        val hasArrangement: Boolean
+            get() = plan.dock.isNotEmpty() || plan.folders.isNotEmpty() || plan.pages.isNotEmpty() || plan.home.isNotEmpty()
+    }
+
+    fun parseRequest(json: String): Request {
+        val src = extractJson(json) ?: throw IllegalArgumentException("В ответе нет JSON")
+        val root = JsonMini.parseObject(src)
+        return Request(
+            plan = parse(src),
+            settings = AiSettings.parseSettings(root),
+            unsupported = AiSettings.parseUnsupported(root),
+        )
+    }
+
+    fun wantsFolders(prompt: String): Boolean {
+        val t = prompt.lowercase().replace('ё', 'е')
+        return Regex(
+            "по\\s+папк|в\\s+папк|папк[ауие]\\s|папк[ауие]:|папк[ауие]\\s*[«\"']|создай.*папк|собери.*папк|разлож\\w*\\s+по\\s+папк|папки\\s+для",
+            RegexOption.IGNORE_CASE,
+        ).containsMatchIn(t)
+    }
+
+    fun wantsDockChange(prompt: String): Boolean {
+        val t = prompt.lowercase().replace('ё', 'е')
+        return Regex("(?<!\\w)док(?!умент|тор|ер|лад)", RegexOption.IGNORE_CASE).containsMatchIn(t)
+    }
+
+    fun wantsArrangement(prompt: String): Boolean {
+        if (prompt.isBlank()) return false
+        if (wantsFolders(prompt) || wantsDockChange(prompt)) return true
+        if (parseOrderGroups(prompt) != null) return true
+        return Regex("расстав|разлож|перелож|по\\s+категор|по\\s+алфавит|на\\s+главн\\w*\\s+стол", RegexOption.IGNORE_CASE).containsMatchIn(prompt)
+    }
+
+    fun parseOrderGroups(prompt: String): List<OrderGroup>? {
+        if (prompt.isBlank()) return null
+        val marker = Regex(
+            "на\\s+(первое|второе|третье|четвертое|четвёртое|пятое)(?:\\s+место)?|сначала|потом|затем|и\\s+наконец|все\\s+остальное|всё\\s+остальное|(?<!\\w)остальное",
+            setOf(RegexOption.IGNORE_CASE),
+        )
+        val hits = marker.findAll(prompt).toList()
+        if (hits.isEmpty()) return null
+        val groups = ArrayList<OrderGroup>()
+        for (i in hits.indices) {
+            val m = hits[i]
+            val token = m.value.lowercase().replace('ё', 'е')
+            val start = m.range.last + 1
+            val end = if (i + 1 < hits.size) hits[i + 1].range.first else prompt.length
+            val body = prompt.substring(start, end).trim().trim(',', '.', ':', '—', '-', ' ', '«', '»')
+            val rest = token.contains("остальн")
+            if (body.isBlank() && !rest) continue // numbered slot whose body is the next marker
+            val text = if (rest) "все остальное" else body
+            groups += OrderGroup(raw = text, kind = kindOfGroup(if (rest) "все остальное" else text))
+        }
+        val cleaned = ArrayList<OrderGroup>()
+        for (g in groups) {
+            val rawN = g.raw.lowercase().replace('ё', 'е').trim()
+            if (g.kind == null && (rawN.isBlank() || rawN == "все" || rawN == "и")) continue
+            if (g.kind == AppKind.OTHER && cleaned.lastOrNull()?.kind == AppKind.OTHER) continue
+            cleaned += g
+        }
+        return cleaned.takeIf { it.isNotEmpty() }
+    }
+
+    fun kindOfGroup(text: String): AppKind? {
+        val t = text.lowercase().replace('ё', 'е')
+        return when {
+            Regex("остальн|прочее|все\\s+остальн").containsMatchIn(t) -> AppKind.OTHER
+            Regex("банк|финанс").containsMatchIn(t) -> AppKind.BANK
+            Regex("еды|еду|еда|доставк|заказ\\s+ед|фуд|food").containsMatchIn(t) -> AppKind.FOOD_DELIVERY
+            else -> null
+        }
+    }
+
+    fun classify(app: CatalogApp): AppKind {
+        val hay = (app.label + " " + app.pkg + " " + app.category).lowercase().replace('ё', 'е')
+        if (isFoodDelivery(hay, app)) return AppKind.FOOD_DELIVERY
+        if (isBank(hay, app)) return AppKind.BANK
+        return AppKind.OTHER
+    }
+
+    private fun isBank(hay: String, app: CatalogApp): Boolean {
+        val banks = listOf(
+            "sberbank", "apps.sber", "sberbankmobile", "сбербанк", "сбер",
+            "tinkoff", "tbank", "т-банк", "т банк", "тбанк", "тинькофф",
+            "alfabank", "alfa-bank", "alfa.bank", "альфа-банк", "альфа банк", "альфабанк",
+            "vtb24", "vtb.", " втб", "втб ",
+            "gazprombank", "газпромбанк",
+            "ozon.fintech", "ozonbank", "ozon.bank", "ozon банк", "озон банк",
+            "raiffeisen", "райффайзен", "райфайзен",
+            "открытие", "openbank", "otkritie",
+            "pochtabank", "почта банк", "почтабанк",
+            "rosbank", "росбанк",
+            "mtsbank", "mts.bank", "мтс банк",
+            "sovcombank", "совкомбанк", "совком банк",
+            "uralsib", "уралсиб",
+            "промсвязь", "psbank",
+            "tochka", "точка банк", "модульбанк", "modulbank",
+            "yoomoney", "юmoney", "юмани", "ю мани",
+            "россельхоз", "rshb", "ак барс", "акбарс",
+            "хоум банк", "homebank",
+        )
+        if (hay.contains("сбермаркет") || hay.contains("sbermarket") || hay.contains("сбер маркет")) return false
+        if (banks.any { hay.contains(it) }) return true
+        val label = app.label.lowercase().replace('ё', 'е')
+        if (Regex("(?<!\\w)банк(?!ом)").containsMatchIn(label) || Regex("(?<!\\w)bank(?!ing)").containsMatchIn(label)) {
+            // "Ozon Банк" yes; bare marketplace names no
+            return true
+        }
+        return false
+    }
+
+    private fun isFoodDelivery(hay: String, app: CatalogApp): Boolean {
+        val food = listOf(
+            "yandex.eda", "yandexeda", "яндекс еда", "яндекс.еда", "foodfox",
+            "deliveryclub", "delivery club", "деливери клаб", "маркет деливери", "market.delivery",
+            "samokat", "самокат",
+            "kuper", "купер",
+            "sbermarket", "сбермаркет", "сбер маркет",
+            "yandex.lavka", "яндекс лавка", "яндекс.лавка", "lavka",
+            "dodopizza", "dodo pizza", "додо пицца", "додо",
+            "kfc", "rostics", "ростис",
+            "burgerking", "burger king", "бургер кинг",
+            "vkusnoitochka", "вкусно и точка", "вкусноиточка",
+            "papajohns", "папа джонс", "pizzahut", "пицца хат",
+            "mcdonalds", "макдональдс", "макдоналдс", "макдак",
+            "growfood", "гроуфуд", "elementaree",
+            "доставка еды", "заказ еды",
+        )
+        if (food.any { hay.contains(it) }) return true
+        val label = app.label.lowercase().replace('ё', 'е')
+        return Regex("пицца|суши|еда|доставка").containsMatchIn(label) &&
+            !Regex("банк|bank").containsMatchIn(label)
+    }
+
+    /** Every installed app appears once; missing ones are appended after [home] (not into the dock). */
+    fun includeAllApps(resolved: Resolved, apps: List<CatalogApp>, dock: List<String>): Resolved {
+        val inFolders = resolved.folders.values.flatMap { it.apps }.toSet()
+        val placed = (dock + resolved.home.filter { !isFolderId(it) && !isWidgetId(it) } + inFolders).toSet()
+        val missing = apps.map { it.key }.filter { it !in placed }
+        return if (missing.isEmpty()) resolved
+        else resolved.copy(home = resolved.home + missing)
+    }
+
+    fun flattenFolders(resolved: Resolved): Resolved {
+        if (resolved.folders.isEmpty()) return resolved
+        val home = ArrayList<String>()
+        val seen = HashSet<String>()
+        fun add(id: String) { if (id !in seen && id !in resolved.dock) { seen += id; home += id } }
+        for (id in resolved.home) {
+            if (isFolderId(id)) resolved.folders[id]?.apps?.forEach { add(it) } else add(id)
+        }
+        for (f in resolved.folders.values) f.apps.forEach { add(it) }
+        return resolved.copy(home = home, folders = emptyMap())
+    }
+
+    fun arrangeByGroups(groups: List<OrderGroup>, apps: List<CatalogApp>, dock: List<String>, currentHomeOrder: List<String> = emptyList()): List<String> {
+        val dockSet = dock.toSet()
+        val remaining = apps.map { it.key }.filter { it !in dockSet }.toMutableList()
+        val byKey = apps.associateBy { it.key }
+        val currentIdx = currentHomeOrder.withIndex().associate { it.value to it.index }
+        fun sortKeys(keys: List<String>): List<String> = keys.sortedWith(
+            compareBy<String> { currentIdx[it] ?: Int.MAX_VALUE }.thenByDescending { byKey[it]?.usage ?: 0 }.thenBy { byKey[it]?.label ?: it }
+        )
+        val home = ArrayList<String>()
+        var consumedRest = false
+        for (g in groups) {
+            val pick = when (g.kind) {
+                AppKind.BANK -> remaining.filter { byKey[it]?.let { a -> classify(a) == AppKind.BANK } == true }
+                AppKind.FOOD_DELIVERY -> remaining.filter { byKey[it]?.let { a -> classify(a) == AppKind.FOOD_DELIVERY } == true }
+                AppKind.OTHER -> remaining.toList().also { consumedRest = true }
+                null -> {
+                    val names = g.raw.split(Regex("(?:,|;|\\s+и\\s+)+")).map { it.trim() }.filter { it.length >= 2 }
+                    names.mapNotNull { q -> match(q, apps)?.app?.key }.filter { it in remaining }
+                }
+            }
+            val ordered = sortKeys(pick)
+            home += ordered
+            remaining.removeAll(ordered.toSet())
+        }
+        if (!consumedRest) home += sortKeys(remaining)
+        return home
+    }
+
+    fun refine(
+        resolved: Resolved,
+        apps: List<CatalogApp>,
+        current: ScreenLayout,
+        prompt: String,
+        maxDock: Int = 5,
+        includeAll: Boolean = prompt.isNotBlank(),
+    ): Resolved {
+        var r = resolved
+        val allowFolders = if (prompt.isBlank()) r.folders.isNotEmpty() else wantsFolders(prompt)
+        if (!allowFolders) r = flattenFolders(r)
+        val preserveDock = prompt.isNotBlank() && !wantsDockChange(prompt)
+        val dock = if (preserveDock) {
+            current.dock.filter { key -> apps.any { it.key == key } || isFolderId(key) }.take(maxDock.coerceAtLeast(1))
+        } else r.dock
+        val groups = if (prompt.isNotBlank()) parseOrderGroups(prompt) else null
+        if (groups != null) {
+            r = r.copy(dock = dock, home = arrangeByGroups(groups, apps, dock, current.home), folders = if (allowFolders) r.folders else emptyMap())
+            // If folders were requested together with order groups, leave folder structure only when allowFolders;
+            // order groups are flat by default.
+        } else {
+            r = r.copy(dock = dock, home = r.home.filter { it !in dock })
+        }
+        if (includeAll) r = includeAllApps(r, apps, r.dock)
+        return r
+    }
+
+    /** Append every missing installed app to the home grid and, optionally, turn on all-apps-on-home. */
+    fun readdMissing(layout: ScreenLayout, apps: List<CatalogApp>): ScreenLayout {
+        val placed = layout.placedApps().toSet() + layout.dock.toSet()
+        val missing = apps.map { it.key }.filter { it !in placed }
+        return if (missing.isEmpty()) layout else layout.copy(home = layout.home + missing).normalized()
+    }
+
+    fun enableAllAppsOnHome(config: LauncherConfig, themeId: String, appKeys: List<String>): LauncherConfig {
+        val keys = appKeys.distinct()
+        return config.copy(allAppsOnHome = true).editAllLayouts { layout ->
+            var next = layout
+            keys.forEach { key ->
+                next = next.appendHome(key)
+                next = next.pinTile(TileItem("t_$key", TileKind.APP, key, TileSize.SMALL))
+            }
+            next.copy(favorites = (next.favorites + keys).distinct()).normalized()
+        }
+    }
+
     /** Pull a JSON object out of a model reply (raw JSON, or a ```json fence, or prose around `{...}`). */
     fun extractJson(text: String): String? {
         val trimmed = text.trim()
@@ -276,8 +516,17 @@ object AiLayout {
         return layout.normalized()
     }
 
-    fun applyPlan(current: ScreenLayout, plan: Plan, apps: List<CatalogApp>, maxDock: Int = 5, columns: Int = 4, rows: Int = 6): Application {
-        val resolved = resolve(plan, apps, maxDock, columns, rows)
+    fun applyPlan(
+        current: ScreenLayout,
+        plan: Plan,
+        apps: List<CatalogApp>,
+        maxDock: Int = 5,
+        columns: Int = 4,
+        rows: Int = 6,
+        prompt: String = "",
+        includeAll: Boolean = prompt.isNotBlank(),
+    ): Application {
+        val resolved = refine(resolve(plan, apps, maxDock, columns, rows), apps, current, prompt, maxDock, includeAll)
         return Application(layout = apply(current, resolved), resolved = resolved, previous = current)
     }
 
@@ -296,13 +545,34 @@ object AiLayout {
         rows: Int = 6,
         prompt: String = "",
     ): Application {
+        val groups = parseOrderGroups(prompt)
+        if (groups != null && !wantsFolders(prompt)) {
+            val dock = if (wantsDockChange(prompt)) {
+                parsePromptHints(prompt, apps)?.dock?.let { names -> names.mapNotNull { match(it, apps)?.app?.key } }.orEmpty().take(maxDock)
+                    .ifEmpty { current.dock.filter { key -> apps.any { it.key == key } } }
+            } else current.dock.filter { key -> apps.any { it.key == key } }
+            val home = arrangeByGroups(groups, apps, dock, current.home)
+            val resolved = includeAllApps(Resolved(dock = dock.take(maxDock.coerceAtLeast(1)), home = home, folders = emptyMap(), matches = emptyList(), unmatched = emptyList()), apps, dock)
+            return Application(layout = apply(current, resolved), resolved = resolved, previous = current)
+        }
         val parsed = parsePromptHints(prompt, apps)
         val plan = if (parsed != null && (parsed.dock.isNotEmpty() || parsed.folders.isNotEmpty() || parsed.home.isNotEmpty() || parsed.pages.isNotEmpty())) {
             parsed
-        } else {
+        } else if (Regex("по\\s+категор", RegexOption.IGNORE_CASE).containsMatchIn(prompt) && wantsFolders(prompt)) {
             defaultCategoryPlan(apps, current, maxDock)
+        } else if (Regex("по\\s+категор", RegexOption.IGNORE_CASE).containsMatchIn(prompt)) {
+            flatCategoryPlan(apps, current, maxDock)
+        } else if (Regex("по\\s+алфавит", RegexOption.IGNORE_CASE).containsMatchIn(prompt)) {
+            alphabetPlan(apps, current, maxDock)
+        } else {
+            // Do not invent folders. Keep the current arrangement and only fill in missing apps.
+            return Application(
+                layout = readdMissing(current, apps),
+                resolved = Resolved(dock = current.dock, home = readdMissing(current, apps).home.filter { !isWidgetId(it) }, folders = current.folders, matches = emptyList(), unmatched = emptyList()),
+                previous = current,
+            )
         }
-        return applyPlan(current, plan, apps, maxDock, columns, rows)
+        return applyPlan(current, plan, apps, maxDock, columns, rows, prompt)
     }
 
     fun defaultCategoryPlan(apps: List<CatalogApp>, current: ScreenLayout, maxDock: Int): Plan {
@@ -323,6 +593,26 @@ object AiLayout {
         return Plan(dock = dock, folders = folders, home = folders.map { PlanItem(type = "folder", folder = it.name, apps = it.apps) } + singles)
     }
 
+    fun flatCategoryPlan(apps: List<CatalogApp>, current: ScreenLayout, maxDock: Int): Plan {
+        val byKey = apps.associateBy { it.key }
+        val dock = (current.dock.mapNotNull { byKey[it] } + apps.sortedByDescending { it.usage })
+            .distinctBy { it.key }
+            .take(maxDock.coerceAtLeast(0))
+            .map { it.label }
+        val dockKeys = dock.mapNotNull { q -> match(q, apps)?.app?.key }.toSet()
+        val rest = apps.filter { it.key !in dockKeys }.groupBy { it.category.ifBlank { HomeCategories.OTHER } }
+        val home = rest.keys.sorted().flatMap { name -> rest[name].orEmpty().sortedBy { it.label }.map { PlanItem(name = it.label) } }
+        return Plan(dock = dock, home = home)
+    }
+
+    fun alphabetPlan(apps: List<CatalogApp>, current: ScreenLayout, maxDock: Int): Plan {
+        val byKey = apps.associateBy { it.key }
+        val dock = current.dock.mapNotNull { byKey[it]?.label }.take(maxDock)
+        val dockKeys = current.dock.toSet()
+        val home = apps.filter { it.key !in dockKeys }.sortedBy { it.label.lowercase() }.map { PlanItem(name = it.label) }
+        return Plan(dock = dock, home = home)
+    }
+
     /** Lightweight reading of "на док X, Y" / "папка Игры: A, B" from a Russian prompt. */
     fun parsePromptHints(prompt: String, apps: List<CatalogApp>): Plan? {
         if (prompt.isBlank()) return null
@@ -333,9 +623,8 @@ object AiLayout {
         if (dockMatch != null) dock += splitNames(dockMatch.groupValues[1])
         val folderRx = Regex("папк[ауие]\\s+[«\"“]?([^«»\":\\n]+)[»\"”]?\\s*[:\\-–]\\s*([^\\n;]+)", RegexOption.IGNORE_CASE)
         for (m in folderRx.findAll(text)) folders += PlanFolder(m.groupValues[1].trim(), splitNames(m.groupValues[2]))
-        val wantsCategories = Regex("по\\s+категор|по\\s+папк|разлож", RegexOption.IGNORE_CASE).containsMatchIn(text)
-        if (dock.isEmpty() && folders.isEmpty() && !wantsCategories) return null
-        if (wantsCategories && folders.isEmpty()) {
+        if (dock.isEmpty() && folders.isEmpty() && !wantsFolders(prompt)) return null
+        if (wantsFolders(prompt) && folders.isEmpty()) {
             return defaultCategoryPlan(apps, ScreenLayout(), dock.size.coerceAtLeast(4)).let {
                 it.copy(dock = dock.ifEmpty { it.dock })
             }
@@ -347,28 +636,56 @@ object AiLayout {
         val list = apps.sortedByDescending { it.usage }.take(160).joinToString("\n") { app ->
             "- ${app.label} | ${app.pkg} | ${app.category}"
         }
+        val folderRule = if (wantsFolders(request))
+            "Пользователь просит папки — можно создавать folders и type=folder."
+        else
+            "Папки НЕ создавать: поле folders оставь пустым [], на страницах только type=app. Фразы вроде «на первое место банки, на второе заказ еды, на третье всё остальное» — это ПОРЯДОК плоских групп на страницах, а не папки."
+        val dockRule = if (wantsDockChange(request))
+            "Пользователь упоминает док — заполни dock."
+        else
+            "Док не меняй: поле dock оставь пустым [] (его сохранит программа)."
         return """
-Ты расставляешь приложения на домашнем экране Android-лаунчера.
+Ты настраиваешь Android-лаунчер SuperSmart. Можно в одном ответе и расставить приложения, и изменить настройки.
 Сетка: $columns столбцов × $rows рядов на страницу, в доке не больше $maxDock иконок.
 
 Просьба пользователя:
 $request
 
-Установленные приложения (название | пакет | категория):
+Установленные приложения (название | пакет | категория). Каждое должно встретиться РОВНО один раз — в dock, в папке или на pages:
 $list
+
+Правила раскладки:
+- $folderRule
+- $dockRule
+- Не пропускай приложения. Если чего-то не хватает в группах — допиши в конец последней страницы («всё остальное»).
+- Не выдумывай пакеты, используй только список выше.
+- Существующие виджеты программа сохранит сама, в JSON их указывать не нужно.
+
+Настройки: верни только те, которые пользователь просит изменить. Имя ключа и значение должны быть из схемы ниже. Неизвестное или невозможное — в "unsupported", никогда не применяй молча.
+Часовые пояса: русские города («Москва», «Владивосток») или IANA id (Europe/Moscow, Asia/Vladivostok). Не больше трёх.
+
+${AiSettings.schemaPrompt()}
 
 Ответь ТОЛЬКО одним JSON-объектом, без пояснений, такой формы:
 {
+  "settings": [
+    {"key": "allAppsOnHome", "value": true},
+    {"key": "clockZones", "value": ["Москва", "Владивосток"]},
+    {"key": "clockStyle", "value": "CARD"},
+    {"key": "pageEffect", "value": "CYLINDER"},
+    {"key": "theme", "value": "Стекло"},
+    {"key": "clockWidget", "value": {"spanX": 4, "spanY": 2, "page": 0, "col": 0, "row": 0}}
+  ],
+  "unsupported": ["то, что сделать нельзя"],
   "dock": ["Название или package"],
   "folders": [{"name": "Имя папки", "apps": ["Название или package"]}],
   "pages": [
     {"items": [
-      {"type": "app", "name": "Название", "pkg": "optional.package", "col": 0, "row": 0},
-      {"type": "folder", "folder": "Имя папки", "apps": ["A", "B"], "col": 1, "row": 0}
+      {"type": "app", "name": "Название", "pkg": "optional.package", "col": 0, "row": 0}
     ]}
   ]
 }
-Используй только приложения из списка. Не выдумывай пакеты. Если чего-то нет — пропусти.
+Если пользователь просит только настройки, pages/dock/folders можно опустить или оставить пустыми.
         """.trim()
     }
 
@@ -446,6 +763,23 @@ internal object JsonMini {
         fun objList(key: String): List<Obj> = (map[key] as? List<*>)?.mapNotNull {
             @Suppress("UNCHECKED_CAST") (it as? Map<String, Any?>)?.let { m -> Obj(m) }
         } ?: emptyList()
+        fun any(key: String): Any? = map[key]
+        fun obj(key: String): Obj? {
+            @Suppress("UNCHECKED_CAST")
+            val m = map[key] as? Map<String, Any?> ?: return null
+            return Obj(m)
+        }
+        fun entries(): List<Pair<String, Any?>> = map.entries.map { it.key to it.value }
+        fun bool(key: String): Boolean? = when (val v = map[key]) {
+            is Boolean -> v
+            is Number -> v.toInt() != 0
+            is String -> when (v.lowercase()) {
+                "true", "1", "да", "вкл", "on", "yes" -> true
+                "false", "0", "нет", "выкл", "off", "no" -> false
+                else -> null
+            }
+            else -> null
+        }
     }
 
     fun parseObject(src: String): Obj {

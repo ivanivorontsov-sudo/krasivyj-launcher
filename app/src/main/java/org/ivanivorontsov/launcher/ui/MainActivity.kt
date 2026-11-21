@@ -714,6 +714,19 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         val e = ArrayList<MenuEntry>()
         e += MenuEntry("Поиск приложений") { ui.drawer.open(focusSearch = true) }
         e += MenuEntry("Расставить с ИИ") { startActivity(org.ivanivorontsov.launcher.ai.AiArrangeActivity.intent(this, spec.id)) }
+        val undoStore = org.ivanivorontsov.launcher.ai.LayoutUndoStore(this)
+        if (undoStore.hasAny()) {
+            e += MenuEntry("Вернуть предыдущую раскладку") {
+                if (undoStore.restore(app.store, spec.id)) {
+                    Toast.makeText(this, "Вернула предыдущую раскладку и настройки.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        e += MenuEntry("Показать все приложения на главном") {
+            val keys = app.apps.apps.value.filter { it.key !in app.store.config.value.hidden }.map { it.key }
+            app.store.update { org.ivanivorontsov.launcher.core.AiLayout.enableAllAppsOnHome(it, spec.id, keys) }
+            Toast.makeText(this, "Все приложения снова на главном экране.", Toast.LENGTH_SHORT).show()
+        }
         e += MenuEntry("Темы и стиль") { openSettings("themes") }
         if (spec.layout == HomeLayout.TILES) {
             e += MenuEntry("Плитка: часы") { pinSpecialTile(TileKind.CLOCK) }
