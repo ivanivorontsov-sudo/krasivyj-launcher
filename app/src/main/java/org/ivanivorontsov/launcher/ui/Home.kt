@@ -1,5 +1,7 @@
 package org.ivanivorontsov.launcher.ui
 
+import org.ivanivorontsov.launcher.core.GridFit
+
 import org.ivanivorontsov.launcher.core.veiled
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -12,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,7 +25,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
@@ -34,8 +39,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -96,6 +103,7 @@ import org.ivanivorontsov.launcher.core.ScreenLayout
 import org.ivanivorontsov.launcher.core.isFolderId
 import org.ivanivorontsov.launcher.core.isWidgetId
 import org.ivanivorontsov.launcher.core.packPages
+import org.ivanivorontsov.launcher.core.reflowSpans
 import org.ivanivorontsov.launcher.core.withClockWidget
 import org.ivanivorontsov.launcher.core.Placed
 import org.ivanivorontsov.launcher.core.PackedPages
@@ -214,19 +222,38 @@ fun LauncherRoot(ui: UiState) {
             else if (wall?.tall == true || spec.layout == HomeLayout.TILES || config.diagNoWallpaper) Box(Modifier.fillMaxSize().background(colors.background))
 
             // Icons of placed apps first (from the disk cache → instant), then everything else for the drawer.
-            LaunchedEffect(apps, spec.iconShape, spec.iconSizeDp) {
+            LaunchedEffect(apps, spec.iconShape, spec.iconSizeDp, spec.columns, spec.rows, wPx, hPx, spec.showLabels) {
                 if (apps.isNotEmpty()) {
                     val placed = layout.placedApps().toHashSet()
-                    app.icons.prefetch(apps.sortedBy { if (it.key in placed) 0 else 1 }, spec.iconShape, with(density) { spec.iconSizeDp.dp.roundToPx() })
+                    val s = GridFit.screen(with(density) { wPx.toDp().value }, with(density) { hPx.toDp().value }, spec.columns, spec.rows, spec.iconSizeDp.toFloat(), spec.showLabels)
+                    val iconPx = with(density) { s.fit.iconDp.dp.roundToPx() }
+                    app.icons.prefetch(apps.sortedBy { if (it.key in placed) 0 else 1 }, spec.iconShape, iconPx)
                 }
             }
 
             val dragging = ui.drag.item != null
-            val packedCount = remember(layout, spec.columns, spec.rows) { layout.packPages(spec.columns, spec.rows).size }
+            val landscape = maxWidth > maxHeight
+            val screen = remember(maxWidth, maxHeight, spec.columns, spec.rows, spec.iconSizeDp, spec.showLabels) {
+                GridFit.screen(maxWidth.value, maxHeight.value, spec.columns, spec.rows, spec.iconSizeDp.toFloat(), spec.showLabels)
+            }
+            val packedCount = remember(layout, screen.columns, screen.rows, spec.columns) {
+                layout.reflowSpans(spec.columns, screen.columns, screen.rows).packPages(screen.columns, screen.rows).size
+            }
             val pageCount = if (spec.layout == HomeLayout.MINIMAL) t + 1
                 else t + packedCount + (if (dragging) 1 else 0)
             val countState = androidx.compose.runtime.rememberUpdatedState(pageCount)
-            val homePager = rememberPagerState(initialPage = t) { countState.value }
+            val homePager = rememberPagerState(initialPage = ui.lastPagerPage ?: t) { countState.value }
+            var prevLandscape by remember { mutableStateOf(landscape) }
+            LaunchedEffect(homePager.currentPage, homePager.isScrollInProgress) {
+                if (!homePager.isScrollInProgress) ui.lastPagerPage = homePager.currentPage
+            }
+            LaunchedEffect(landscape, homePager.pageCount) {
+                if (prevLandscape != landscape && homePager.pageCount > 0) {
+                    val p = (ui.lastPagerPage ?: homePager.currentPage).coerceIn(0, homePager.pageCount - 1)
+                    homePager.scrollToPage(p)
+                    prevLandscape = landscape
+                }
+            }
             // 1.4.5: tell ScrollGate while the pager moves (defers widget updates / minute tick to the end of a swipe).
             androidx.compose.runtime.DisposableEffect(homePager) { onDispose { ScrollGate.set(false) } }
             LaunchedEffect(homePager) { androidx.compose.runtime.snapshotFlow { homePager.isScrollInProgress }.collect { ScrollGate.set(it) } }
@@ -289,7 +316,7 @@ fun LauncherRoot(ui: UiState) {
                 }
                 alpha = (1f - p) * ea * za
             }
-            Box(homeModifier.homeGestures(ui, config, hPx.toFloat(), spec.layout != HomeLayout.TILES)) {
+            Box(homeModifier.homeGestures(ui, config, hPx.toFloat(), fullVertical = !landscape && spec.layout != HomeLayout.TILES)) {
                 when (spec.layout) {
                     HomeLayout.GRID -> GridHome(ui, layout, byKey, wall, homePager, t)
                     HomeLayout.MINIMAL -> MinimalHome(ui, layout, byKey, homePager, config, t)
@@ -298,6 +325,24 @@ fun LauncherRoot(ui: UiState) {
             }
             // Keep the search drawer available in every home layout, including TILES.
             // It remains translated off-screen while closed and is opened by the existing drawer/search gestures.
+            if (landscape && spec.layout != HomeLayout.TILES) {
+                val edge = 36.dp
+                Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().height(edge).pointerInput(config.swipeDown) {
+                    var acc = 0f
+                    detectVerticalDragGestures(onDragEnd = {
+                        if (acc > 48f) ui.actions?.gesture(config.swipeDown)
+                    }) { _, dy -> acc += dy }
+                })
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().height(edge).pointerInput(config.swipeUp, config.allAppsOnHome) {
+                    var acc = 0f
+                    detectVerticalDragGestures(onDragEnd = {
+                        if (acc < -48f) {
+                            if (config.swipeUp == GestureAction.DRAWER && !config.allAppsOnHome) ui.drawer.open()
+                            else if (!(config.allAppsOnHome && config.swipeUp == GestureAction.DRAWER)) ui.actions?.gesture(config.swipeUp)
+                        }
+                    }) { _, dy -> acc += dy }
+                })
+            }
             DrawerLayer(ui, visibleApps, config, wall)
 
             OverlayEffect(spec.overlay)
@@ -316,6 +361,30 @@ fun LauncherRoot(ui: UiState) {
             RenameDialog(ui)
             FolderRenameDialog(ui, layout)
             if (ui.widgetPicker) WidgetPicker(toToday = ui.widgetPickerToToday || spec.layout != HomeLayout.GRID, onDismiss = { ui.widgetPicker = false; ui.widgetPickerToToday = false })
+            val snack = ui.snackbar
+            if (snack != null) {
+                androidx.compose.runtime.LaunchedEffect(snack) {
+                    kotlinx.coroutines.delay(snack.durationMs)
+                    if (ui.snackbar === snack) ui.snackbar = null
+                }
+                Row(
+                    Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 16.dp)
+                        .fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.82f))
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.Text(snack.text, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    snack.action?.let { label ->
+                        androidx.compose.material3.Text(
+                            label,
+                            color = colors.accent,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { snack.onAction() }.padding(start = 12.dp),
+                        )
+                    }
+                }
+            }
 
             // HOME pressed while already home → close everything, go to the main page.
             LaunchedEffect(ui.revealPage, ui.revealFolder) {
@@ -349,7 +418,7 @@ fun LauncherRoot(ui: UiState) {
 
 /** Swipe up = drawer (follows the finger), swipe down = shade, double tap = lock, long press = home menu. */
 @Composable
-private fun Modifier.homeGestures(ui: UiState, config: LauncherConfig, height: Float, vertical: Boolean): Modifier = this.then(
+private fun Modifier.homeGestures(ui: UiState, config: LauncherConfig, height: Float, fullVertical: Boolean): Modifier = this.then(
     Modifier.pointerInput(config.doubleTap) {
         detectTapGestures(
             onTap = { if (ui.homeWidgetEdit != null) ui.homeWidgetEdit = null },
@@ -357,7 +426,7 @@ private fun Modifier.homeGestures(ui: UiState, config: LauncherConfig, height: F
             onLongPress = { pos -> ui.actions?.homeMenu(Rect(pos, pos)) },
         )
     }
-).then(if (!vertical) Modifier else Modifier.composedDrag(ui, config, height))
+).then(if (!fullVertical) Modifier else Modifier.composedDrag(ui, config, height))
 
 @Composable
 private fun Modifier.composedDrag(ui: UiState, configNow: LauncherConfig, height: Float): Modifier {
@@ -404,6 +473,8 @@ private class GridHost(val ui: UiState) : DropHost {
         return layout.detach(id).packPages(cols, rows).also { packCache = Triple(id, layout, it) }
     }
     var screenW = 1f
+    var screenH = 1f
+    var verticalPager = false
     val pageGrid = HashMap<Int, BoundsRef>()
     val dockRef = BoundsRef()
     private var edgeDir = 0; private var edgeSince = 0L
@@ -447,8 +518,9 @@ private class GridHost(val ui: UiState) : DropHost {
 
     override fun onFrame(p: Offset, nanos: Long) {
         if (ui.drawer.progress > 0.3f) return
-        val edge = screenW * 0.07f
-        val dir = when { p.x < edge -> -1; p.x > screenW - edge -> 1; else -> 0 }
+        val edge = (if (verticalPager) screenH else screenW) * 0.07f
+        val dir = if (verticalPager) when { p.y < edge -> -1; p.y > screenH - edge -> 1; else -> 0 }
+            else when { p.x < edge -> -1; p.x > screenW - edge -> 1; else -> 0 }
         if (dir != edgeDir) { edgeDir = dir; edgeSince = nanos }
         if (dir != 0 && nanos - edgeSince > 450_000_000L && !pager.isScrollInProgress) {
             val target = pager.currentPage + dir
@@ -465,30 +537,53 @@ fun GridHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, wal
     val host = remember { GridHost(ui) }
     val preview = ui.drag.preview(layout)
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val inset = maxWidth * 0.068f
-        val pages = remember(preview.home, preview.widgets, spec.columns, spec.rows) { preview.packPages(spec.columns, spec.rows) }
+        val landscape = maxWidth > maxHeight
+        val screen = remember(maxWidth, maxHeight, spec.columns, spec.rows, spec.iconSizeDp, spec.showLabels) {
+            GridFit.screen(maxWidth.value, maxHeight.value, spec.columns, spec.rows, spec.iconSizeDp.toFloat(), spec.showLabels)
+        }
+        val inset = maxWidth * (if (landscape) 0.04f else 0.068f)
+        val pages = remember(preview.home, preview.widgets, screen.columns, screen.rows, spec.columns) {
+            preview.reflowSpans(spec.columns, screen.columns, screen.rows).packPages(screen.columns, screen.rows)
+        }
         host.layout = layout; host.preview = preview; host.pager = pager; host.scope = scope; host.t = t
-        host.cols = spec.columns; host.rows = spec.rows
-        host.dockMax = spec.columns; host.dockEnabled = spec.dockStyle != DockStyle.NONE
+        host.cols = screen.columns; host.rows = screen.rows
+        host.dockMax = screen.columns; host.dockEnabled = spec.dockStyle != DockStyle.NONE
         host.screenW = constraints.maxWidth.toFloat()
-        Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-            val effect = LocalPageEffect.current
-            HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.5f)), beyondViewportPageCount = 1, key = { it }) { page ->
-                val fx = remember(effect, pager, page) { PageFx(effect, pager, page) }
-                Box(Modifier.fillMaxSize().pageEffect(effect, pager, page, itemsDoIt = page >= t)) {
-                    if (page < t) WidgetsPage(ui)
-                    else androidx.compose.runtime.CompositionLocalProvider(LocalPageFx provides fx) {
-                        val ap = page - t
-                        val ref = remember(page) { BoundsRef() }
-                        androidx.compose.runtime.DisposableEffect(ap, ref) { host.pageGrid[ap] = ref; onDispose { if (host.pageGrid[ap] === ref) host.pageGrid.remove(ap) } }
-                        AppPage(ui, pages.page(ap), preview, byKey, cols = spec.columns, rows = spec.rows, inset = inset, gridRef = ref)
-                    }
+        host.screenH = constraints.maxHeight.toFloat()
+        host.verticalPager = landscape
+        val effect = LocalPageEffect.current
+        val fling = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(
+            state = pager,
+            snapAnimationSpec = androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.5f),
+        )
+        val pageCountShown = minOf(pager.pageCount, pages.size + t + if (ui.drag.item != null) 1 else 0)
+        val pageBody: @Composable (Int) -> Unit = { page ->
+            val fx = remember(effect, pager, page) { PageFx(effect, pager, page) }
+            Box(Modifier.fillMaxSize().pageEffect(effect, pager, page, itemsDoIt = page >= t)) {
+                if (page < t) WidgetsPage(ui)
+                else androidx.compose.runtime.CompositionLocalProvider(LocalPageFx provides fx, LocalGridFit provides screen.fit) {
+                    val ap = page - t
+                    val ref = remember(page) { BoundsRef() }
+                    androidx.compose.runtime.DisposableEffect(ap, ref) { host.pageGrid[ap] = ref; onDispose { if (host.pageGrid[ap] === ref) host.pageGrid.remove(ap) } }
+                    AppPage(ui, pages.page(ap), preview, byKey, cols = screen.columns, rows = screen.rows, inset = inset, gridRef = ref)
                 }
             }
-            PageDots(pager, minOf(pager.pageCount, pages.size + t + if (ui.drag.item != null) 1 else 0))
-            Dock(ui, preview, byKey, wall, host.dockRef)
-            Spacer(Modifier.navigationBarsPadding())
+        }
+        CompositionLocalProvider(LocalVerticalPages provides landscape) {
+            Column(Modifier.fillMaxSize()) {
+                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                if (landscape) {
+                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                        VerticalPager(pager, Modifier.weight(1f).fillMaxHeight().clipToBounds(), flingBehavior = fling, beyondViewportPageCount = 1, key = { it }) { pageBody(it) }
+                        PageDots(pager, pageCountShown, vertical = true)
+                    }
+                } else {
+                    HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().clipToBounds(), flingBehavior = fling, beyondViewportPageCount = 1, key = { it }) { pageBody(it) }
+                    PageDots(pager, pageCountShown)
+                }
+                Dock(ui, preview, byKey, wall, host.dockRef, landscape = landscape, dockHeightDp = screen.dockHeightDp.takeIf { landscape }, dockIconDp = screen.dockIconDp.takeIf { landscape }, columns = screen.columns)
+                Spacer(Modifier.navigationBarsPadding())
+            }
         }
     }
     androidx.compose.runtime.DisposableEffect(host) { ui.drag.host = host; onDispose { if (ui.drag.host === host) ui.drag.host = null } }
@@ -509,11 +604,15 @@ private fun HomeItem(ui: UiState, id: String, layout: ScreenLayout, byKey: Map<S
 @Composable
 private fun AppPage(ui: UiState, items: List<Placed>, layout: ScreenLayout, byKey: Map<String, AppInfo>, cols: Int, rows: Int, inset: androidx.compose.ui.unit.Dp, gridRef: BoundsRef) {
     val spec = LocalSpec.current
-    val fx = LocalPageFx.current?.takeIf { it.effect.perItem() }
+    val verticalPages = LocalVerticalPages.current
+    val fx = LocalPageFx.current?.takeIf { it.effect.perItem() && !verticalPages }
     val insetPx = with(LocalDensity.current) { inset.toPx() }
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = inset)) {
         // Cell size in px, known before layout so widgets can size their Android views and resize handles.
         val cwPx = constraints.maxWidth / cols; val chPx = constraints.maxHeight / rows.coerceAtLeast(1)
+        val provided = LocalGridFit.current
+        val gridFit = provided ?: GridFit.ofCells(cols, rows, with(LocalDensity.current) { constraints.maxWidth.toDp().value }, with(LocalDensity.current) { constraints.maxHeight.toDp().value }, spec.iconSizeDp.toFloat(), spec.showLabels)
+        CompositionLocalProvider(LocalGridFit provides gridFit) {
         Layout(
             content = {
                 items.forEach { pl ->
@@ -563,35 +662,55 @@ private fun AppPage(ui: UiState, items: List<Placed>, layout: ScreenLayout, byKe
                 }
             }
         }
+        }
     }
 }
 
 @Composable
-fun PageDots(pager: PagerState, count: Int) {
+fun PageDots(pager: PagerState, count: Int, vertical: Boolean = false) {
     val spec = LocalSpec.current; val colors = LocalColors.current
-    if (spec.pageIndicator == PageIndicator.NONE || count <= 1) { Spacer(Modifier.height(10.dp)); return }
+    if (spec.pageIndicator == PageIndicator.NONE || count <= 1) { if (!vertical) Spacer(Modifier.height(10.dp)); return }
     val dot = 7.dp; val gap = 9.dp
-    Box(Modifier.fillMaxWidth().height(26.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.width((dot + gap) * count).height(dot)) {
-            val pos = pager.currentPage + pager.currentPageOffsetFraction
-            val d = dot.toPx(); val g = gap.toPx()
-            val c = colors.onWallpaper
-            if (spec.pageIndicator == PageIndicator.LINE) {
-                drawRoundRect(c.copy(alpha = 0.25f), size = size.copy(height = d / 2), topLeft = Offset(0f, d / 4), cornerRadius = androidx.compose.ui.geometry.CornerRadius(d))
-                val seg = size.width / count
-                drawRoundRect(colors.accent, topLeft = Offset(seg * pos, 0f), size = androidx.compose.ui.geometry.Size(seg, d), cornerRadius = androidx.compose.ui.geometry.CornerRadius(d))
-            } else for (i in 0 until count) {
-                val a = (1f - abs(pos - i)).coerceIn(0f, 1f)
-                drawCircle(c.copy(alpha = 0.35f + 0.65f * a), radius = d / 2, center = Offset(g / 2 + i * (d + g) + d / 2, d / 2))
+    if (vertical) {
+        Box(Modifier.width(22.dp).fillMaxHeight().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.height((dot + gap) * count).width(dot)) {
+                val pos = pager.currentPage + pager.currentPageOffsetFraction
+                val d = dot.toPx(); val g = gap.toPx()
+                val c = colors.onWallpaper
+                if (spec.pageIndicator == PageIndicator.LINE) {
+                    val seg = size.height / count
+                    drawRoundRect(c.copy(alpha = 0.25f), size = size.copy(width = d / 2), topLeft = Offset(d / 4, 0f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(d))
+                    drawRoundRect(colors.accent, topLeft = Offset(0f, seg * pos), size = androidx.compose.ui.geometry.Size(d, seg), cornerRadius = androidx.compose.ui.geometry.CornerRadius(d))
+                } else for (i in 0 until count) {
+                    val a = (1f - abs(pos - i)).coerceIn(0f, 1f)
+                    drawCircle(c.copy(alpha = 0.35f + 0.65f * a), radius = d / 2, center = Offset(d / 2, g / 2 + i * (d + g) + d / 2))
+                }
+            }
+        }
+    } else {
+        Box(Modifier.fillMaxWidth().height(26.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.width((dot + gap) * count).height(dot)) {
+                val pos = pager.currentPage + pager.currentPageOffsetFraction
+                val d = dot.toPx(); val g = gap.toPx()
+                val c = colors.onWallpaper
+                if (spec.pageIndicator == PageIndicator.LINE) {
+                    drawRoundRect(c.copy(alpha = 0.25f), size = size.copy(height = d / 2), topLeft = Offset(0f, d / 4), cornerRadius = androidx.compose.ui.geometry.CornerRadius(d))
+                    val seg = size.width / count
+                    drawRoundRect(colors.accent, topLeft = Offset(seg * pos, 0f), size = androidx.compose.ui.geometry.Size(seg, d), cornerRadius = androidx.compose.ui.geometry.CornerRadius(d))
+                } else for (i in 0 until count) {
+                    val a = (1f - abs(pos - i)).coerceIn(0f, 1f)
+                    drawCircle(c.copy(alpha = 0.35f + 0.65f * a), radius = d / 2, center = Offset(g / 2 + i * (d + g) + d / 2, d / 2))
+                }
             }
         }
     }
 }
 
 @Composable
-fun Dock(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, wall: WallImages?, rowRef: BoundsRef) {
+fun Dock(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, wall: WallImages?, rowRef: BoundsRef, landscape: Boolean = false, dockHeightDp: Float? = null, dockIconDp: Float? = null, columns: Int? = null) {
     val spec = LocalSpec.current; val colors = LocalColors.current
     if (spec.dockStyle == DockStyle.NONE || (layout.dock.isEmpty() && ui.drag.item == null)) return
+    val dockCols = columns ?: spec.columns
     val radius = spec.cornerDp.dp
     val posRef = remember { BoundsRef() }
     val bg: Modifier = when (spec.dockStyle) {
@@ -609,11 +728,21 @@ fun Dock(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, wall: W
         DockStyle.SOLID -> Modifier.clip(RoundedCornerShape(radius)).background(colors.surface.copy(alpha = 0.88f))
         else -> Modifier
     }
-    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp)
-        .trackBounds(posRef).then(bg).padding(vertical = 14.dp)) {
-        Row(Modifier.fillMaxWidth().height(spec.iconSizeDp.dp).trackBounds(rowRef), verticalAlignment = Alignment.CenterVertically) {
-            layout.dock.take(spec.columns).forEach { id ->
-                androidx.compose.runtime.key(id) { HomeItem(ui, id, layout, byKey, DragSource.DOCK, showLabel = false, modifier = Modifier.weight(1f)) }
+    val vPad = if (landscape) 4.dp else 14.dp
+    val dockCap = dockHeightDp?.dp
+    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = if (landscape) 4.dp else 8.dp)
+        .then(if (dockCap != null) Modifier.heightIn(max = dockCap) else Modifier)
+        .trackBounds(posRef).then(bg).padding(vertical = vPad)) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val n = layout.dock.take(dockCols).size.coerceAtLeast(1)
+            val themeIcon = dockIconDp ?: spec.iconSizeDp.toFloat()
+            val dockFit = GridFit.of(n, maxWidth.value, themeIcon)
+            CompositionLocalProvider(LocalGridFit provides dockFit) {
+                Row(Modifier.fillMaxWidth().height(dockFit.iconDp.dp).trackBounds(rowRef), verticalAlignment = Alignment.CenterVertically) {
+                    layout.dock.take(dockCols).forEach { id ->
+                        androidx.compose.runtime.key(id) { HomeItem(ui, id, layout, byKey, DragSource.DOCK, showLabel = false, modifier = Modifier.weight(1f)) }
+                    }
+                }
             }
         }
     }
@@ -656,7 +785,7 @@ fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, 
     host.shown = favKeys
     androidx.compose.runtime.DisposableEffect(host) { ui.drag.host = host; onDispose { if (ui.drag.host === host) ui.drag.host = null } }
     val effect = LocalPageEffect.current
-    HorizontalPager(pager, Modifier.fillMaxSize(), flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.5f)), beyondViewportPageCount = 1) { page ->
+    val pageBody: @Composable (Int) -> Unit = { page ->
       Box(Modifier.fillMaxSize().pageEffect(effect, pager, page)) {
         if (page < t) WidgetsPage(ui)
         else if (page == t) Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 30.dp)
@@ -690,6 +819,14 @@ fun MinimalHome(ui: UiState, layout: ScreenLayout, byKey: Map<String, AppInfo>, 
             }
         } else Box(Modifier.fillMaxSize())
       }
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val landscape = maxWidth > maxHeight
+        val fling = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.5f))
+        CompositionLocalProvider(LocalVerticalPages provides landscape) {
+            if (landscape) VerticalPager(pager, Modifier.fillMaxSize().clipToBounds(), flingBehavior = fling, beyondViewportPageCount = 1) { pageBody(it) }
+            else HorizontalPager(pager, Modifier.fillMaxSize().clipToBounds(), flingBehavior = fling, beyondViewportPageCount = 1) { pageBody(it) }
+        }
     }
 }
 

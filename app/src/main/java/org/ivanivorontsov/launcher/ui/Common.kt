@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -53,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.ivanivorontsov.launcher.LauncherApp
+import org.ivanivorontsov.launcher.core.GridFit
 import org.ivanivorontsov.launcher.core.GestureAction
 import org.ivanivorontsov.launcher.core.IconShape
 import org.ivanivorontsov.launcher.core.Motion
@@ -205,6 +207,9 @@ fun labelStyle(color: Color, size: TextUnit = LocalSpec.current.labelSizeSp.sp):
         letterSpacing = if (spec.letterSpacing != 0f) (spec.letterSpacing * 10).sp * 0.1f else TextUnit.Unspecified)
 }
 
+/** Fitted icon/label sizes for the current grid; null means use the caller-provided icon size. */
+val LocalGridFit = compositionLocalOf<GridFit?> { null }
+
 /** Grid cell: shaped icon + label, press feedback, long-press menu, long-press + move = drag. */
 @Composable
 fun AppCell(
@@ -218,7 +223,11 @@ fun AppCell(
     val ref = remember { BoundsRef() }
     val iconRef = remember { BoundsRef() }
     val badge = badgeCount(app.pkg)
-    val iconPx = with(LocalDensity.current) { iconSize.toPx() }
+    val fit = LocalGridFit.current
+    val size = fit?.iconDp?.dp ?: iconSize
+    val labelW = fit?.labelWidthDp?.dp ?: (iconSize + 22.dp)
+    val labelSp = (spec.labelSizeSp * (fit?.labelScale ?: 1f)).sp
+    val iconPx = with(LocalDensity.current) { size.toPx() }
     RegisterIcon(ui, app.key, iconRef, enabled = source == DragSource.HOME || source == DragSource.DOCK)
     if (source == DragSource.FOLDER) RegisterFolderIcon(ui, app.key, iconRef)
     Column(
@@ -237,14 +246,14 @@ fun AppCell(
     ) {
         // 1.3.6: inside an open folder the icon also hides while the card lands on it (no double icon).
         Box(Modifier.trackBounds(iconRef).then(if (source == DragSource.FOLDER) Modifier.launcherItemVisibility(ui, app.key) else Modifier)) {
-            AppIcon(app, iconSize, pixelated = spec.motion == Motion.PIXEL_STEP)
+            AppIcon(app, size, pixelated = spec.motion == Motion.PIXEL_STEP)
             if (badge > 0) Badge(badge, Modifier.align(Alignment.TopEnd).padding(0.dp))
         }
         if (showLabel) {
             Spacer(Modifier.height(5.dp))
             Text(
-                spec.labelPrefix + spec.withCase(app.label), style = labelStyle(labelColor), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center, modifier = Modifier.width(iconSize + 22.dp),
+                spec.labelPrefix + spec.withCase(app.label), style = labelStyle(labelColor, labelSp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center, modifier = Modifier.width(labelW),
             )
         }
     }

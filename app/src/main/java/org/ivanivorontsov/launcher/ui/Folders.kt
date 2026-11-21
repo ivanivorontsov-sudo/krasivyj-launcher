@@ -1,5 +1,7 @@
 package org.ivanivorontsov.launcher.ui
 
+import org.ivanivorontsov.launcher.core.GridFit
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -8,6 +10,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,7 +80,11 @@ fun FolderCell(folder: Folder, iconSize: Dp, showLabel: Boolean, source: DragSou
     val ui = LocalUi.current
     val ref = remember { BoundsRef() }
     val iconRef = remember { BoundsRef() }
-    val iconPx = with(LocalDensity.current) { iconSize.toPx() }
+    val fit = LocalGridFit.current
+    val size = fit?.iconDp?.dp ?: iconSize
+    val labelW = fit?.labelWidthDp?.dp ?: (iconSize + 22.dp)
+    val labelSp = (spec.labelSizeSp * (fit?.labelScale ?: 1f)).sp
+    val iconPx = with(LocalDensity.current) { size.toPx() }
     RegisterIcon(ui, folder.id, iconRef)
     Column(
         Modifier.trackBounds(ref).launcherItem(
@@ -87,11 +95,11 @@ fun FolderCell(folder: Folder, iconSize: Dp, showLabel: Boolean, source: DragSou
         ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.trackBounds(iconRef)) { FolderIcon(folder, iconSize) }
+        Box(Modifier.trackBounds(iconRef)) { FolderIcon(folder, size) }
         if (showLabel) {
             Spacer(Modifier.height(5.dp))
-            Text(spec.labelPrefix + spec.withCase(folder.name), style = labelStyle(labelColor), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center, modifier = Modifier.width(iconSize + 22.dp))
+            Text(spec.labelPrefix + spec.withCase(folder.name), style = labelStyle(labelColor, labelSp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center, modifier = Modifier.width(labelW))
         }
     }
 }
@@ -132,12 +140,17 @@ fun FolderOverlay(ui: UiState, layout: ScreenLayout) {
         ) {
             Text(spec.withCase(folder.name), style = labelStyle(colors.onSurface, 20.sp).copy(shadow = null, fontFamily = LocalFonts.current.heading),
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().clickable(remember { MutableInteractionSource() }, null) { ui.renameFolder = folder.id }.padding(bottom = 12.dp))
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                val apps = folder.apps.mapNotNull { byKey[it] }
-                apps.chunked(4).forEach { row ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                        row.forEach { a -> Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AppCell(a, (spec.iconSizeDp - 2).dp, true, labelColor = colors.onSurface, source = DragSource.FOLDER, folderId = folder.id) } }
-                        repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val folderFit = GridFit.of(4, maxWidth.value, (spec.iconSizeDp - 2).toFloat())
+                CompositionLocalProvider(LocalGridFit provides folderFit) {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        val apps = folder.apps.mapNotNull { byKey[it] }
+                        apps.chunked(4).forEach { row ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                                row.forEach { a -> Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AppCell(a, folderFit.iconDp.dp, true, labelColor = colors.onSurface, source = DragSource.FOLDER, folderId = folder.id) } }
+                                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
                     }
                 }
             }

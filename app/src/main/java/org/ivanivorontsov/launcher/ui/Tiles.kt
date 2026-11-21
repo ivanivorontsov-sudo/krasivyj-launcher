@@ -27,6 +27,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -101,14 +104,17 @@ fun TilesHome(ui: UiState, config: LauncherConfig, layout: ScreenLayout, byKey: 
         ui.showStartPage = f
         onDispose { if (ui.showStartPage === f) ui.showStartPage = null }
     }
-    HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = ui.drag.item == null) { page ->
+    val pageBody: @Composable (Int) -> Unit = { page ->
+        val verticalPages = LocalVerticalPages.current
         if (page == 0) Box(Modifier.fillMaxSize().pageEffect(LocalPageEffect.current, pager, 0)) {
             TileStart(ui, config, layout, byKey, wall, isCurrent = { pager.currentPage == 0 }, toList = { scope.launch { pager.animateScrollToPage(1) } })
         }
         else Column(Modifier.fillMaxSize().statusBarsPadding().graphicsLayer {
-            // the list swings in from the right edge as the page arrives
+            // the list swings in from the right edge (or the bottom, in landscape)
             val f = (pager.currentPage - 1 + pager.currentPageOffsetFraction).coerceIn(-1f, 0f)
-            rotationY = f * -25f; transformOrigin = TransformOrigin(0f, 0.5f); cameraDistance = 16f * density
+            if (verticalPages) { rotationX = f * 25f; transformOrigin = TransformOrigin(0.5f, 0f) }
+            else { rotationY = f * -25f; transformOrigin = TransformOrigin(0f, 0.5f) }
+            cameraDistance = 16f * density
         }) {
             var q by remember { mutableStateOf("") }
             val focus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -119,6 +125,13 @@ fun TilesHome(ui: UiState, config: LauncherConfig, layout: ScreenLayout, byKey: 
             else androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize()) {
                 items(results.size, key = { results[it].key }) { i -> AppRow(results[i], source = DragSource.LIST) }
             }
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val landscape = maxWidth > maxHeight
+        CompositionLocalProvider(LocalVerticalPages provides landscape) {
+            if (landscape) VerticalPager(pager, Modifier.fillMaxSize().clipToBounds(), beyondViewportPageCount = 1, userScrollEnabled = ui.drag.item == null) { pageBody(it) }
+            else HorizontalPager(pager, Modifier.fillMaxSize().clipToBounds(), beyondViewportPageCount = 1, userScrollEnabled = ui.drag.item == null) { pageBody(it) }
         }
     }
 }

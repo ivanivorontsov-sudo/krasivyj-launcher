@@ -73,7 +73,9 @@ import kotlinx.coroutines.withContext
 import org.ivanivorontsov.launcher.BuildConfig
 import org.ivanivorontsov.launcher.LauncherApp
 import org.ivanivorontsov.launcher.core.AccentPalette
+import org.ivanivorontsov.launcher.core.SettingsAnchors
 import org.ivanivorontsov.launcher.core.SettingsIndex
+import androidx.compose.runtime.CompositionLocalProvider
 import org.ivanivorontsov.launcher.core.HomeCategories
 import org.ivanivorontsov.launcher.core.ClockStyle
 import org.ivanivorontsov.launcher.core.DigitAnchor
@@ -161,6 +163,7 @@ private enum class Screen(val title: String) {
 
 @Composable
 private fun SettingsRoot(start: String?, close: () -> Unit) {
+    val focus = remember { SettingsFocusController() }
     var screen by remember { mutableStateOf(when (start) { "themes" -> Screen.THEMES; "home" -> Screen.HOME; else -> Screen.MAIN }) }
     var fontTarget by remember { mutableStateOf("all") }
     var licText by remember { mutableStateOf<String?>(null) }
@@ -178,6 +181,7 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
     fun openEntry(entry: SettingsIndex.Entry) {
         searchQuery = ""
         searchOpen = false
+        focus.focus(entry)
         when (entry.screen) {
             SettingsIndex.Screens.STOP -> { /* opened from SettingsSearchResults */ }
             SettingsIndex.Screens.THEMES -> screen = Screen.THEMES
@@ -197,6 +201,7 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
         }
     }
     BackHandler { if (searchQuery.isNotBlank() || searchOpen) { searchQuery = ""; searchOpen = false } else back() }
+    CompositionLocalProvider(LocalSettingsFocus provides focus) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("‹", fontSize = 34.sp, modifier = Modifier.clickable { if (searchQuery.isNotBlank() || searchOpen) { searchQuery = ""; searchOpen = false } else back() }.padding(horizontal = 14.dp))
@@ -236,10 +241,11 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
                 Screen.DIGITS -> DigitsScreen()
                 Screen.SYSTEM -> SystemScreen()
                 Screen.ABOUT -> AboutScreen(openLicenses = { licText = null; screen = Screen.LICENSES })
-                Screen.LICENSES -> LicensesScreen(licText) { licText = it }
+                Screen.LICENSES -> SettingsAnchor("licenses") { LicensesScreen(licText) { licText = it } }
                 Screen.SMOOTH -> SmoothScreen()
             }
         }
+    }
     }
 }
 
@@ -253,7 +259,7 @@ private fun SettingsSearchResults(query: String, onPick: (SettingsIndex.Entry) -
         } else items(hits, key = { it.id }) { entry ->
             NavRow(entry.title, entry.subtitle.ifBlank { null }) {
                 if (entry.screen == SettingsIndex.Screens.STOP) {
-                    ctx.startActivity(android.content.Intent(ctx, org.ivanivorontsov.launcher.stop.StopActivity::class.java))
+                    ctx.startActivity(android.content.Intent(ctx, org.ivanivorontsov.launcher.stop.StopActivity::class.java).putExtra(SettingsAnchors.EXTRA_FOCUS, "stop"))
                 }
                 onPick(entry)
             }
@@ -262,10 +268,21 @@ private fun SettingsSearchResults(query: String, onPick: (SettingsIndex.Entry) -
 }
 
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 6.dp))
-        content()
+private fun Section(title: String, group: String? = null, anchors: List<String> = listOfNotNull(group), content: @Composable () -> Unit) {
+    val focus = LocalSettingsFocus.current
+    var open by remember(group) { mutableStateOf(true) }
+    val expanded = group == null || open || (group != null && focus.isGroupExpanded(group))
+    SettingsAnchor(*anchors.toTypedArray()) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(
+                Modifier.fillMaxWidth().then(if (group != null) Modifier.clickable { open = !open } else Modifier),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f).padding(bottom = 6.dp))
+                if (group != null) Text(if (expanded) "▾" else "▸", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
+            }
+            if (expanded) content()
+        }
     }
 }
 
@@ -301,7 +318,7 @@ private fun MainScreen(go: (Screen) -> Unit) {
         }
         item { NavRow("Все темы", "${Presets.all.size} готовых тем с живым предпросмотром") { go(Screen.THEMES) } }
         item { NavRow("Главный экран", "Перетаскивание и папки, эффекты перелистывания, новые приложения, анимация возврата к иконке") { go(Screen.HOME) } }
-        if (!BuildConfig.PLAY) item { NavRow("Стоп-экран", "Лимит экранного времени, расписание, запрещённые приложения, пароль") { ctx.startActivity(android.content.Intent(ctx, org.ivanivorontsov.launcher.stop.StopActivity::class.java)) } }
+        if (!BuildConfig.PLAY) item { NavRow("Стоп-экран", "Лимит экранного времени, расписание, запрещённые приложения, пароль") { ctx.startActivity(android.content.Intent(ctx, org.ivanivorontsov.launcher.stop.StopActivity::class.java).putExtra(SettingsAnchors.EXTRA_FOCUS, "stop")) } }
         item { NavRow("Свой стиль", "Шрифты, цвета, форма иконок, сетка, анимации, обои") { go(Screen.EDITOR) } }
         item { NavRow("Шрифты", "${org.ivanivorontsov.launcher.ui.FontCatalog.all.size} шрифтов с кириллицей, в том числе рукописные") { go(Screen.FONTS) } }
         item { NavRow("Системный шрифт и обои", "Что можно поменять во всём телефоне") { go(Screen.SYSTEM) } }
@@ -322,7 +339,9 @@ private fun ThemesScreen(openEditor: () -> Unit) {
     val spec by store.theme.collectAsStateCompat()
     val custom by store.custom.collectAsStateCompat()
     val all = remember(custom) { (listOfNotNull(custom) + Presets.all) }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 40.dp)) {
+    val themesList = rememberAnchoredListState(SettingsIndex.Screens.THEMES)
+    LazyColumn(Modifier.fillMaxSize(), state = themesList, contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 40.dp)) {
+        item(key = "themes") { SettingsAnchor("themes") { Text("Готовые темы", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 8.dp)) } }
         items(all.chunked(2)) { pair ->
             Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 pair.forEach { t -> ThemePreview(t, t.id == spec.id, Modifier.weight(1f)) { store.setTheme(t) } }
@@ -340,22 +359,26 @@ private fun EditorScreen(openFonts: (String) -> Unit) {
     val store = LauncherApp.instance.store
     val spec by store.theme.collectAsStateCompat()
     fun set(f: (ThemeSpec) -> ThemeSpec) = store.setCustom(f(spec).copy(name = "Мой стиль", description = "Собран в редакторе"))
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
-        item { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { ThemePreview(spec, false, Modifier.width(150.dp).padding(8.dp)) } }
-        item { Section("Макет") {
+    val listState = rememberAnchoredListState(SettingsIndex.Screens.EDITOR)
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 48.dp)) {
+        item(key = "editor-preview") { SettingsAnchor("editor") { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { ThemePreview(spec, false, Modifier.width(150.dp).padding(8.dp)) } } }
+        item(key = "layout-kind") { Section("Макет", group = "layout-kind") {
             Chips(HomeLayout.entries, spec.layout, { it.title }) { v -> set { it.copy(layout = v) } }
             Text("Меню приложений", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
             Chips(DrawerStyle.entries, spec.drawer, { it.title }) { v -> set { it.copy(drawer = v) } }
         } }
-        item { Section("Шрифты") {
+        item(key = "editor-fonts") { Section("Шрифты", group = "editor-fonts") {
             NavRow("Часы: " + (FontCatalog[spec.clockFont]?.name ?: "")) { openFonts("clock") }
             NavRow("Заголовки: " + (FontCatalog[spec.headingFont]?.name ?: "")) { openFonts("heading") }
             NavRow("Текст и подписи: " + (FontCatalog[spec.bodyFont]?.name ?: "")) { openFonts("body") }
             Labeled("Толщина часов: ${spec.clockWeight}") { Slider(spec.clockWeight.toFloat(), { v -> set { it.copy(clockWeight = (v / 100).toInt() * 100) } }, valueRange = 100f..900f, steps = 7) }
         } }
-        item { Section("Цвета") {
-            if (Build.VERSION.SDK_INT >= 31) SwitchRow("Цвета из обоев (Material You)", spec.dynamicColor) { v -> set { it.copy(dynamicColor = v) } }
-            SwitchRow("Тёмная тема", spec.dark) { v -> set { it.copy(dark = v, background = if (v) 0xFF101114 else 0xFFF7F7F8, surface = if (v) 0xFF1B1D22 else 0xFFFFFFFF, onSurface = if (v) 0xFFF2F3F5 else 0xFF111827) } }
+        item(key = "colors") { Section("Цвета", group = "colors") {
+            SettingsAnchor("dynamic-color") {
+                if (Build.VERSION.SDK_INT >= 31) SwitchRow("Цвета из обоев (Material You)", spec.dynamicColor) { v -> set { it.copy(dynamicColor = v) } }
+                else Info("Цвета из обоев (Material You) — на Android 12 и новее.")
+            }
+            SettingsAnchor("dark-theme") { SwitchRow("Тёмная тема", spec.dark) { v -> set { it.copy(dark = v, background = if (v) 0xFF101114 else 0xFFF7F7F8, surface = if (v) 0xFF1B1D22 else 0xFFFFFFFF, onSurface = if (v) 0xFFF2F3F5 else 0xFF111827) } } }
             Text("Акцент", style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 6.dp)) {
                 (AccentPalette.tiles.map { it.second } + AccentPalette.soft).forEach { c ->
@@ -364,33 +387,33 @@ private fun EditorScreen(openFonts: (String) -> Unit) {
             }
             SwitchRow("Светлый текст на обоях", spec.onWallpaper == 0xFFFFFFFF) { v -> set { it.copy(onWallpaper = if (v) 0xFFFFFFFF else 0xFF111827) } }
         } }
-        item { Section("Обои") {
+        item(key = "wallpaper") { Section("Обои", group = "wallpaper") {
             Chips(WallpaperStyle.entries, spec.wallpaper, { it.title }) { v -> set { it.copy(wallpaper = v, wallpaperColors = Presets.all.firstOrNull { p -> p.wallpaper == v }?.wallpaperColors ?: it.wallpaperColors) } }
             Labeled("Затемнение: ${(spec.wallpaperDim * 100).toInt()}%") { Slider(spec.wallpaperDim, { v -> set { it.copy(wallpaperDim = v) } }, valueRange = 0f..0.7f) }
             Labeled("Непрозрачность меню: ${(spec.surfaceAlpha * 100).toInt()}%") { Slider(spec.surfaceAlpha, { v -> set { it.copy(surfaceAlpha = v) } }, valueRange = 0.3f..1f) }
-            SwitchRow("Матовое размытие", spec.blur) { v -> set { it.copy(blur = v) } }
+            SettingsAnchor("blur") { SwitchRow("Матовое размытие", spec.blur) { v -> set { it.copy(blur = v) } } }
         } }
-        item { Section("Иконки") {
+        item(key = "icon-shape") { Section("Иконки", group = "icon-shape") {
             Chips(IconShape.entries, spec.iconShape, { it.title }) { v -> set { it.copy(iconShape = v) } }
             Labeled("Размер: ${spec.iconSizeDp} dp") { Slider(spec.iconSizeDp.toFloat(), { v -> set { it.copy(iconSizeDp = v.toInt()) } }, valueRange = 40f..72f) }
-            SwitchRow("Подписи", spec.showLabels) { v -> set { it.copy(showLabels = v) } }
+            SettingsAnchor("labels") { SwitchRow("Подписи", spec.showLabels) { v -> set { it.copy(showLabels = v) } } }
             Labeled("Размер подписей: ${spec.labelSizeSp.toInt()} sp") { Slider(spec.labelSizeSp, { v -> set { it.copy(labelSizeSp = v) } }, valueRange = 9f..30f) }
             Chips(TextCase.entries, spec.textCase, { it.title }) { v -> set { it.copy(textCase = v) } }
             Labeled("Скругление карточек: ${spec.cornerDp} dp") { Slider(spec.cornerDp.toFloat(), { v -> set { it.copy(cornerDp = v.toInt()) } }, valueRange = 0f..40f) }
         } }
-        item { Section("Сетка") {
+        item(key = "grid") { Section("Сетка", group = "grid") {
             Labeled("Столбцы: ${spec.columns}") { Slider(spec.columns.toFloat(), { v -> set { it.copy(columns = v.toInt()) } }, valueRange = 3f..6f, steps = 2) }
             Labeled("Ряды: ${spec.rows}") { Slider(spec.rows.toFloat(), { v -> set { it.copy(rows = v.toInt()) } }, valueRange = 4f..8f, steps = 3) }
-            Text("Док", style = MaterialTheme.typography.labelLarge); Chips(DockStyle.entries, spec.dockStyle, { it.title }) { v -> set { it.copy(dockStyle = v) } }
-            Text("Часы", style = MaterialTheme.typography.labelLarge); Chips(ClockStyle.entries, spec.clockStyle, { it.title }) { v -> set { it.copy(clockStyle = v) } }
+            SettingsAnchor("dock-style") { Text("Док", style = MaterialTheme.typography.labelLarge); Chips(DockStyle.entries, spec.dockStyle, { it.title }) { v -> set { it.copy(dockStyle = v) } } }
+            SettingsAnchor("clock-style") { Text("Часы", style = MaterialTheme.typography.labelLarge); Chips(ClockStyle.entries, spec.clockStyle, { it.title }) { v -> set { it.copy(clockStyle = v) } } }
             Text("Индикатор страниц", style = MaterialTheme.typography.labelLarge); Chips(PageIndicator.entries, spec.pageIndicator, { it.title }) { v -> set { it.copy(pageIndicator = v) } }
         } }
-        item { Section("Плитки") {
+        item(key = "tiles") { Section("Плитки", group = "tiles") {
             Chips(TileFill.entries, spec.tileFill, { it.title }) { v -> set { it.copy(tileFill = v, wallpaper = if (v == TileFill.TRANSPARENT && it.wallpaper == WallpaperStyle.SOLID) WallpaperStyle.AURORA else it.wallpaper) } }
             SwitchRow("Больше плиток (6 в ряд)", spec.tileColumns == 6) { v -> set { it.copy(tileColumns = if (v) 6 else 4) } }
             Labeled("Промежутки: ${"%.0f".format(spec.tileGapDp * 2)} px") { Slider(spec.tileGapDp, { v -> set { it.copy(tileGapDp = v) } }, valueRange = 0f..12f) }
         } }
-        item { Section("Движение и эффекты") {
+        item(key = "motion") { Section("Движение и эффекты", group = "motion") {
             Chips(Motion.entries, spec.motion, { it.title }) { v -> set { it.copy(motion = v) } }
             Text("Наложение", style = MaterialTheme.typography.labelLarge); Chips(Overlay.entries, spec.overlay, { it.title }) { v -> set { it.copy(overlay = v) } }
             SwitchRow("Неоновое свечение текста", spec.glow) { v -> set { it.copy(glow = v) } }
@@ -432,13 +455,14 @@ private fun FontsScreen(initialTarget: String) {
         else -> spec.copy(clockFont = id, headingFont = id, bodyFont = id)
     }.copy(name = "Мой стиль", description = "Собран в редакторе"))
     val current = when (target) { "clock" -> spec.clockFont; "heading" -> spec.headingFont; else -> spec.bodyFont }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item {
+    val listState = rememberAnchoredListState(SettingsIndex.Screens.FONTS)
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 40.dp)) {
+        item(key = "fonts") { SettingsAnchor("fonts") {
             Column(Modifier.padding(horizontal = 16.dp)) {
                 Info("Все шрифты проверены программно: в каждом есть все 66 букв русского алфавита. Лицензия SIL OFL — в разделе «О приложении».")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { targets.forEach { (k, l) -> FilterChip(target == k, { target = k }, { Text(l) }) } }
             }
-        }
+        } }
         FontCategory.entries.forEach { cat ->
             val list = FontCatalog.all.filter { it.category == cat }
             if (list.isNotEmpty()) {
@@ -466,11 +490,12 @@ private fun GesturesScreen() {
     val cfg by store.config.collectAsStateCompat()
     val tick = SettingsActivity.resumeTick
     val lockOn = remember(tick) { LockService.isEnabled }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item { Section("Свайп вверх") { Chips(listOf(GestureAction.DRAWER, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.swipeUp, { it.title }) { v -> store.update { it.copy(swipeUp = v) } } } }
-        item { Section("Свайп вниз") { Chips(listOf(GestureAction.NOTIFICATIONS, GestureAction.DRAWER, GestureAction.SETTINGS, GestureAction.NONE), cfg.swipeDown, { it.title }) { v -> store.update { it.copy(swipeDown = v) } } } }
-        item { Section("Двойное касание") { Chips(listOfNotNull(GestureAction.LOCK.takeUnless { BuildConfig.PLAY }, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.doubleTap, { it.title }) { v -> store.update { it.copy(doubleTap = v) } } } }
-        if (!BuildConfig.PLAY) item { Section("Блокировка двойным касанием") {
+    val listState = rememberAnchoredListState(SettingsIndex.Screens.GESTURES)
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 40.dp)) {
+        item(key = "swipe-up") { Section("Свайп вверх", group = "swipe-up", anchors = listOf("swipe-up", "gestures")) { Chips(listOf(GestureAction.DRAWER, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.swipeUp, { it.title }) { v -> store.update { it.copy(swipeUp = v) } } } }
+        item(key = "swipe-down") { Section("Свайп вниз", group = "swipe-down") { Chips(listOf(GestureAction.NOTIFICATIONS, GestureAction.DRAWER, GestureAction.SETTINGS, GestureAction.NONE), cfg.swipeDown, { it.title }) { v -> store.update { it.copy(swipeDown = v) } } } }
+        item(key = "double-tap") { Section("Двойное касание", group = "double-tap") { Chips(listOfNotNull(GestureAction.LOCK.takeUnless { BuildConfig.PLAY }, GestureAction.NOTIFICATIONS, GestureAction.SETTINGS, GestureAction.NONE), cfg.doubleTap, { it.title }) { v -> store.update { it.copy(doubleTap = v) } } } }
+        if (!BuildConfig.PLAY) item(key = "lock-double-tap") { Section("Блокировка двойным касанием", group = "lock-double-tap") {
             Info(if (lockOn) "Служба включена ✓" else "Для блокировки экрана нужна служба спец. возможностей «СуперСмарт: блокировка экрана». Она ничего не читает с экрана и умеет только заблокировать телефон и открыть шторку.")
             if (Build.VERSION.SDK_INT >= 33) Info("Android 13+: если переключатель серый — откройте «О приложении» СуперСмарт → ⋮ → «Разрешить ограниченные настройки».")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -478,7 +503,7 @@ private fun GesturesScreen() {
                 OutlinedButton(onClick = { Device.openAppDetails(ctx) }) { Text("О приложении") }
             }
         } }
-        item { Section("Клавиатура") { SwitchRow("Открывать клавиатуру в меню приложений", cfg.autoKeyboard) { v -> store.update { it.copy(autoKeyboard = v) } } } }
+        item(key = "auto-keyboard") { Section("Клавиатура", group = "auto-keyboard") { SwitchRow("Открывать клавиатуру в меню приложений", cfg.autoKeyboard) { v -> store.update { it.copy(autoKeyboard = v) } } } }
     }
 }
 
@@ -487,8 +512,9 @@ private fun HiddenScreen() {
     val store = LauncherApp.instance.store
     val cfg by store.config.collectAsStateCompat()
     val apps by LauncherApp.instance.apps.apps.collectAsStateCompat()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item { Info("  Скрытые приложения не видны в меню, но находятся поиском.") }
+    val listState = rememberAnchoredListState(SettingsIndex.Screens.HIDDEN)
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 40.dp)) {
+        item(key = "hidden") { SettingsAnchor("hidden") { Info("  Скрытые приложения не видны в меню, но находятся поиском.") } }
         items(apps, key = { it.key }) { a ->
             Row(Modifier.fillMaxWidth().clickable { store.update { c -> c.copy(hidden = if (a.key in c.hidden) c.hidden - a.key else c.hidden + a.key) } }.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 AppIcon(a, 36.dp); Spacer(Modifier.width(14.dp))
@@ -503,8 +529,9 @@ private fun IconPacksScreen() {
     val store = LauncherApp.instance.store
     val cfg by store.config.collectAsStateCompat()
     val packs = remember { LauncherApp.instance.icons.packs.installed() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item { NavRow((if (cfg.iconPack == null) "✓  " else "") + "Системные иконки") { store.update { it.copy(iconPack = null) } } }
+    val listState = rememberAnchoredListState(SettingsIndex.Screens.ICONS)
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 40.dp)) {
+        item(key = "icons") { SettingsAnchor("icons") { NavRow((if (cfg.iconPack == null) "✓  " else "") + "Системные иконки") { store.update { it.copy(iconPack = null) } } } }
         items(packs, key = { it.pkg }) { p -> NavRow((if (cfg.iconPack == p.pkg) "✓  " else "") + p.label, p.pkg) { store.update { it.copy(iconPack = p.pkg) } } }
         if (packs.isEmpty()) item { Info("  Наборы иконок не найдены. Подходят любые наборы для Nova/ADW из магазина приложений.") }
     }
@@ -530,13 +557,14 @@ private fun LiveScreen() {
             if (f != null) store.update { it.copy(tileBackgroundUri = Uri.fromFile(f).toString() + "?t=" + System.currentTimeMillis()) }
         }
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item { Section("Счётчики уведомлений на плитках") {
+    val listState = rememberAnchoredListState(SettingsIndex.Screens.LIVE)
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 40.dp)) {
+        item(key = "badges") { Section("Счётчики уведомлений на плитках", group = "badges", anchors = listOf("badges", "live")) {
             Info(if (notif) "Включено ✓ (хранится только число уведомлений, текст не читается и не сохраняется)" else "Необязательно. Дайте СуперСмарт доступ к уведомлениям, чтобы плитки и иконки показывали число новых.")
             Button(onClick = { Device.openNotificationAccess(ctx) }) { Text(if (notif) "Настройки доступа" else "Разрешить") }
             @Suppress("UNUSED_EXPRESSION") NotificationCounter
         } }
-        item { Section("Плитка «Фото»") {
+        item(key = "photo-tile") { Section("Плитка «Фото»", group = "photo-tile") {
             if (BuildConfig.PLAY) {
                 Info(if (photos) "Выбрано фото: ${live.pickedPhotos().size} ✓ Фото не покидают телефон." else "Показывает выбранные вами фото с плавным приближением. Доступ ко всей галерее не нужен.")
                 Button(onClick = { pickMany.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text(if (photos) "Выбрать другие фото" else "Выбрать фото") }
@@ -545,11 +573,11 @@ private fun LiveScreen() {
             if (!photos) Button(onClick = { photoReq.launch(live.photoPermissions()) }) { Text("Разрешить фото") }
             }
         } }
-        item { Section("Плитка «Календарь»") {
+        item(key = "calendar-tile") { Section("Плитка «Календарь»", group = "calendar-tile") {
             Info(if (calendar) "Доступ к календарю есть ✓" else "Показывает ближайшее событие. Необязательно.")
             if (!calendar) Button(onClick = { calReq.launch(android.Manifest.permission.READ_CALENDAR) }) { Text("Разрешить календарь") }
         } }
-        item { Section("Фон прозрачных плиток") {
+        item(key = "live-tile-bg") { Section("Фон прозрачных плиток", anchors = listOf("live-tile-bg")) {
             Info("Для темы «Плитки: окна» можно выбрать своё фото — оно будет видно только внутри плиток и плыть с параллаксом.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Выбрать фото") }
@@ -582,8 +610,9 @@ private fun DigitsScreen() {
         waitingForPermission = false
         if (android.provider.Settings.canDrawOverlays(ctx)) store.update { it.copy(digitOverlay = true) }
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item { Section("Показ") {
+    val listState = rememberAnchoredListState(SettingsIndex.Screens.DIGITS)
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 40.dp)) {
+        item(key = "digit-overlay") { Section("Показ", group = "digit-overlay", anchors = listOf("digit-overlay", "digits")) {
             SwitchRow("Показывать цифры", cfg.digitOverlay) { on ->
                 if (!on) {
                     store.update { it.copy(digitOverlay = false) }
@@ -598,7 +627,7 @@ private fun DigitsScreen() {
                 Button(onClick = { explain = true }) { Text("Выдать разрешение") }
             }
         } }
-        item { Section("Что показывать") {
+        item(key = "digit-mode") { Section("Что показывать", group = "digit-mode") {
             Chips(DigitMode.entries, cfg.digitMode, { it.title }) { v -> store.update { it.copy(digitMode = v) } }
             Info(when (cfg.digitMode) {
                 DigitMode.APP -> "Сколько это приложение на экране в текущий заход: мм:сс, после часа — ч:мм:сс. Считается, пока включена служба специальных возможностей СуперСмарта (та же, что для «Стоп-экрана»)."
@@ -606,7 +635,7 @@ private fun DigitsScreen() {
                 DigitMode.TODAY -> "Сколько сегодня экран был включён, пока цифры включены. В полночь счётчик обнуляется."
             })
         } }
-        item { Section("Вид") {
+        item(key = "digit-look") { Section("Вид", anchors = listOf("digit-look")) {
             Text("Положение", style = MaterialTheme.typography.labelLarge)
             Chips(DigitAnchor.entries, cfg.digitAnchor, { it.title }) { v -> store.update { it.copy(digitAnchor = v) } }
             Labeled("Размер: ${cfg.digitSizeSp} sp") {
@@ -646,13 +675,14 @@ private fun SystemScreen() {
     val ctx = LocalContext.current
     val spec by LauncherApp.instance.store.theme.collectAsStateCompat()
     val scope = rememberCoroutineScope()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item { Section("Честно о системном шрифте") {
+    val listState = rememberAnchoredListState(SettingsIndex.Screens.SYSTEM)
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 40.dp)) {
+        item(key = "system-font") { Section("Честно о системном шрифте", group = "system-font", anchors = listOf("system-font", "system")) {
             Info("Android не даёт обычным приложениям менять шрифт всей системы — для этого нужен root или фирменный магазин тем производителя. Поэтому СуперСмарт меняет шрифты везде, где рисует сам: часы, подписи, меню, виджеты и плитки.")
             Info("Кнопка ниже откроет экран шрифтов вашего телефона (${Device.oemName()}), если производитель его сделал; иначе — настройки экрана.")
             Button(onClick = { if (!Device.openSystemFontSettings(ctx)) Toast.makeText(ctx, "Не нашёл настройки шрифта", Toast.LENGTH_SHORT).show() }) { Text("Открыть настройки шрифта телефона") }
         } }
-        item { Section("Обои темы — во всём телефоне") {
+        item(key = "system-wallpaper") { Section("Обои темы — во всём телефоне", group = "system-wallpaper") {
             Info("Можно поставить нарисованные обои текущей темы «${spec.name}» на рабочий стол и экран блокировки. На Android 12+ система сама перекрасит акцентные цвета (Material You) — шторка, настройки и приложения подстроятся под тему.")
             Button(enabled = spec.wallpaper != WallpaperStyle.SYSTEM, onClick = {
                 scope.launch {
@@ -677,46 +707,57 @@ private fun HomeScreenSettings() {
     val spec by store.theme.collectAsStateCompat()
     val installedApps by launcher.apps.apps.collectAsStateCompat()
     val own = cfg.hasOwnLayout(spec.id)
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item { Section("Главный экран без меню приложений") {
-            SwitchRow("Все приложения на главном экране", cfg.allAppsOnHome) { enabled ->
-                val keys = installedApps.filter { it.key !in cfg.hidden }.map { it.key }.distinct()
-                store.update { current ->
-                    val base = current.copy(allAppsOnHome = enabled)
-                    if (!enabled) base else base.editAllLayouts { layout ->
-                        var next = layout
-                        keys.forEach { key ->
-                            next = next.appendHome(key)
-                            next = next.pinTile(TileItem("t_$key", TileKind.APP, key, TileSize.SMALL))
+    val listState = rememberAnchoredListState(SettingsIndex.Screens.HOME)
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 40.dp)) {
+        item(key = "home-apps") { Section("Главный экран без меню приложений", group = "home-apps", anchors = listOf("home-apps", "home")) {
+            SettingsAnchor("all-apps-on-home") {
+                SwitchRow("Все приложения на главном экране", cfg.allAppsOnHome) { enabled ->
+                    val keys = installedApps.filter { it.key !in cfg.hidden }.map { it.key }.distinct()
+                    store.update { current ->
+                        val base = current.copy(allAppsOnHome = enabled)
+                        if (!enabled) base else base.editAllLayouts { layout ->
+                            var next = layout
+                            keys.forEach { key ->
+                                next = next.appendHome(key)
+                                next = next.pinTile(TileItem("t_$key", TileKind.APP, key, TileSize.SMALL))
+                            }
+                            next.copy(favorites = (next.favorites + keys).distinct()).normalized()
                         }
-                        next.copy(favorites = (next.favorites + keys).distinct()).normalized()
                     }
                 }
+                Info("Включите, чтобы убрать отдельное меню приложений и разместить установленные приложения на страницах главного экрана. В теме «Плитки» они появятся плитками; в минималистичной теме — текстовым списком. Новые приложения тоже будут добавляться автоматически.")
             }
-            Info("Включите, чтобы убрать отдельное меню приложений и разместить установленные приложения на страницах главного экрана. В теме «Плитки» они появятся плитками; в минималистичной теме — текстовым списком. Новые приложения тоже будут добавляться автоматически.")
-            SortIntoFoldersButton(spec.id, installedApps)
+            SettingsAnchor("sort-folders") { SortIntoFoldersButton(spec.id, installedApps) }
             val arrangeCtx = LocalContext.current
             Spacer(Modifier.height(8.dp))
-            Button(onClick = { arrangeCtx.startActivity(org.ivanivorontsov.launcher.ai.AiArrangeActivity.intent(arrangeCtx, spec.id)) }, modifier = Modifier.fillMaxWidth()) { Text("Расставить с ИИ") }
-            Info("Опишите словами, как расставить приложения и что изменить в настройках: порядок и папки (папки — только если вы их просите), тема, анимация, сетка, иконки, док, жесты, пояса часов. Можно через тот же веб-чат, что и в клавиатуре (вход запоминается, без ключей API), или разобрать запрос прямо на телефоне. Изменения применяются только после подтверждения «было → станет».")
+            SettingsAnchor("ai-arrange") {
+                Button(onClick = { arrangeCtx.startActivity(org.ivanivorontsov.launcher.ai.AiArrangeActivity.intent(arrangeCtx, spec.id)) }, modifier = Modifier.fillMaxWidth()) { Text("Расставить с ИИ") }
+                Info("Опишите словами, как расставить приложения и что изменить в настройках: порядок и папки (папки — только если вы их просите), тема, анимация, сетка, иконки, док, жесты, пояса часов. Можно через тот же веб-чат, что и в клавиатуре (вход запоминается, без ключей API), или разобрать запрос прямо на телефоне. Изменения применяются только после подтверждения «было → станет».")
+            }
             val undoStore = remember(arrangeCtx) { org.ivanivorontsov.launcher.ai.LayoutUndoStore(arrangeCtx) }
-            if (undoStore.hasAny()) {
+            SettingsAnchor("ai-undo") {
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = {
-                    if (undoStore.restore(store, spec.id)) {
-                        Toast.makeText(arrangeCtx, "Вернула предыдущую раскладку и настройки.", Toast.LENGTH_SHORT).show()
-                    }
-                }, modifier = Modifier.fillMaxWidth()) { Text("Вернуть предыдущую раскладку") }
+                Button(
+                    onClick = {
+                        if (undoStore.restore(store, spec.id)) {
+                            Toast.makeText(arrangeCtx, "Вернула предыдущую раскладку и настройки.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = undoStore.hasAny(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Вернуть предыдущую раскладку") }
             }
             Spacer(Modifier.height(8.dp))
-            Button(onClick = {
-                val keys = installedApps.filter { it.key !in cfg.hidden }.map { it.key }.distinct()
-                store.update { org.ivanivorontsov.launcher.core.AiLayout.enableAllAppsOnHome(it, spec.id, keys) }
-                Toast.makeText(arrangeCtx, "Все приложения снова на главном экране.", Toast.LENGTH_SHORT).show()
-            }, modifier = Modifier.fillMaxWidth()) { Text("Показать все приложения на главном") }
-            Info("Если после расстановки с ИИ пропали приложения, эта кнопка включит режим «все на главном» и допишет недостающие. «Вернуть предыдущую раскладку» откатывает и раскладку, и настройки (в том числе бэкап из 1.4.9).")
+            SettingsAnchor("ai-repair") {
+                Button(onClick = {
+                    val keys = installedApps.filter { it.key !in cfg.hidden }.map { it.key }.distinct()
+                    store.update { org.ivanivorontsov.launcher.core.AiLayout.enableAllAppsOnHome(it, spec.id, keys) }
+                    Toast.makeText(arrangeCtx, "Все приложения снова на главном экране.", Toast.LENGTH_SHORT).show()
+                }, modifier = Modifier.fillMaxWidth()) { Text("Показать все приложения на главном") }
+                Info("Если после расстановки с ИИ пропали приложения, эта кнопка включит режим «все на главном» и допишет недостающие. «Вернуть предыдущую раскладку» откатывает и раскладку, и настройки (в том числе бэкап из 1.4.9).")
+            }
         } }
-        item { Section("Виджеты и экран «Сегодня»") {
+        item(key = "today-page") { Section("Виджеты и экран «Сегодня»", group = "today-page") {
             var ask by remember { mutableStateOf(false) }
             val ctx = androidx.compose.ui.platform.LocalContext.current
             SwitchRow("Экран «Сегодня» слева от главного", cfg.todayPage) { on ->
@@ -739,17 +780,17 @@ private fun HomeScreenSettings() {
                     }) { Text("Удалить") }
                 } })
         } }
-        item { Section("Новые приложения") {
+        item(key = "auto-add") { Section("Новые приложения", group = "auto-add") {
             SwitchRow("Добавлять новые приложения на главный экран", cfg.autoAddNew) { v -> store.update { it.copy(autoAddNew = v) } }
             Info("Только что установленное приложение встаёт в первую свободную ячейку (в «Плитках» — маленькой плиткой). Обновления, системные приложения и копии из рабочего профиля не добавляются.")
         } }
-        item { Section("Перелистывание страниц") {
+        item(key = "page-effects") { Section("Перелистывание страниц", group = "page-effects") {
             val cur = cfg.pageEffectFor(spec.id, spec.layout)
             PagePreview(cur, Modifier.fillMaxWidth().height(150.dp).padding(bottom = 8.dp))
             Chips(org.ivanivorontsov.launcher.core.PageEffect.entries, cur, { it.title }) { v -> store.update { it.copy(pageEffects = it.pageEffects + (spec.id to v)) } }
             Info("Эффект хранится отдельно для каждой темы (сейчас — «${spec.name}»). Если в системе отключена анимация, страницы листаются без эффекта. «Цилиндр» сворачивает страницы на объёмный барабан: в покое экран ровный, при листании края уходят вглубь, а соседняя страница видна с обратной стороны.")
         } }
-        item { Section("Перетаскивание") {
+        item(key = "multi-finger") { Section("Перетаскивание", group = "multi-finger") {
             SwitchRow("Перетаскивание двумя или тремя пальцами", cfg.multiFingerDrag) { v -> store.update { it.copy(multiFingerDrag = v) } }
             Info("Коснитесь иконки двумя или тремя пальцами — она сразу поднимется без долгого нажатия. Тяните: иконки расступаются и встают по сетке.")
             Info("Долгое нажатие поднимает иконку — тяните её: остальные иконки расступаются. Отпустите на другой иконке, чтобы сделать папку; у края экрана страница перелистнётся сама. Сверху появятся «Удалить с экрана», «О приложении» и «Удалить приложение».")
@@ -757,7 +798,7 @@ private fun HomeScreenSettings() {
             Info(if (own) "У темы «${spec.name}» своя расстановка — у каждой темы она хранится отдельно." else "Тема «${spec.name}» пока использует общую расстановку. Как только вы что-то передвинете, у неё появится своя.")
             if (own) OutlinedButton(onClick = { store.update { it.resetLayout(spec.id) } }) { Text("Сбросить расстановку этой темы") }
         } }
-        item { Section("Анимации «Домой» и «Назад»") {
+        item(key = "home-anim") { Section("Анимации «Домой» и «Назад»", group = "home-anim") {
             Info("Работают и с жестами, и с кнопками навигации. «Домой» — свайп вверх от нижнего края или кнопка ○, «Назад» — свайп от края экрана или кнопка ◁.")
             Text("Домой (сворачивание приложения)", style = MaterialTheme.typography.titleSmall)
             Chips(org.ivanivorontsov.launcher.core.HomeAnim.entries, cfg.homeAnim, { it.title }) { v -> store.update { it.copy(homeAnim = v, returnAnimation = true) } }
@@ -776,7 +817,7 @@ private fun HomeScreenSettings() {
             Info("Оптимизация после обновления: " + org.ivanivorontsov.launcher.data.UpdateWarmUp.status + ". Без компьютера Android компилирует профиль сам — обычно ночью на зарядке; до этого первые минуты возможны микрорывки.")
             Info("realme 15 5G (экран 144 Гц): для самых плавных кадров включите в Настройках телефона → Экран → Частота обновления «Высокая», а здесь, в разделе экрана, — «Максимальная частота». Если хочется ещё мягче — «Пружина» и длительность 0,4 с; быстрее всего — 0,15–0,2 с.")
         } }
-        item { Section("Часы: часовые пояса") {
+        item(key = "clock-zones") { Section("Часы: часовые пояса", group = "clock-zones") {
             Info("Сколько времён показывать в виджете часов. Первое — главное, остальные — строкой под ним.")
             Chips(listOf(1, 2, 3), cfg.clockZoneCount.coerceIn(1, 3), { "$it" }) { v -> store.update { it.copy(clockZoneCount = v) } }
             var editing by remember { mutableIntStateOf(-1) }
@@ -790,7 +831,7 @@ private fun HomeScreenSettings() {
                 editing = -1
             }
         } }
-        item { Section("Диагностика фризов") {
+        item(key = "frame-meter") { Section("Диагностика фризов", group = "frame-meter") {
             Info("Включите «Счётчик кадров», сверните тяжёлое приложение домой 5–10 раз и нажмите «Скопировать отчёт» — пришлите текст разработчику. Переключатели ниже по одному отключают подозреваемых: включайте по одному и сравнивайте, пропал ли фриз.")
             SwitchRow("Счётчик кадров после возврата домой", cfg.frameMeter) { v -> store.update { it.copy(frameMeter = v) } }
             SwitchRow("Упрощённый дом: без обоев (сплошной фон)", cfg.diagNoWallpaper) { v -> store.update { it.copy(diagNoWallpaper = v) } }
@@ -807,15 +848,15 @@ private fun HomeScreenSettings() {
                 android.widget.Toast.makeText(ctx, "Отчёт скопирован", android.widget.Toast.LENGTH_SHORT).show()
             }) { Text("Скопировать отчёт") }
         } }
-        item { Section("Анимация при разблокировке") {
+        item(key = "unlock-anim") { Section("Анимация при разблокировке", group = "unlock-anim") {
             Chips(org.ivanivorontsov.launcher.core.UnlockAnim.entries, cfg.unlockAnim, { it.title }) { v -> store.update { it.copy(unlockAnim = v) } }
             UnlockPreview(cfg.unlockAnim, Modifier.padding(top = 8.dp))
         } }
-        item { Section("Поворот экрана") {
+        item(key = "auto-rotate") { Section("Поворот экрана", group = "auto-rotate") {
             SwitchRow("Автоповорот лаунчера", cfg.autoRotate) { v -> store.update { it.copy(autoRotate = v) } }
-            Info("Выключено — главный экран всегда вертикальный. Включено — следует системному автоповороту.")
+            Info("Выключено — главный экран всегда вертикальный. Включено — следует системному автоповороту. В альбомной ориентации домашние страницы листаются вниз и вверх, как на планшете; шторка уведомлений и меню приложений открываются свайпом от верхнего или нижнего края, чтобы не пересекаться с листанием страниц.")
         } }
-        item { Section("Возврат на главный экран") {
+        item(key = "return-icon") { Section("Возврат на главный экран", group = "return-icon") {
             SwitchRow("Анимация «приложение сворачивается в иконку»", cfg.returnAnimation) { v -> store.update { it.copy(returnAnimation = v) } }
             SwitchRow("Своя анимация приземления в иконку (рекомендуется для realme/ColorOS)", cfg.ownLanding) { v -> store.update { it.copy(ownLanding = v, returnAnimation = if (v) true else it.returnAnimation) } }
             SwitchRow("Жест «домой» прилетает в иконку (Android 11+)", cfg.gestureContract) { v -> store.update { it.copy(gestureContract = v) } }
@@ -871,8 +912,9 @@ private fun SmoothScreen() {
     val maxHz = remember { Device.maxRefreshRate(ctx.window).toInt() }
     val ignoring = remember(tick) { Device.isIgnoringBatteryOptimizations(ctx) }
     val anim = remember(tick) { Device.animationsEnabled() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item { Section("Частота экрана") {
+    val listState = rememberAnchoredListState(SettingsIndex.Screens.SMOOTH)
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 40.dp)) {
+        item(key = "refresh-rate") { Section("Частота экрана", group = "refresh-rate", anchors = listOf("refresh-rate", "smooth")) {
             val activeHz = remember(tick) { Device.activeRefreshRate(ctx.window) }
             var taps by remember { mutableIntStateOf(0) }
             Text(
@@ -893,8 +935,8 @@ private fun SmoothScreen() {
             Info("Все анимации считаются по времени, а не по кадрам: на 60, 90, 120 и 144 Гц они одинаковые по длительности, просто плавнее. СуперСмарт просит самый высокий режим для текущего разрешения и не меняет разрешение.")
             Info("realme и ColorOS часто держат сторонние приложения на 60 Гц, даже если экран умеет 144. Если жест «Домой» всё равно дёргается: Настройки телефона → Экран → Частота обновления → высокая частота для приложений — добавьте СуперСмарт. Фактический режим пишется в logcat, тег UyutHz. Пять нажатий на строку «Сейчас» показывают его тостом.")
         } }
-        item { Section("Анимации") { Info(if (anim) "Системные анимации включены ✓" else "В настройках телефона отключены анимации — СуперСмарт работает без анимаций и не тратит на них энергию.") } }
-        item { Section("Фоновая работа") {
+        item(key = "smooth-anim") { Section("Анимации", anchors = listOf("smooth-anim")) { Info(if (anim) "Системные анимации включены ✓" else "В настройках телефона отключены анимации — СуперСмарт работает без анимаций и не тратит на них энергию.") } }
+        item(key = "background") { Section("Фоновая работа", group = "background") {
             Info(if (ignoring) "СуперСмарт исключён из оптимизации батареи ✓" else "Чтобы система не выгружала лаунчер (и он не «перезапускался» при возврате домой), исключите его из оптимизации батареи.")
             if (!ignoring && !BuildConfig.PLAY) Button(onClick = { Device.requestIgnoreBatteryOptimizations(ctx) }) { Text("Не выгружать СуперСмарт") }
             if (Device.oem == Device.Oem.REALME_OPPO_ONEPLUS) {
@@ -914,8 +956,9 @@ private fun AboutScreen(openLicenses: () -> Unit) {
     val ctx = LocalContext.current
     var showOfl by remember { mutableStateOf(false) }
     val ofl = remember { try { ctx.assets.open("licenses/OFL-1.1.txt").bufferedReader().readText() } catch (_: Exception) { "" } }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 0.dp, 16.dp, 40.dp)) {
-        item {
+    val listState = rememberAnchoredListState(SettingsIndex.Screens.ABOUT)
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(16.dp, 0.dp, 16.dp, 40.dp)) {
+        item(key = "about-version") { SettingsAnchor("about", "about-version") {
             Text("СуперСмарт ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleLarge)
             Info("Без интернета (нет разрешения INTERNET), без рекламы и трекеров. Все данные — на телефоне.")
             Info("Идеи взяты из лучших лаунчеров: быстрый поиск и плавность Kvaesitso и Olauncher, алфавит-«волна» Niagara, формы иконок и шрифты Lawnchair, живые плитки SquareHome. Чужие логотипы, значки, обои и фирменные шрифты не используются.")
@@ -923,14 +966,14 @@ private fun AboutScreen(openLicenses: () -> Unit) {
             Button(onClick = openLicenses, modifier = Modifier.padding(top = 12.dp)) { Text("Лицензии шрифтов и библиотек") }
             Text("Шрифты", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
             Info("Все шрифты распространяются по лицензии SIL Open Font License 1.1. Шрифты с «зарезервированным именем» включены без изменений; остальные сокращены до латиницы и кириллицы (это разрешено лицензией).")
-        }
+        } }
         items(FontCatalog.all, key = { it.id }) { f ->
             Column(Modifier.padding(vertical = 6.dp)) {
                 Text(f.name + "  —  " + f.designer, fontFamily = FontRegistry.family(f.id), fontSize = 17.sp)
                 Text(f.copyright.ifEmpty { "SIL OFL 1.1" } + (if (f.unmodified) "  ·  без изменений" else "  ·  подмножество: латиница + кириллица"), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
         }
-        item {
+        item(key = "about-ofl") {
             OutlinedButton(onClick = { showOfl = !showOfl }, modifier = Modifier.padding(top = 12.dp)) { Text(if (showOfl) "Скрыть текст лицензии" else "Текст лицензии SIL OFL 1.1") }
             if (showOfl) Text(ofl, fontSize = 11.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 8.dp))
             Spacer(Modifier.height(24.dp).navigationBarsPadding())

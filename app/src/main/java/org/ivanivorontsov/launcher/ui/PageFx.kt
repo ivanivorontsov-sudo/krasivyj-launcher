@@ -3,6 +3,7 @@ package org.ivanivorontsov.launcher.ui
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.TransformOrigin
@@ -27,6 +28,8 @@ import kotlin.math.sin
  *
  * 1.4.9: STACK/DEPTH z-order is directional so a backward swipe no longer freezes the incoming page;
  * every layer resets its transforms at rest; cylinder columns get a 2% seam overlap and are depth-sorted.
+ * 1.4.12: off-screen pages (offset ±1 and leftovers) are fully hidden (alpha 0, translationX off-screen,
+ * z-index below); settled pages always get an identity layer so a cancelled or repeated swipe cannot leave two pages on screen.
  */
 class PageFx(val effect: PageEffect, val pager: PagerState, val page: Int)
 
@@ -35,21 +38,25 @@ val LocalPageEffect = compositionLocalOf { PageEffect.NONE }
 
 val LocalPageFx = compositionLocalOf<PageFx?> { null }
 
+/** Landscape home pages swipe vertically (tablet-style). */
+val LocalVerticalPages = compositionLocalOf { false }
+
 internal fun PagerState.position() = currentPage + currentPageOffsetFraction
 
 /** Whole-page transform. Apply to the root of a pager page. */
-fun Modifier.pageEffect(effect: PageEffect, pager: PagerState, page: Int, itemsDoIt: Boolean = false): Modifier {
+fun Modifier.pageEffect(effect: PageEffect, pager: PagerState, page: Int, itemsDoIt: Boolean = false): Modifier = composed {
     val fx = AnimGuard.safeEffect(effect)
-    if (fx == PageEffect.NONE) return this
-    if (fx.perItem() && itemsDoIt) return this.zIndexFor(pager, page, fx)
-    if (fx == PageEffect.WAVE) return this
-    // Pages nearer to the centre draw on top (cube/stack/cylinder back faces).
-    return this.zIndexFor(pager, page, fx).graphicsLayer {
-        val raw = page - pager.position()
-        // 1.3.4: only the current page and the incoming neighbour may draw. Pages kept composed by the
-        // pager (or a far page such as the first one) are fully hidden, so nothing ghosts on top.
-        if (abs(raw) >= 1f) { resetLayer(); alpha = 0f; return@graphicsLayer }
-        pageLayer(fx, raw)
+    if (fx == PageEffect.NONE) this
+    else {
+        val vertical = LocalVerticalPages.current
+        // In landscape, cylinder/wave fall back to a page-level vertical slide (no per-icon bend).
+        when {
+            fx.perItem() && itemsDoIt && !vertical -> this.zIndexFor(pager, page, fx)
+            fx == PageEffect.WAVE && !vertical -> this
+            else -> this.zIndexFor(pager, page, fx).graphicsLayer {
+                applyTransform(PageFxMath.pageTransform(fx, page - pager.position(), size.width, size.height, vertical))
+            }
+        }
     }
 }
 
@@ -84,115 +91,23 @@ private fun GraphicsLayerScope.resetLayer() {
     compositingStrategy = CompositingStrategy.Auto
 }
 
+private fun GraphicsLayerScope.applyTransform(t: PageFxMath.PageTransform) {
+    translationX = t.translationX
+    translationY = t.translationY
+    scaleX = t.scaleX
+    scaleY = t.scaleY
+    rotationX = t.rotationX
+    rotationY = t.rotationY
+    rotationZ = t.rotationZ
+    alpha = t.alpha
+    shadowElevation = t.shadowElevation
+    transformOrigin = TransformOrigin(t.originX, t.originY)
+    cameraDistance = t.cameraDistanceFactor * density
+    compositingStrategy = if (t.modulateAlpha) CompositingStrategy.ModulateAlpha else CompositingStrategy.Auto
+}
+
 internal fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
-    resetLayer()
-    val a = abs(o)
-    when (effect) {
-        PageEffect.CUBE -> {
-            transformOrigin = TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
-            rotationY = 90f * o.coerceIn(-1f, 1f)
-            alpha = if (a >= 1f) 0f else 1f
-        }
-        PageEffect.FLIP -> {
-            translationX = -o * size.width
-            rotationY = 180f * o.coerceIn(-1f, 1f)
-            // Edge-on at |o| = 0.5; hide only the back face (no hard pop before that).
-            alpha = if (a >= 0.5f) 0f else 1f
-            shadowElevation = 0f
-        }
-        PageEffect.ROTATE -> {
-            transformOrigin = TransformOrigin(0.5f, 1.6f)
-            rotationZ = 22f * o
-        }
-        PageEffect.ZOOM -> {
-            val s = 1f - 0.22f * a.coerceAtMost(1f)
-            scaleX = s; scaleY = s
-            alpha = 1f - 0.6f * a.coerceAtMost(1f)
-        }
-        PageEffect.STACK -> if (o > 0f) {
-            // Under-card: stay visually centred (counter the pager) and shrink slightly.
-            // The top card (o ≤ 0) follows the finger with identity transforms — both directions.
-            translationX = -o * size.width
-            val s = 1f - 0.14f * o.coerceAtMost(1f)
-            scaleX = s; scaleY = s
-            alpha = 1f - 0.35f * o.coerceAtMost(1f)
-        }
-        // 1.3.9 — new effects. All are pure layer transforms of the page (no recomposition while swiping).
-        PageEffect.CUBE_IN -> {
-            // Inside of the cube: the shared edge stays put, the faces turn towards the viewer.
-            transformOrigin = TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
-            rotationY = -90f * o.coerceIn(-1f, 1f)
-            alpha = 1f - 0.25f * a.coerceAtMost(1f)
-        }
-        PageEffect.CAROUSEL -> {
-            // Pages ride on a round table: they turn around their own centre and step back.
-            val c = a.coerceAtMost(1f)
-            rotationY = 55f * o.coerceIn(-1f, 1f)
-            translationX = -o * size.width * 0.28f
-            val s = 1f - 0.24f * c
-            scaleX = s; scaleY = s
-            alpha = 1f - 0.4f * c
-        }
-        PageEffect.TILT -> {
-            transformOrigin = TransformOrigin(0.5f, 0.5f)
-            rotationY = -28f * o.coerceIn(-1f, 1f)
-            rotationX = 6f * a.coerceAtMost(1f)
-            val s = 1f - 0.08f * a.coerceAtMost(1f)
-            scaleX = s; scaleY = s
-        }
-        PageEffect.ZOOM_IN -> {
-            // The leaving page swells towards the viewer and dissolves; the next one grows into place.
-            val c = a.coerceAtMost(1f)
-            val s = if (o < 0f) 1f + 0.35f * c else 1f - 0.25f * c
-            scaleX = s; scaleY = s
-            alpha = 1f - c
-        }
-        PageEffect.DEPTH -> if (o > 0f) {
-            // The page on the right waits underneath; the current one slides over it.
-            val c = o.coerceAtMost(1f)
-            translationX = -o * size.width
-            val s = 0.75f + 0.25f * (1f - c)
-            scaleX = s; scaleY = s
-            alpha = 1f - 0.5f * c
-        }
-        PageEffect.ACCORDION -> {
-            transformOrigin = TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
-            scaleX = (1f - a).coerceIn(0f, 1f)
-            alpha = 1f - 0.3f * a.coerceAtMost(1f)
-        }
-        PageEffect.SPIN -> {
-            val c = a.coerceAtMost(1f)
-            rotationZ = 90f * o.coerceIn(-1f, 1f)
-            val s = 1f - 0.45f * c
-            scaleX = s; scaleY = s
-            alpha = 1f - c
-        }
-        PageEffect.FADE -> {
-            // Cross-fade without an offscreen copy of hardware bitmaps. The default
-            // compositing strategy promoted each fading page (icons live in
-            // Bitmap.Config.HARDWARE since 1.4.3) to a full-screen layer; stacking two
-            // such layers at the same pixels hung HWUI on some Mali GPUs, so HOME
-            // never became ready and the launcher could not be chosen as default.
-            compositingStrategy = CompositingStrategy.ModulateAlpha
-            translationX = -o * size.width
-            alpha = (1f - a.coerceAtMost(1f)).coerceIn(0f, 1f)
-        }
-        PageEffect.WHEEL -> {
-            // Ferris wheel: pages swing around a hub high above the screen.
-            transformOrigin = TransformOrigin(0.5f, -1.1f)
-            rotationZ = -24f * o.coerceIn(-1f, 1f)
-            alpha = 1f - 0.3f * a.coerceAtMost(1f)
-        }
-        // Pages without per-item content (widgets page, tiles, text lists) get a page-level cylinder.
-        PageEffect.CYLINDER -> {
-            val b = PageFxMath.bend(o)
-            transformOrigin = TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
-            rotationY = 70f * o.coerceIn(-1f, 1f) * (0.4f + 0.6f * b)
-            val s = 1f - 0.12f * a.coerceAtMost(1f)
-            scaleX = s; scaleY = s
-        }
-        else -> {}
-    }
+    applyTransform(PageFxMath.pageTransform(effect, o, size.width))
 }
 
 /**
@@ -203,8 +118,8 @@ fun GraphicsLayerScope.itemPageLayer(fx: PageFx, cx: Float, cy: Float, w: Float,
     resetLayer()
     val pos = fx.pager.position()
     val o = fx.page - pos
-    // 1.3.4: a page that is not the current one or its direct neighbour never draws.
-    if (abs(o) >= 1f) { alpha = 0f; return }
+    if (PageFxMath.isOffscreen(o)) { applyTransform(PageFxMath.hidden(o, w)); return }
+    if (PageFxMath.isSettled(o)) return
     when (fx.effect) {
         PageEffect.CYLINDER -> {
             val e = PageFxMath.bend(pos)

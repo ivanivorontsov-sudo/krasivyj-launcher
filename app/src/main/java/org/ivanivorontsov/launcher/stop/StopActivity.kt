@@ -57,6 +57,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import kotlinx.coroutines.delay
 import org.ivanivorontsov.launcher.LauncherApp
+import org.ivanivorontsov.launcher.core.SettingsAnchors
+import org.ivanivorontsov.launcher.ui.SettingsAnchor
+import org.ivanivorontsov.launcher.ui.SettingsFocusController
+import org.ivanivorontsov.launcher.ui.LocalSettingsFocus
+import org.ivanivorontsov.launcher.core.SettingsIndex
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import org.ivanivorontsov.launcher.service.LockService
 import org.ivanivorontsov.launcher.stop.core.Backup
 import org.ivanivorontsov.launcher.stop.core.ExitChoice
@@ -128,6 +136,13 @@ private enum class Page(val title: String) { MAIN("Стоп-экран"), BLOCKE
 
 @Composable
 private fun StopRoot(close: () -> Unit) {
+    val focus = remember { SettingsFocusController() }
+    val focusId = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.intent?.getStringExtra(SettingsAnchors.EXTRA_FOCUS)
+    LaunchedEffect(focusId) {
+        if (focusId == "stop") {
+            SettingsIndex.all().firstOrNull { it.id == "stop" }?.let { focus.focus(it) }
+        }
+    }
     val store = StopGuard.store
     var editingUnlocked by remember { mutableStateOf(!store.hasPassword || StopActivity.editingUnlocked) }
     var showPasswordPrompt by remember { mutableStateOf(false) }
@@ -142,6 +157,7 @@ private fun StopRoot(close: () -> Unit) {
         else if (page == Page.MAIN) close()
         else page = Page.MAIN
     }
+    CompositionLocalProvider(LocalSettingsFocus provides focus) {
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("‹", fontSize = 34.sp, modifier = Modifier.clickable {
@@ -149,7 +165,7 @@ private fun StopRoot(close: () -> Unit) {
                 else if (page == Page.MAIN) close()
                 else page = Page.MAIN
             }.padding(horizontal = 14.dp))
-            Text(page.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            SettingsAnchor("stop") { Text(page.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f)) }
             if (!editingUnlocked && store.hasPassword) {
                 Button(onClick = { showPasswordPrompt = true }) { Text("Снять блокировку") }
             } else if (editingUnlocked && store.hasPassword) {
@@ -193,6 +209,7 @@ private fun StopRoot(close: () -> Unit) {
             showPasswordPrompt = false
         }
     )
+    }
 }
 
 @Composable

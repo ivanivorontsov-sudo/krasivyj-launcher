@@ -1,5 +1,7 @@
 package org.ivanivorontsov.launcher.ui
 
+import org.ivanivorontsov.launcher.core.TodayPage
+
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
@@ -106,7 +108,19 @@ fun WidgetsPage(ui: UiState) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             Pill("+ Виджет") { ui.widgetPickerToToday = true; actions.addWidget() }
             if (config.widgets.isNotEmpty()) Pill(if (ui.widgetEdit) "Готово" else "Изменить") { ui.widgetEdit = !ui.widgetEdit }
-            Pill("Убрать экран") { actions.openSettings("home") }
+            Pill("Убрать экран") {
+                val change = TodayPage.remove(LauncherApp.instance.store.config.value, spec.id, spec.columns, spec.rows)
+                if (change.changed) {
+                    LauncherApp.instance.store.update { change.next }
+                    ui.widgetEdit = false
+                    ui.widgetPickerToToday = false
+                    ui.revealPage = 0
+                    ui.snackbar = SnackAction(TodayPage.REMOVED_MESSAGE, TodayPage.UNDO_ACTION, TodayPage.UNDO_MS) {
+                        LauncherApp.instance.store.update { change.undo() }
+                        ui.snackbar = null
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(24.dp))
         @Suppress("UNUSED_EXPRESSION") ctx

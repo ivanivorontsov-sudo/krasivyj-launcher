@@ -1,5 +1,7 @@
 package org.ivanivorontsov.launcher.ui
 
+import org.ivanivorontsov.launcher.core.GridFit
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -43,6 +45,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -266,11 +269,14 @@ private fun GridDrawer(apps: List<AppInfo>, bottom: Dp, scrollerEnabled: Boolean
     val state = rememberLazyGridState()
     val letters = remember(apps) { firstIndexByLetter(apps) }
     LaunchedEffect(resetTick) { if (resetTick > 0) state.scrollToItem(DrawerOpen.INITIAL_INDEX) }
-    Box(Modifier.fillMaxSize()) {
-        LazyVerticalGrid(GridCells.Fixed(spec.columns), state = state, modifier = Modifier.fillMaxSize().padding(end = 18.dp),
-            contentPadding = PaddingValues(start = 8.dp, top = 4.dp, bottom = bottom + 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            items(apps, key = { it.key }, contentType = { 0 }) { a ->
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { AppCell(a, (spec.iconSizeDp - 4).dp, true, labelColor = LocalColors.current.onSurface) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val drawerFit = GridFit.of(spec.columns, (maxWidth - 18.dp - 8.dp).value, (spec.iconSizeDp - 4).toFloat())
+        CompositionLocalProvider(LocalGridFit provides drawerFit) {
+            LazyVerticalGrid(GridCells.Fixed(spec.columns), state = state, modifier = Modifier.fillMaxSize().padding(end = 18.dp),
+                contentPadding = PaddingValues(start = 8.dp, top = 4.dp, bottom = bottom + 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                items(apps, key = { it.key }, contentType = { 0 }) { a ->
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { AppCell(a, drawerFit.iconDp.dp, true, labelColor = LocalColors.current.onSurface) }
+                }
             }
         }
         FastScroller(letters, Modifier.align(Alignment.CenterEnd), enabled = scrollerEnabled) { idx -> state.scrollToItem(idx) }
@@ -385,8 +391,13 @@ private fun LibraryDrawer(apps: List<AppInfo>, config: LauncherConfig, bottom: D
         Column(Modifier.fillMaxSize()) {
             Text("‹  " + oc.title, style = labelStyle(colors.onSurface, 20.sp).copy(fontFamily = LocalFonts.current.heading, shadow = null),
                 modifier = Modifier.fillMaxWidth().clickable { open = null }.padding(horizontal = 22.dp, vertical = 12.dp))
-            LazyVerticalGrid(GridCells.Fixed(spec.columns), Modifier.fillMaxSize(), contentPadding = PaddingValues(8.dp, 4.dp, 8.dp, bottom + 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                items(list, key = { it.key }) { a -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { AppCell(a, spec.iconSizeDp.dp, true, labelColor = colors.onSurface) } }
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val catFit = GridFit.of(spec.columns, (maxWidth - 16.dp).value, spec.iconSizeDp.toFloat())
+                CompositionLocalProvider(LocalGridFit provides catFit) {
+                    LazyVerticalGrid(GridCells.Fixed(spec.columns), Modifier.fillMaxSize(), contentPadding = PaddingValues(8.dp, 4.dp, 8.dp, bottom + 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                        items(list, key = { it.key }) { a -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { AppCell(a, catFit.iconDp.dp, true, labelColor = colors.onSurface) } }
+                    }
+                }
             }
         }
         androidx.activity.compose.BackHandler { open = null }

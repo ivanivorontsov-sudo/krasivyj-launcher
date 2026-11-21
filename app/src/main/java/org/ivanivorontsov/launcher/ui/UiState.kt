@@ -54,6 +54,8 @@ data class MenuEntry(val label: String, val danger: Boolean = false, val onClick
 
 data class MenuState(val anchor: Rect, val app: AppInfo? = null, val tile: TileItem? = null, val title: String? = null, val entries: List<MenuEntry> = emptyList())
 
+data class SnackAction(val text: String, val action: String? = null, val durationMs: Long = 5000L, val onAction: () -> Unit = {})
+
 @Stable
 class UiState(val scope: CoroutineScope) {
     val drawer = DrawerController(scope)
@@ -78,6 +80,8 @@ class UiState(val scope: CoroutineScope) {
     var currentAppPage: () -> Int = { 0 }
     /** 1.3.9: true while the widget picker adds to «Сегодня» instead of the current home page. */
     var widgetPickerToToday by mutableStateOf(false)
+    /** Short undoable notice at the bottom of the home screen (e.g. «Экран убран»). */
+    var snackbar by mutableStateOf<SnackAction?>(null)
     var tileEdit by mutableStateOf<String?>(null)
     /** 0 = tiles in place, 1 = swung away (turnstile). */
     val turnstile = Animatable(0f)
@@ -100,6 +104,8 @@ class UiState(val scope: CoroutineScope) {
     var showStartPage: (() -> Unit)? = null
     /** Pager page to reveal before answering the home-gesture contract (0 = widgets). */
     var revealPage by mutableStateOf<Int?>(null)
+    /** Pager index to restore when rotating between portrait (horizontal) and landscape (vertical). */
+    var lastPagerPage: Int? = null
     var revealFolder by mutableStateOf<String?>(null)
 
     // ---- return-into-icon animation ----

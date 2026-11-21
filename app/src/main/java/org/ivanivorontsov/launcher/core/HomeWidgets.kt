@@ -59,6 +59,20 @@ fun ScreenLayout.spanOf(id: String, cols: Int, rows: Int): Pair<Int, Int> {
 }
 
 /** Packs [ScreenLayout.home] into pages of [cols]×[rows] cells (always at least one page). */
+/**
+ * Recompute widget spans for a different column count (landscape reflow) without
+ * rewriting the stored layout. Full-width widgets stay full-width; item order is unchanged.
+ */
+fun ScreenLayout.reflowSpans(srcCols: Int, dstCols: Int, dstRows: Int): ScreenLayout {
+    if (srcCols == dstCols || widgets.isEmpty()) return this
+    val mapped = widgets.mapValues { (_, w) ->
+        val sx = (if (w.spanX >= srcCols) dstCols else w.spanX).coerceIn(1, dstCols.coerceAtLeast(1))
+        val sy = w.spanY.coerceIn(1, dstRows.coerceAtLeast(1))
+        if (sx == w.spanX && sy == w.spanY) w else w.copy(spanX = sx, spanY = sy)
+    }
+    return copy(widgets = mapped)
+}
+
 fun ScreenLayout.packPages(cols: Int, rows: Int): PackedPages {
     val c = cols.coerceAtLeast(1); val r = rows.coerceAtLeast(1)
     val pages = ArrayList<List<Placed>>()

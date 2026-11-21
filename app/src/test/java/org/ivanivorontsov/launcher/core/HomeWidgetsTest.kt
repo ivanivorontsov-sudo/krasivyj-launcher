@@ -94,4 +94,26 @@ class HomeWidgetsTest {
         val back = ConfigCodec.decode(ConfigCodec.encode(c))
         assertEquals(c.layoutFor("cupertino"), back.layoutFor("cupertino"))
     }
+
+    @Test fun sideScreenRemoveDisablesTodayAndUndoRestores() {
+        val c = LauncherConfig(
+            todayPage = true,
+            base = ScreenLayout(home = listOf("a/a")),
+            widgets = listOf(WidgetItem(11, 180), WidgetItem(12, 90)),
+        )
+        val change = TodayPage.remove(c, "cupertino", 4, 6)
+        assertTrue(change.changed)
+        assertFalse(change.next.todayPage)
+        assertTrue(change.next.widgets.isEmpty())
+        val home = change.next.layoutFor("cupertino").home
+        assertEquals(listOf("a/a", "widget:11", "widget:12"), home)
+        val back = change.undo()
+        assertTrue(back.todayPage)
+        assertEquals(c.widgets, back.widgets)
+        assertEquals(listOf("a/a"), back.layoutFor("cupertino").home)
+        assertFalse("already hidden is a no-op", TodayPage.remove(change.next, "cupertino", 4, 6).changed)
+        assertEquals(TodayPage.REMOVED_MESSAGE, "Экран убран")
+        assertEquals(TodayPage.UNDO_ACTION, "Отменить")
+        assertEquals(5000L, TodayPage.UNDO_MS)
+    }
 }
