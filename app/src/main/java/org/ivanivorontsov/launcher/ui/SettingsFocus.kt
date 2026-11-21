@@ -95,6 +95,9 @@ fun SettingsAnchor(vararg ids: String, modifier: Modifier = Modifier, content: @
     val a = highlight.value
     // Column, never Box: a search row is title + description + button. Box would
     // stack them at the same origin (the overlap on «Главный экран» at large font).
+    // Do not put Modifier.weight on children: this is a Column, so a vertical weight
+    // would stretch the anchor to the incoming max height and starve siblings
+    // (that emptied «Стоп-экран» in 1.4.13). Put weight on the SettingsAnchor modifier instead.
     Column(
         modifier
             .fillMaxWidth()

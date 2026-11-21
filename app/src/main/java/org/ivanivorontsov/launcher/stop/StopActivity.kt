@@ -165,7 +165,7 @@ private fun StopRoot(close: () -> Unit) {
                 else if (page == Page.MAIN) close()
                 else page = Page.MAIN
             }.padding(horizontal = 14.dp))
-            SettingsAnchor("stop") { Text(page.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f)) }
+            SettingsAnchor("stop", modifier = Modifier.weight(1f)) { Text(page.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, modifier = Modifier.fillMaxWidth()) }
             if (!editingUnlocked && store.hasPassword) {
                 Button(onClick = { showPasswordPrompt = true }) { Text("Снять блокировку") }
             } else if (editingUnlocked && store.hasPassword) {
