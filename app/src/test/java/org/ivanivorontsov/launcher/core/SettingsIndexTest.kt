@@ -57,4 +57,35 @@ class SettingsIndexTest {
         assertTrue(SettingsIndex.search("тема").isNotEmpty())
         assertTrue(SettingsIndex.search("ии").isNotEmpty() || SettingsIndex.search("ИИ").isNotEmpty())
     }
+
+    @Test fun indexContainsAllAnimationOptionLabels() {
+        val labels = SettingsIndex.animationOptionLabels()
+        assertTrue("animation enums must contribute labels", labels.size >= 20)
+        assertTrue("Круги на воде" in labels)
+        for (label in labels) {
+            val hits = SettingsIndex.search(label)
+            val hit = hits.firstOrNull { it.title == label }
+                ?: hits.firstOrNull { it.title.contains(label, ignoreCase = true) || it.keywords.contains(label, ignoreCase = true) || it.subtitle.contains(label, ignoreCase = true) }
+            assertTrue("animation option not indexed: '$label' hits=${hits.map { it.title }}", hit != null)
+            val anchor = SettingsAnchors.resolve(hit!!)
+            assertTrue("animation option '$label' (${hit.id}) has no scroll anchor", anchor != null)
+            assertTrue("anchor screen for '$label'", anchor!!.screen == hit.screen)
+        }
+    }
+
+    @Test fun searchFindsCirclesOnWaterCollapseAndAnimation() {
+        fun titles(q: String) = SettingsIndex.search(q).map { it.title }
+        val circles = titles("круги")
+        assertTrue("круги: $circles", circles.any { it.contains("Круги на воде") })
+        val collapse = titles("сворачивание")
+        assertTrue("сворачивание: $collapse", collapse.isNotEmpty())
+        val collapseGen = titles("сворачивания")
+        assertTrue("сворачивания: $collapseGen", collapseGen.isNotEmpty())
+        val anim = titles("анимация")
+        assertTrue("анимация: $anim", anim.isNotEmpty())
+        val rings = SettingsIndex.search("Круги на воде")
+        assertTrue(rings.any { it.title == "Круги на воде" })
+        val t = SettingsAnchors.resolve(rings.first { it.title == "Круги на воде" })
+        assertTrue("circles must scroll to the home-anim section", t != null && t.lazyKey == "home-anim")
+    }
 }

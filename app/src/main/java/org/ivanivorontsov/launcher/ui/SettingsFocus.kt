@@ -21,7 +21,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import kotlinx.coroutines.delay
 import org.ivanivorontsov.launcher.BuildConfig
 import org.ivanivorontsov.launcher.core.SettingsAnchors
@@ -78,9 +79,10 @@ fun SettingsAnchor(vararg ids: String, modifier: Modifier = Modifier, content: @
     val requester = remember { BringIntoViewRequester() }
     val highlight = remember { Animatable(0f) }
     val accent = MaterialTheme.colorScheme.primary
-    LaunchedEffect(focus.nonce, focus.targetId) {
-        val id = focus.targetId ?: return@LaunchedEffect
-        if (id !in ids) return@LaunchedEffect
+    val id = focus.targetId
+    val mine = id != null && SettingsAnchors.covers(ids, id)
+    LaunchedEffect(focus.nonce, id) {
+        if (!mine) return@LaunchedEffect
         delay(40)
         requester.bringIntoView()
         highlight.snapTo(0f)
@@ -88,11 +90,14 @@ fun SettingsAnchor(vararg ids: String, modifier: Modifier = Modifier, content: @
         highlight.animateTo(0.4f, tween(280))
         highlight.animateTo(0.9f, tween(280))
         highlight.animateTo(0f, tween(760)) // 180+280+280+760 = 1500 ms
-        focus.consume(id)
+        if (id != null) focus.consume(id)
     }
     val a = highlight.value
-    Box(
+    // Column, never Box: a search row is title + description + button. Box would
+    // stack them at the same origin (the overlap on «Главный экран» at large font).
+    Column(
         modifier
+            .fillMaxWidth()
             .bringIntoViewRequester(requester)
             .background(accent.copy(alpha = a * 0.32f), RoundedCornerShape(16.dp)),
     ) { content() }

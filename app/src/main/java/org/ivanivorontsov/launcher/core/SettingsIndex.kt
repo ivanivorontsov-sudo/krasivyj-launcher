@@ -70,7 +70,7 @@ object SettingsIndex {
         playRestricted: Boolean = false,
     ) = Entry(id, title, screen, subtitle, keywords, playRestricted)
 
-    private val catalog: List<Entry> = listOf(
+    private val baseCatalog: List<Entry> = listOf(
         // Root
         e("themes", "Все темы", Screens.THEMES, "Готовые темы с живым предпросмотром", "стекло плитки тишина материал призма пастель тетрадь письмо акварель терминал неон космос аквариум свет"),
         e("home", "Главный экран", Screens.HOME, "Перетаскивание, папки, эффекты перелистывания, анимация возврата, ИИ"),
@@ -133,10 +133,90 @@ object SettingsIndex {
         e("calendar-tile", "Плитка «Календарь»", Screens.LIVE),
         e("digit-overlay", "Показывать цифры", Screens.DIGITS, playRestricted = true),
         e("digit-mode", "Что показывать на цифрах", Screens.DIGITS, "Время в приложении, часы, экран сегодня", playRestricted = true),
+        e("digit-look", "Вид цифр", Screens.DIGITS, "Положение, размер, обводка", playRestricted = true),
         e("system-font", "Честно о системном шрифте", Screens.SYSTEM, "Системный шрифт всего телефона"),
         e("system-wallpaper", "Обои темы — во всём телефоне", Screens.SYSTEM),
         e("refresh-rate", "Максимальная частота экрана", Screens.SMOOTH, "144 Гц высокая частота"),
         e("background", "Фоновая работа", Screens.SMOOTH, "Производитель батарея оптимизация"),
         e("about-version", "Версия СуперСмарт", Screens.ABOUT),
     )
+
+    /**
+     * Choice labels of page / home / back / icon / unlock animations, taken from the
+     * live enums so a new option is indexed automatically.
+     */
+    fun animationOptionLabels(): List<String> =
+        animationChoices().flatMap { it.labels }.distinct()
+
+    private data class ChoiceSet(val parentId: String, val labels: List<String>, val keywords: String = "")
+
+    private fun animationChoices(): List<ChoiceSet> = listOf(
+        ChoiceSet(
+            "page-effects",
+            PageEffect.entries.map { it.title },
+            "анимация перелистывание эффект",
+        ),
+        ChoiceSet(
+            "home-anim",
+            HomeAnim.entries.map { it.title } +
+                BackAnim.entries.map { it.title } +
+                IconFx.entries.map { it.title } +
+                listOf("Обычная", "Быстрая", "Очень быстрая"),
+            "анимация сворачивание сворачивания сворачивается возврат круги",
+        ),
+        ChoiceSet(
+            "unlock-anim",
+            UnlockAnim.entries.map { it.title },
+            "анимация разблокировка",
+        ),
+        ChoiceSet(
+            "return-icon",
+            emptyList(),
+            "анимация сворачивание сворачивания сворачивается",
+        ),
+    )
+
+    private fun otherChoices(): List<ChoiceSet> = listOf(
+        ChoiceSet("layout-kind", HomeLayout.entries.map { it.title } + DrawerStyle.entries.map { it.title }),
+        ChoiceSet("wallpaper", WallpaperStyle.entries.map { it.title }),
+        ChoiceSet("icon-shape", IconShape.entries.map { it.title } + TextCase.entries.map { it.title }),
+        ChoiceSet("dock-style", DockStyle.entries.map { it.title }),
+        ChoiceSet("clock-style", ClockStyle.entries.map { it.title }),
+        ChoiceSet("grid", PageIndicator.entries.map { it.title }),
+        ChoiceSet("tiles", TileFill.entries.map { it.title }),
+        ChoiceSet("motion", Motion.entries.map { it.title } + Overlay.entries.map { it.title }),
+        ChoiceSet("swipe-up", GestureAction.entries.map { it.title }, "жест"),
+        ChoiceSet("swipe-down", GestureAction.entries.map { it.title }, "жест"),
+        ChoiceSet("double-tap", GestureAction.entries.map { it.title }, "жест"),
+        ChoiceSet("digit-mode", DigitMode.entries.map { it.title }),
+        ChoiceSet("digit-look", DigitAnchor.entries.map { it.title }),
+    )
+
+    private fun choiceEntries(base: List<Entry>): List<Entry> {
+        val byId = base.associateBy { it.id }
+        // return-icon has no chip list; keywords are folded into the parent row instead.
+        val folded = mutableListOf<Entry>()
+        val expanded = mutableListOf<Entry>()
+        for (set in animationChoices() + otherChoices()) {
+            val parent = requireNotNull(byId[set.parentId]) { "choice parent missing: ${set.parentId}" }
+            if (set.labels.isEmpty()) {
+                folded += parent.copy(keywords = listOf(parent.keywords, set.keywords).filter { it.isNotBlank() }.joinToString(" "))
+                continue
+            }
+            set.labels.forEachIndexed { i, label ->
+                expanded += e(
+                    "${set.parentId}::opt::$i",
+                    label,
+                    parent.screen,
+                    parent.title,
+                    set.keywords,
+                    parent.playRestricted,
+                )
+            }
+        }
+        val replaced = folded.associateBy { it.id }
+        return base.map { replaced[it.id] ?: it } + expanded
+    }
+
+    private val catalog: List<Entry> = choiceEntries(baseCatalog)
 }

@@ -1,6 +1,7 @@
 package org.ivanivorontsov.launcher.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -71,5 +72,12 @@ class SettingsAnchorsTest {
         assertTrue(SettingsIndex.Screens.DIGITS !in order)
         assertTrue("ai-arrange" in (order[SettingsIndex.Screens.HOME] ?: emptyList()) ||
             SettingsAnchors.resolve("ai-arrange", includePlayRestricted = false) != null)
+    }
+
+    @Test fun coversOptionIdsOfTheParentSection() {
+        val rings = SettingsIndex.search("Круги на воде").first { it.title == "Круги на воде" }
+        assertTrue(SettingsAnchors.covers(arrayOf("home-anim"), rings.id))
+        assertTrue(SettingsAnchors.covers(arrayOf("home-anim", "home"), rings.id))
+        assertFalse(SettingsAnchors.covers(arrayOf("page-effects"), rings.id))
     }
 }

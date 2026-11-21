@@ -21,11 +21,27 @@ object SettingsAnchors {
         fun needsExpand(): Boolean = group != null
     }
 
+    /** Parent catalog id for an option row (`page-effects::opt::3` → `page-effects`). */
+    fun optionParentId(id: String): String? {
+        val i = id.indexOf("::opt::")
+        return if (i > 0) id.substring(0, i) else null
+    }
+
+    /** True when a SettingsAnchor listed in [anchorIds] should scroll/highlight for [targetId]. */
+    fun covers(anchorIds: Array<out String>, targetId: String): Boolean {
+        if (targetId in anchorIds) return true
+        optionParentId(targetId)?.let { if (it in anchorIds) return true }
+        val t = resolve(targetId) ?: return false
+        return t.id in anchorIds || t.lazyKey in anchorIds || (t.group != null && t.group in anchorIds)
+    }
+
     fun resolve(id: String, includePlayRestricted: Boolean = true): Target? =
         SettingsIndex.all(includePlayRestricted).firstOrNull { it.id == id }?.let { resolve(it) }
 
     fun resolve(entry: SettingsIndex.Entry): Target? {
-        val b = bindings[entry.id] ?: return null
+        val b = bindings[entry.id]
+            ?: optionParentId(entry.id)?.let { bindings[it]?.copy(id = entry.id) }
+            ?: return null
         if (b.screen != entry.screen) return null
         val order = lazyOrder()[b.screen] ?: return null
         if (b.lazyKey !in order) return null
@@ -127,6 +143,7 @@ object SettingsAnchors {
         bind("calendar-tile", S.LIVE, group = "calendar-tile"),
         bind("digit-overlay", S.DIGITS, group = "digit-overlay"),
         bind("digit-mode", S.DIGITS, group = "digit-mode"),
+        bind("digit-look", S.DIGITS, lazyKey = "digit-look"),
         bind("system-font", S.SYSTEM, group = "system-font"),
         bind("system-wallpaper", S.SYSTEM, group = "system-wallpaper"),
         bind("refresh-rate", S.SMOOTH, group = "refresh-rate"),

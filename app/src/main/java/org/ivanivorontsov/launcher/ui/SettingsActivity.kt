@@ -278,7 +278,7 @@ private fun Section(title: String, group: String? = null, anchors: List<String> 
                 Modifier.fillMaxWidth().then(if (group != null) Modifier.clickable { open = !open } else Modifier),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f).padding(bottom = 6.dp))
+                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f).padding(bottom = 6.dp), softWrap = true)
                 if (group != null) Text(if (expanded) "▾" else "▸", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
             }
             if (expanded) content()
@@ -295,7 +295,7 @@ private fun NavRow(title: String, subtitle: String? = null, onClick: () -> Unit)
 }
 
 @Composable
-private fun Info(text: String) = Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f), modifier = Modifier.padding(vertical = 4.dp))
+private fun Info(text: String) = Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f), modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), softWrap = true)
 
 @Composable
 private fun MainScreen(go: (Screen) -> Unit) {
@@ -436,7 +436,7 @@ private fun Labeled(label: String, content: @Composable () -> Unit) { Column(Mod
 @Composable
 private fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, softWrap = true)
         Switch(checked, onChange)
     }
 }
