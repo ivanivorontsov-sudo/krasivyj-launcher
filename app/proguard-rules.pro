@@ -12,3 +12,9 @@
 # «Боец поневоле» init is called reflectively from LauncherApp (so the «Лёгкий» flavor compiles without modules).
 -keep class org.ivanivorontsov.boec.data.Store { public *; }
 -keep class org.ivanivorontsov.boec.alarm.Notifier { public *; }
+
+# WebView chat used by «Расставить с ИИ» (evaluateJavascript / cookies).
+-keepclassmembers class org.ivanivorontsov.launcher.ai.** { *; }
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}

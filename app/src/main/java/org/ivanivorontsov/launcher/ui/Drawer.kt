@@ -108,7 +108,9 @@ fun DrawerLayer(ui: UiState, apps: List<AppInfo>, config: LauncherConfig, wall: 
         snapshotFlow { drawer.progress >= 0.999f }.distinctUntilChanged().collect { open ->
             if (open) {
                 openTick++
-                if (config.autoKeyboard) try { focus.requestFocus(); keyboard?.show() } catch (_: Exception) {}
+                val force = drawer.wantSearchFocus
+                if (force) drawer.wantSearchFocus = false
+                if (config.autoKeyboard || force) try { focus.requestFocus(); keyboard?.show() } catch (_: Exception) {}
             }
         }
     }
@@ -172,21 +174,47 @@ private fun UiState.actionsContext() = org.ivanivorontsov.launcher.LauncherApp.i
 @Composable
 fun SearchField(value: String, onChange: (String) -> Unit, focus: FocusRequester, placeholder: String, onGo: () -> Unit) {
     val spec = LocalSpec.current; val colors = LocalColors.current; val fonts = LocalFonts.current
+    val keyboard = LocalSoftwareKeyboardController.current
     val shape = if (spec.drawer == DrawerStyle.TILES_LIST) RoundedCornerShape(0.dp) else RoundedCornerShape(spec.cornerDp.coerceAtMost(22).dp)
+    val textColor = if (spec.drawer == DrawerStyle.TILES_LIST) colors.background else colors.onSurface
+    // 1.4.9: full-width, tall (64 dp) touch target. The whole pill focuses the field and
+    // opens the keyboard — no dead padding around a narrow inner editor.
     Box(
-        // Slightly wider, taller search pill; the editable target below fills its full height.
-        Modifier.padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth().height(52.dp).clip(shape)
-            .background(colors.onSurface.copy(alpha = if (spec.drawer == DrawerStyle.TILES_LIST) 0.9f else 0.1f)).padding(horizontal = 16.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .height(64.dp)
+            .clip(shape)
+            .background(colors.onSurface.copy(alpha = if (spec.drawer == DrawerStyle.TILES_LIST) 0.9f else 0.12f))
+            .clickable {
+                try { focus.requestFocus(); keyboard?.show() } catch (_: Exception) {}
+            }
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        val textColor = if (spec.drawer == DrawerStyle.TILES_LIST) colors.background else colors.onSurface
-        if (value.isEmpty()) Text((if (spec.labelPrefix.isNotEmpty()) "$ grep " else "⌕  ") + spec.withCase(placeholder), color = textColor.copy(alpha = 0.55f), fontFamily = fonts.body, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (value.isEmpty()) Text(
+            (if (spec.labelPrefix.isNotEmpty()) "$ grep " else "⌕  ") + spec.withCase(placeholder),
+            color = textColor.copy(alpha = 0.55f),
+            fontFamily = fonts.body,
+            fontSize = 18.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
+        )
         BasicTextField(
-            value, onChange, singleLine = true, modifier = Modifier.fillMaxWidth().fillMaxHeight().focusRequester(focus),
-            textStyle = androidx.compose.ui.text.TextStyle(color = textColor, fontFamily = fonts.body, fontSize = 17.sp),
+            value, onChange, singleLine = true,
+            modifier = Modifier.fillMaxWidth().fillMaxHeight().focusRequester(focus),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                color = textColor,
+                fontFamily = fonts.body,
+                fontSize = 18.sp,
+            ),
             cursorBrush = SolidColor(colors.accent),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go, autoCorrectEnabled = false),
             keyboardActions = KeyboardActions(onGo = { onGo() }),
+            decorationBox = { inner ->
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) { inner() }
+            },
         )
     }
 }

@@ -712,6 +712,8 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     override fun homeMenu(anchor: Rect) {
         val spec = app.store.theme.value
         val e = ArrayList<MenuEntry>()
+        e += MenuEntry("Поиск приложений") { ui.drawer.open(focusSearch = true) }
+        e += MenuEntry("Расставить с ИИ") { startActivity(org.ivanivorontsov.launcher.ai.AiArrangeActivity.intent(this, spec.id)) }
         e += MenuEntry("Темы и стиль") { openSettings("themes") }
         if (spec.layout == HomeLayout.TILES) {
             e += MenuEntry("Плитка: часы") { pinSpecialTile(TileKind.CLOCK) }

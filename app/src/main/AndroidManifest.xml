@@ -129,6 +129,22 @@
         </service>
 
         <activity
+            android:name=".ai.AiArrangeActivity"
+            android:exported="false"
+            android:label="Расставить с ИИ"
+            android:theme="@style/Theme.Launcher.Settings"
+            android:windowSoftInputMode="adjustResize"
+            android:taskAffinity="${applicationId}.settings" />
+
+        <activity
+            android:name=".ai.AiLoginActivity"
+            android:exported="false"
+            android:label="Вход в чат"
+            android:theme="@style/Theme.Launcher.Settings"
+            android:windowSoftInputMode="adjustResize"
+            android:taskAffinity="${applicationId}.settings" />
+
+        <activity
             android:name=".stop.StopActivity"
             android:exported="false"
             android:label="Стоп-экран"

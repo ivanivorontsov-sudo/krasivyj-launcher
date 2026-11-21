@@ -21,6 +21,8 @@ import org.ivanivorontsov.launcher.core.TileItem
 class DrawerController(private val scope: CoroutineScope) {
     var progress by mutableFloatStateOf(0f); private set
     var animationsEnabled = true
+    /** After the open animation, focus the search field and show the keyboard. */
+    var wantSearchFocus by mutableStateOf(false)
     private var job: Job? = null
     val isOpen get() = progress > 0.5f
 
@@ -32,7 +34,11 @@ class DrawerController(private val scope: CoroutineScope) {
         animateTo(target, velocity)
     }
 
-    fun open() = animateTo(1f, 0f)
+    fun open(focusSearch: Boolean = false) {
+        if (focusSearch) wantSearchFocus = true
+        animateTo(1f, 0f)
+    }
+
     fun close(animated: Boolean = true) { if (!animated || !animationsEnabled) { job?.cancel(); progress = 0f } else animateTo(0f, 0f) }
 
     private fun animateTo(target: Float, velocity: Float) {

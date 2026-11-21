@@ -10,10 +10,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import org.ivanivorontsov.launcher.core.AnimGuard
 import org.ivanivorontsov.launcher.core.PageEffect
+import org.ivanivorontsov.launcher.core.PageFxMath
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -24,6 +24,9 @@ import kotlin.math.sin
  * per item: every icon column is mapped onto a vertical cylinder whose radius grows to infinity at rest, so the
  * page is perfectly flat when it stops and curves away at the edges while it is moving — the neighbouring
  * pages wrap around the back of the cylinder (mirrored and smaller), like realme/OPPO «Цилиндр» or Nova «Carousel».
+ *
+ * 1.4.9: STACK/DEPTH z-order is directional so a backward swipe no longer freezes the incoming page;
+ * every layer resets its transforms at rest; cylinder columns get a 2% seam overlap and are depth-sorted.
  */
 class PageFx(val effect: PageEffect, val pager: PagerState, val page: Int)
 
@@ -32,27 +35,20 @@ val LocalPageEffect = compositionLocalOf { PageEffect.NONE }
 
 val LocalPageFx = compositionLocalOf<PageFx?> { null }
 
-private fun PagerState.position() = currentPage + currentPageOffsetFraction
-
-/** How "bent" the cylinder is: 0 at rest, 1 half-way through a swipe. */
-private fun bend(pos: Float): Float {
-    val f = abs(pos - pos.roundToInt())          // 0..0.5
-    val t = (f * 4f).coerceIn(0f, 1f)
-    return t * t * (3f - 2f * t)                 // smoothstep
-}
+internal fun PagerState.position() = currentPage + currentPageOffsetFraction
 
 /** Whole-page transform. Apply to the root of a pager page. */
 fun Modifier.pageEffect(effect: PageEffect, pager: PagerState, page: Int, itemsDoIt: Boolean = false): Modifier {
     val fx = AnimGuard.safeEffect(effect)
     if (fx == PageEffect.NONE) return this
-    if (fx.perItem() && itemsDoIt) return this.zIndexFor(pager, page)
+    if (fx.perItem() && itemsDoIt) return this.zIndexFor(pager, page, fx)
     if (fx == PageEffect.WAVE) return this
     // Pages nearer to the centre draw on top (cube/stack/cylinder back faces).
-    return this.zIndexFor(pager, page).graphicsLayer {
+    return this.zIndexFor(pager, page, fx).graphicsLayer {
         val raw = page - pager.position()
         // 1.3.4: only the current page and the incoming neighbour may draw. Pages kept composed by the
         // pager (or a far page such as the first one) are fully hidden, so nothing ghosts on top.
-        if (abs(raw) >= 1f) { alpha = 0f; return@graphicsLayer }
+        if (abs(raw) >= 1f) { resetLayer(); alpha = 0f; return@graphicsLayer }
         pageLayer(fx, raw)
     }
 }
@@ -62,17 +58,35 @@ fun Modifier.pageEffect(effect: PageEffect, pager: PagerState, page: Int, itemsD
  * pager.currentPage, which is an integer that flips at the half-way point: when swiping back the incoming
  * (lower-index) page sat under the current one and then popped on top mid-swipe — the "поддёргивание".
  * Reading currentPage also recomposed the page on every flip.
+ *
+ * 1.4.9: STACK and DEPTH use signed z-order (−o), so the card that follows the finger stays on top
+ * when swiping backwards as well as forwards.
  */
-private fun Modifier.zIndexFor(pager: PagerState, page: Int): Modifier =
+private fun Modifier.zIndexFor(pager: PagerState, page: Int, effect: PageEffect): Modifier =
     this.then(Modifier.layout { m, c ->
         val p = m.measure(c)
-        layout(p.width, p.height) { p.place(0, 0, zIndex = -abs(page - pager.position())) }
+        layout(p.width, p.height) { p.place(0, 0, zIndex = PageFxMath.zIndex(effect, page - pager.position())) }
     })
 
-internal fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
-    val a = abs(o)
-    // Camera far enough that a 90-180° turn never clips the near edge on a tall 144 Hz panel.
+/** Identity + a far camera, so a settled page never keeps a leftover rotation or scale. */
+private fun GraphicsLayerScope.resetLayer() {
+    translationX = 0f
+    translationY = 0f
+    scaleX = 1f
+    scaleY = 1f
+    rotationX = 0f
+    rotationY = 0f
+    rotationZ = 0f
+    alpha = 1f
+    shadowElevation = 0f
+    transformOrigin = TransformOrigin.Center
     cameraDistance = 24f * density
+    compositingStrategy = CompositingStrategy.Auto
+}
+
+internal fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
+    resetLayer()
+    val a = abs(o)
     when (effect) {
         PageEffect.CUBE -> {
             transformOrigin = TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
@@ -96,10 +110,12 @@ internal fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
             alpha = 1f - 0.6f * a.coerceAtMost(1f)
         }
         PageEffect.STACK -> if (o > 0f) {
+            // Under-card: stay visually centred (counter the pager) and shrink slightly.
+            // The top card (o ≤ 0) follows the finger with identity transforms — both directions.
             translationX = -o * size.width
             val s = 1f - 0.14f * o.coerceAtMost(1f)
             scaleX = s; scaleY = s
-            alpha = 1f - 0.5f * o.coerceAtMost(1f)
+            alpha = 1f - 0.35f * o.coerceAtMost(1f)
         }
         // 1.3.9 — new effects. All are pure layer transforms of the page (no recomposition while swiping).
         PageEffect.CUBE_IN -> {
@@ -137,7 +153,7 @@ internal fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
             translationX = -o * size.width
             val s = 0.75f + 0.25f * (1f - c)
             scaleX = s; scaleY = s
-            alpha = 1f - c
+            alpha = 1f - 0.5f * c
         }
         PageEffect.ACCORDION -> {
             transformOrigin = TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
@@ -169,7 +185,7 @@ internal fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
         }
         // Pages without per-item content (widgets page, tiles, text lists) get a page-level cylinder.
         PageEffect.CYLINDER -> {
-            val b = bend(o)
+            val b = PageFxMath.bend(o)
             transformOrigin = TransformOrigin(if (o < 0f) 1f else 0f, 0.5f)
             rotationY = 70f * o.coerceIn(-1f, 1f) * (0.4f + 0.6f * b)
             val s = 1f - 0.12f * a.coerceAtMost(1f)
@@ -184,13 +200,14 @@ internal fun GraphicsLayerScope.pageLayer(effect: PageEffect, o: Float) {
  * page width (px). Called from the page's placement layer block, so it only reads the scroll state at draw.
  */
 fun GraphicsLayerScope.itemPageLayer(fx: PageFx, cx: Float, cy: Float, w: Float, h: Float) {
+    resetLayer()
     val pos = fx.pager.position()
     val o = fx.page - pos
     // 1.3.4: a page that is not the current one or its direct neighbour never draws.
     if (abs(o) >= 1f) { alpha = 0f; return }
     when (fx.effect) {
         PageEffect.CYLINDER -> {
-            val e = bend(pos)
+            val e = PageFxMath.bend(pos)
             if (e <= 0.001f) return
             val x = cx + o * w                           // screen x relative to the viewport centre
             // Fully bent: the front half of the drum is one screen wide (radius = half the width), so a page
@@ -206,7 +223,8 @@ fun GraphicsLayerScope.itemPageLayer(fx: PageFx, cx: Float, cy: Float, w: Float,
             val deg = theta * 180f / PI.toFloat()
             cameraDistance = 24f * density
             if (abs(theta) <= PI.toFloat() / 2f) {
-                scaleX = p; scaleY = p
+                val s = PageFxMath.seamScale(p)
+                scaleX = s; scaleY = p
                 rotationY = deg
             } else {
                 // 1.3.4: back faces are no longer drawn — they landed behind the current page's icons and
@@ -215,7 +233,7 @@ fun GraphicsLayerScope.itemPageLayer(fx: PageFx, cx: Float, cy: Float, w: Float,
             }
         }
         PageEffect.WAVE -> {
-            val e = bend(pos)
+            val e = PageFxMath.bend(pos)
             if (e <= 0.001f) return
             val x = cx + o * w
             val amp = 26f * density

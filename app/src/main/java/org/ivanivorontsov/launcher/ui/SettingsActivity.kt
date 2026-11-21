@@ -631,6 +631,10 @@ private fun HomeScreenSettings() {
             }
             Info("Включите, чтобы убрать отдельное меню приложений и разместить установленные приложения на страницах главного экрана. В теме «Плитки» они появятся плитками; в минималистичной теме — текстовым списком. Новые приложения тоже будут добавляться автоматически.")
             SortIntoFoldersButton(spec.id, installedApps)
+            val arrangeCtx = LocalContext.current
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { arrangeCtx.startActivity(org.ivanivorontsov.launcher.ai.AiArrangeActivity.intent(arrangeCtx, spec.id)) }, modifier = Modifier.fillMaxWidth()) { Text("Расставить с ИИ") }
+            Info("Опишите словами, как расставить приложения: по папкам, по порядку, по категориям, что на доке и на страницах. Можно через тот же веб-чат, что и в клавиатуре (вход запоминается, без ключей API), или составить раскладку прямо на телефоне.")
         } }
         item { Section("Виджеты и экран «Сегодня»") {
             var ask by remember { mutableStateOf(false) }
