@@ -211,7 +211,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
                 val lightBars = !t.dark
                 c.isAppearanceLightStatusBars = lightBars; c.isAppearanceLightNavigationBars = lightBars
                 // Hide the system wallpaper window when the theme paints its own (saves composition work).
-                if (t.wallpaper == org.ivanivorontsov.launcher.core.WallpaperStyle.SYSTEM && t.layout != HomeLayout.TILES && !app.store.config.value.diagNoWallpaper) window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                if (t.wallpaper == org.ivanivorontsov.launcher.core.WallpaperStyle.SYSTEM && t.customWallpaperPath == null && t.layout != HomeLayout.TILES && !app.store.config.value.diagNoWallpaper) window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
                 WallpaperApplier.onTheme(this@MainActivity, t)
             }
@@ -219,7 +219,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         lifecycleScope.launch { app.store.config.collect { app.icons.iconPack = it.iconPack; applyRefreshRate(it.highRefreshRate) } }
         // Cross-window blur behind the drawer when the phone wallpaper is visible (Android 12+, if the device supports it).
         if (Build.VERSION.SDK_INT >= 31) lifecycleScope.launch {
-            combine(snapshotFlow { ui.drawer.progress > 0.5f }, app.store.theme) { open, t -> open && t.blur && t.wallpaper == org.ivanivorontsov.launcher.core.WallpaperStyle.SYSTEM }
+            combine(snapshotFlow { ui.drawer.progress > 0.5f }, app.store.theme) { open, t -> open && t.blur && t.wallpaper == org.ivanivorontsov.launcher.core.WallpaperStyle.SYSTEM && t.customWallpaperPath == null }
                 .distinctUntilChanged().collect { on -> setBlurBehind(on) }
         }
         lifecycleScope.launch { app.store.config.collect { JankMonitor.setEnabled(this@MainActivity, it.frameMeter) } }
