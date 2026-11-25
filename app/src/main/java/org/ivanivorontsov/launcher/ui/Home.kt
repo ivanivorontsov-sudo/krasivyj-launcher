@@ -142,7 +142,7 @@ fun rememberWallpaper(spec: ThemeSpec, wPx: Int, hPx: Int, tilePhoto: String?): 
     val epoch by WallCache.epoch.collectAsStateCompat()
     val tall = spec.layout == HomeLayout.TILES && spec.tileFill == TileFill.TRANSPARENT
     val needs = Wallpapers.hasGenerated(spec) || tall
-    val key = "${spec.wallpaper}|${spec.wallpaperColors}|${spec.wallpaperDim}|${spec.id}|$wPx|$hPx|$tall|$tilePhoto|v3|$epoch"
+    val key = "${spec.wallpaper}|${spec.wallpaperColors}|${spec.wallpaperDim}|${spec.id}|${spec.customWallpaperPath}|$wPx|$hPx|$tall|$tilePhoto|v4|$epoch"
     val cached = if (WallCache.key == key) WallCache.images else null
     val img by produceState(cached, key, needs, wPx, hPx) {
         if (!needs || wPx <= 0 || hPx <= 0) { value = null; return@produceState }
@@ -151,7 +151,12 @@ fun rememberWallpaper(spec: ThemeSpec, wPx: Int, hPx: Int, tilePhoto: String?): 
             val h = if (tall) (hPx * 1.45f).toInt() else hPx
             val file = java.io.File(ctx.cacheDir, "wall_" + Integer.toHexString(key.hashCode()) + ".jpg")
             val fromDisk = try { if (file.exists()) BitmapFactory.decodeFile(file.path)?.takeIf { it.width == wPx && it.height == h } else null } catch (_: Throwable) { null }
-            val bmp: Bitmap = fromDisk ?: ((if (tall && tilePhoto != null) loadPhoto(ctx, Uri.parse(tilePhoto), wPx, h) else null) ?: Wallpapers.render(spec, wPx, h)).also { b ->
+            val pickedPhoto = spec.customWallpaperPath?.let { path ->
+                Wallpapers.loadPhoto(ctx, Uri.fromFile(java.io.File(path)), wPx, h)
+            }
+            val tilePhotoBitmap = if (pickedPhoto == null && tall && tilePhoto != null)
+                Wallpapers.loadPhoto(ctx, Uri.parse(tilePhoto), wPx, h) else null
+            val bmp: Bitmap = fromDisk ?: (pickedPhoto ?: tilePhotoBitmap ?: Wallpapers.render(spec, wPx, h)).also { b ->
                 try {
                     ctx.cacheDir.listFiles { _, n -> n.startsWith("wall_") }?.forEach { it.delete() }
                     file.outputStream().use { b.compress(Bitmap.CompressFormat.JPEG, 94, it) }
@@ -163,19 +168,6 @@ fun rememberWallpaper(spec: ThemeSpec, wPx: Int, hPx: Int, tilePhoto: String?): 
     }
     return img
 }
-
-private fun loadPhoto(ctx: android.content.Context, uri: Uri, w: Int, h: Int): Bitmap? = try {
-    val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o) }
-    var s = 1; while (o.outWidth / (s * 2) >= w && o.outHeight / (s * 2) >= h) s *= 2
-    val src = ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = s }) }
-    src?.let {
-        val scale = maxOf(w / it.width.toFloat(), h / it.height.toFloat())
-        val sw = (w / scale).toInt().coerceAtMost(it.width); val sh = (h / scale).toInt().coerceAtMost(it.height)
-        val crop = Bitmap.createBitmap(it, (it.width - sw) / 2, (it.height - sh) / 2, sw, sh)
-        Bitmap.createScaledBitmap(crop, w, h, true)
-    }
-} catch (_: Exception) { null }
 
 @Composable
 fun LauncherRoot(ui: UiState) {
