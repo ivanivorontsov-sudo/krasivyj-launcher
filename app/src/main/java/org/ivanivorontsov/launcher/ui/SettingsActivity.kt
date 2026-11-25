@@ -358,7 +358,17 @@ private fun ThemesScreen(openEditor: () -> Unit) {
 private fun EditorScreen(openFonts: (String) -> Unit) {
     val store = LauncherApp.instance.store
     val spec by store.theme.collectAsStateCompat()
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     fun set(f: (ThemeSpec) -> ThemeSpec) = store.setCustom(f(spec).copy(name = "Мой стиль", description = "Собран в редакторе"))
+    val wallpaperPick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+        if (uri != null) scope.launch {
+            val name = "launcher_wallpaper_${System.currentTimeMillis()}.jpg"
+            val file = withContext(Dispatchers.IO) { copyDownscaled(ctx, uri, name) }
+            if (file != null) set { it.copy(customWallpaperPath = file.absolutePath) }
+            else Toast.makeText(ctx, "Не удалось прочитать выбранное фото", Toast.LENGTH_SHORT).show()
+        }
+    }
     val listState = rememberAnchoredListState(SettingsIndex.Screens.EDITOR)
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 48.dp)) {
         item(key = "editor-preview") { SettingsAnchor("editor") { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { ThemePreview(spec, false, Modifier.width(150.dp).padding(8.dp)) } } }
@@ -388,7 +398,14 @@ private fun EditorScreen(openFonts: (String) -> Unit) {
             SwitchRow("Светлый текст на обоях", spec.onWallpaper == 0xFFFFFFFF) { v -> set { it.copy(onWallpaper = if (v) 0xFFFFFFFF else 0xFF111827) } }
         } }
         item(key = "wallpaper") { Section("Обои", group = "wallpaper") {
-            Chips(WallpaperStyle.entries, spec.wallpaper, { it.title }) { v -> set { it.copy(wallpaper = v, wallpaperColors = Presets.all.firstOrNull { p -> p.wallpaper == v }?.wallpaperColors ?: it.wallpaperColors) } }
+            Chips(WallpaperStyle.entries, spec.wallpaper, { it.title }) { v -> set { it.copy(wallpaper = v, customWallpaperPath = null, wallpaperColors = Presets.all.firstOrNull { p -> p.wallpaper == v }?.wallpaperColors ?: it.wallpaperColors) } }
+            Button(onClick = { wallpaperPick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                Text(if (spec.customWallpaperPath != null) "Выбрать другое фото" else "Выбрать фото из галереи")
+            }
+            if (spec.customWallpaperPath != null) {
+                Info("Собственное фото используется как фон домашнего экрана.")
+                OutlinedButton(onClick = { set { it.copy(customWallpaperPath = null) } }) { Text("Вернуть обои темы") }
+            }
             Labeled("Затемнение: ${(spec.wallpaperDim * 100).toInt()}%") { Slider(spec.wallpaperDim, { v -> set { it.copy(wallpaperDim = v) } }, valueRange = 0f..0.7f) }
             Labeled("Непрозрачность меню: ${(spec.surfaceAlpha * 100).toInt()}%") { Slider(spec.surfaceAlpha, { v -> set { it.copy(surfaceAlpha = v) } }, valueRange = 0.3f..1f) }
             SettingsAnchor("blur") { SwitchRow("Матовое размытие", spec.blur) { v -> set { it.copy(blur = v) } } }
@@ -587,14 +604,27 @@ private fun LiveScreen() {
     }
 }
 
-private fun copyDownscaled(ctx: android.content.Context, uri: Uri): File? = try {
-    val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o) }
-    val target = 1600; var s = 1
-    while (o.outWidth / (s * 2) >= target && o.outHeight / (s * 2) >= target) s *= 2
-    val b = ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = s }) }
-    b?.let { File(ctx.filesDir, "tile_bg.jpg").also { f -> f.outputStream().use { os -> it.compress(Bitmap.CompressFormat.JPEG, 90, os) } } }
-} catch (_: Exception) { null }
+private fun copyDownscaled(ctx: android.content.Context, uri: Uri, fileName: String = "tile_bg.jpg"): File? {
+    return try {
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o) }
+        if (o.outWidth <= 0 || o.outHeight <= 0) null else {
+            val target = 1600
+            var s = 1
+            while (maxOf(o.outWidth / (s * 2), o.outHeight / (s * 2)) >= target) s *= 2
+            val bitmap = ctx.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = s })
+            }
+            bitmap?.let {
+                val file = File(ctx.filesDir, fileName)
+                try {
+                    file.outputStream().use { os -> it.compress(Bitmap.CompressFormat.JPEG, 90, os) }
+                    file
+                } finally { it.recycle() }
+            }
+        }
+    } catch (_: Exception) { null }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -683,18 +713,27 @@ private fun SystemScreen() {
             Button(onClick = { if (!Device.openSystemFontSettings(ctx)) Toast.makeText(ctx, "Не нашёл настройки шрифта", Toast.LENGTH_SHORT).show() }) { Text("Открыть настройки шрифта телефона") }
         } }
         item(key = "system-wallpaper") { Section("Обои темы — во всём телефоне", group = "system-wallpaper") {
-            Info("Можно поставить нарисованные обои текущей темы «${spec.name}» на рабочий стол и экран блокировки. На Android 12+ система сама перекрасит акцентные цвета (Material You) — шторка, настройки и приложения подстроятся под тему.")
-            Button(enabled = spec.wallpaper != WallpaperStyle.SYSTEM, onClick = {
+            Info(if (spec.customWallpaperPath != null)
+                "Можно поставить выбранное фото на рабочий стол и экран блокировки."
+                else "Можно поставить нарисованные обои текущей темы «${spec.name}» на рабочий стол и экран блокировки. На Android 12+ система сама перекрасит акцентные цвета (Material You).")
+            Button(enabled = spec.customWallpaperPath != null || spec.wallpaper != WallpaperStyle.SYSTEM, onClick = {
                 scope.launch {
                     val dm = ctx.resources.displayMetrics
-                    val ok = withContext(Dispatchers.Default) {
-                        val bmp = Wallpapers.render(spec, minOf(dm.widthPixels, dm.heightPixels), maxOf(dm.widthPixels, dm.heightPixels))
-                        Device.setSystemWallpaper(ctx, bmp)
+                    val ok = withContext(Dispatchers.IO) {
+                        val w = minOf(dm.widthPixels, dm.heightPixels).coerceAtLeast(1)
+                        val h = maxOf(dm.widthPixels, dm.heightPixels).coerceAtLeast(1)
+                        val bmp = spec.customWallpaperPath?.let { path ->
+                            Wallpapers.loadPhoto(ctx, Uri.fromFile(File(path)), w, h)
+                        } ?: if (spec.wallpaper != WallpaperStyle.SYSTEM) Wallpapers.render(spec, w, h) else null
+                        bmp?.let {
+                            try { Device.setSystemWallpaper(ctx, it) }
+                            finally { if (!it.isRecycled) it.recycle() }
+                        } ?: false
                     }
                     Toast.makeText(ctx, if (ok) "Обои установлены" else "Не получилось установить обои", Toast.LENGTH_SHORT).show()
                 }
-            }) { Text("Установить обои темы") }
-            if (spec.wallpaper == WallpaperStyle.SYSTEM) Info("В этой теме используются обои телефона.")
+            }) { Text(if (spec.customWallpaperPath != null) "Установить фото на телефон" else "Установить обои темы") }
+            if (spec.wallpaper == WallpaperStyle.SYSTEM && spec.customWallpaperPath == null) Info("В этой теме используются обои телефона.")
         } }
     }
 }
