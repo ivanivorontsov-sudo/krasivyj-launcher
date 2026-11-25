@@ -734,6 +734,7 @@ private fun SystemScreen() {
                 }
             }) { Text(if (spec.customWallpaperPath != null) "Установить фото на телефон" else "Установить обои темы") }
             if (spec.wallpaper == WallpaperStyle.SYSTEM && spec.customWallpaperPath == null) Info("В этой теме используются обои телефона.")
+            OutlinedButton(onClick = { Device.openWallpaperPicker(ctx) }) { Text("Открыть системный выбор обоев") }
         } }
     }
 }
