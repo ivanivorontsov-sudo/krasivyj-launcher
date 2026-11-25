@@ -278,6 +278,15 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
     private fun inTransition(): Boolean = ui.returning != null || (resumeUptime != 0L && SystemClock.uptimeMillis() - resumeUptime < afterLandingMs())
 
     // Re-assert the preferred mode on every resume: Android/OEM task transitions can reset it.
+    private fun syncWallpaperWindow() {
+        val t = app.store.theme.value
+        if (t.wallpaper == org.ivanivorontsov.launcher.core.WallpaperStyle.SYSTEM &&
+            t.customWallpaperPath == null && t.layout != HomeLayout.TILES &&
+            !app.store.config.value.diagNoWallpaper
+        ) window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+    }
+
     private fun applyRefreshRate(high: Boolean) = Device.applyRefreshRate(window, high)
 
     /** Completed when our window is really on screen (enter transition done or window focused). */
@@ -329,6 +338,7 @@ class MainActivity : ComponentActivity(), LauncherActions, WidgetBinder {
         // first visible frame so wallpaper and shaped-icon caches cannot stay stale.
         // Skip it on the way back from an app: that path must stay as cheap as Back.
         if (!comingHome && app.store.refreshThemeFromPreferences()) app.icons.clear()
+        syncWallpaperWindow()
         wasResumed = true
         // Live tiles pause while we are stopped. This flag is not an animation key:
         // the home grid must stay composed, and `enter` / hasAnimatedIn are not reset here.
