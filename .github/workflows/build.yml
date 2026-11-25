@@ -2,7 +2,7 @@ name: Build signed APK
 
 on:
   push:
-    branches: [main, release/1.4.8]
+    branches: [main, release/1.4.8, release/1.4.14]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -34,6 +34,9 @@ jobs:
           elif [[ "$GITHUB_REF" == "refs/heads/release/1.4.8" ]]; then
             VERSION_NAME=1.4.8
             VERSION_CODE=1480
+          elif [[ "$GITHUB_REF" == "refs/heads/release/1.4.14" ]]; then
+            VERSION_NAME=1.4.15
+            VERSION_CODE=1550
           else
             VERSION_NAME=1.0.${GITHUB_RUN_NUMBER}-ci
             VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))
@@ -71,7 +74,7 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           mkdir -p dist
-          if [[ "$GITHUB_REF" == "refs/heads/release/1.4.8" || "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [[ "$GITHUB_REF" == "refs/heads/release/1.4.8" || "$GITHUB_REF" == "refs/heads/release/1.4.14" || "$GITHUB_REF" == refs/tags/v* ]]; then
             ./gradlew --stacktrace assembleFullRelease assembleNowisdomRelease assembleLightRelease
             cp app/build/outputs/apk/full/release/app-full-release.apk "dist/SuperSmart-${VERSION_NAME}-full.apk"
             cp app/build/outputs/apk/nowisdom/release/app-nowisdom-release.apk "dist/SuperSmart-${VERSION_NAME}-bez-mudrosti.apk"
@@ -133,4 +136,17 @@ jobs:
             gh release upload "$TAG" dist/*.apk dist/SHA256SUMS --clobber
           else
             gh release create "$TAG" dist/*.apk dist/SHA256SUMS --title "СуперСмарт 1.4.8" --notes-file RELEASE_NOTES.md --target "$GITHUB_SHA"
+          fi
+
+      # Publish all three 1.4.15 sideload variants from the maintained 1.4.14 release line.
+      - name: Publish SuperSmart 1.4.15 release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/release/1.4.14'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=v1.4.15
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.apk dist/SHA256SUMS --clobber
+          else
+            gh release create "$TAG" dist/*.apk dist/SHA256SUMS --title "СуперСмарт 1.4.15" --notes "Исправлены обои, выбор фото и полноэкранный AI-чат. Собрано из release/1.4.14." --target "$GITHUB_SHA"
           fi
