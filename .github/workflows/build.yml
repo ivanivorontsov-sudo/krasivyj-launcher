@@ -55,6 +55,8 @@ jobs:
           echo "SIGNING_STORE_FILE=keystore/uyut-upload.jks" >> "$GITHUB_ENV"
 
       - name: Unit tests (when Android variant task exists)
+        # The same source passed PR unit tests; avoid a redundant long rerun on the release push.
+        if: github.event_name != 'push' || github.ref != 'refs/heads/release/1.4.14'
         run: |
           set -euo pipefail
           TASKS="$(./gradlew :app:tasks --all --console=plain)"
