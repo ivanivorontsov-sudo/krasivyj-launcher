@@ -2,6 +2,8 @@ package org.ivanivorontsov.launcher.ui
 
 import android.app.WallpaperManager
 import android.content.Context
+import android.net.Uri
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,7 +24,7 @@ object WallpaperApplier {
     @Volatile private var seen: String? = null
 
     fun onTheme(context: Context, spec: ThemeSpec) {
-        val key = "${spec.id}|${spec.wallpaper}|${spec.wallpaperColors}|${spec.wallpaperDim}|${spec.background}|${spec.accent}"
+        val key = "${spec.id}|${spec.wallpaper}|${spec.wallpaperColors}|${spec.wallpaperDim}|${spec.background}|${spec.accent}|${spec.customWallpaperPath}"
         if (key == seen) return
         val first = seen == null
         seen = key
@@ -45,10 +47,20 @@ object WallpaperApplier {
                 w = (w * s).toInt().coerceAtLeast(1)
                 h = (h * s).toInt().coerceAtLeast(1)
             }
-            val bmp = Wallpapers.render(spec, w, h)
-            try {
-                WallpaperManager.getInstance(app).setBitmap(bmp, null, true, WallpaperManager.FLAG_SYSTEM)
-            } catch (_: Exception) {}
+            val bmp = spec.customWallpaperPath?.let { path ->
+                Wallpapers.loadPhoto(app, Uri.fromFile(File(path)), w, h)
+            } ?: if (spec.wallpaper != org.ivanivorontsov.launcher.core.WallpaperStyle.SYSTEM) {
+                Wallpapers.render(spec, w, h)
+            } else null
+            if (bmp != null) {
+                try {
+                    WallpaperManager.getInstance(app).setBitmap(bmp, null, true, WallpaperManager.FLAG_SYSTEM)
+                } catch (_: Exception) {
+                    // OEM wallpaper services may reject an update; keep the launcher running.
+                } finally {
+                    if (!bmp.isRecycled) bmp.recycle()
+                }
+            }
         }
     }
 }

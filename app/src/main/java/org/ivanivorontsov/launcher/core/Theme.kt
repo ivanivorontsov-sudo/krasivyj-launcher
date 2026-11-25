@@ -71,6 +71,8 @@ data class ThemeSpec(
     val wallpaper: WallpaperStyle = WallpaperStyle.SYSTEM,
     val wallpaperColors: List<Long> = emptyList(),
     val wallpaperDim: Float = 0f,
+    /** Private app-files path to a user-selected launcher wallpaper. */
+    val customWallpaperPath: String? = null,
     val iconShape: IconShape = IconShape.SQUIRCLE,
     val iconSizeDp: Int = 56,
     val cornerDp: Int = 24,
@@ -109,6 +111,7 @@ data class ThemeSpec(
         labelSizeSp = labelSizeSp.coerceIn(9f, 22f),
         surfaceAlpha = surfaceAlpha.coerceIn(0.3f, 1f),
         wallpaperDim = wallpaperDim.coerceIn(0f, 0.8f),
+        customWallpaperPath = customWallpaperPath?.takeIf { it.isNotBlank() }?.take(2048),
         tileColumns = if (tileColumns == 6) 6 else 4,
         tileGapDp = tileGapDp.coerceIn(0f, 16f),
         headingFont = headingFont.takeIf { it in FontIds.all } ?: "inter",

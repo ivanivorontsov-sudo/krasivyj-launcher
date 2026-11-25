@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -139,6 +140,21 @@ class AiArrangeActivity : ComponentActivity() {
             finish()
         }
 
+        if (showChat && source.url != null) {
+            Column(
+                Modifier.fillMaxSize().background(bg).statusBarsPadding().navigationBarsPadding()
+                    .imePadding().padding(horizontal = 8.dp, vertical = 6.dp),
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { if (!busy) showChat = false }, enabled = !busy) { Text("Назад") }
+                    Text(source.title, color = fg, style = MaterialTheme.typography.titleMedium)
+                    if (busy) LinearProgressIndicator(Modifier.weight(1f).padding(start = 12.dp))
+                }
+                Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(12.dp))) { ChatView(source.url) }
+            }
+            return
+        }
+
         if (preview != null) {
             val plan = preview!!
             Column(
@@ -200,6 +216,7 @@ class AiArrangeActivity : ComponentActivity() {
                 .background(bg)
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .imePadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             Text("Расставить с ИИ", style = MaterialTheme.typography.titleLarge, color = fg)
@@ -234,7 +251,7 @@ class AiArrangeActivity : ComponentActivity() {
             if (source.needsLogin) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                     TextButton(onClick = { openLogin(source) }) { Text("Войти в ${source.title.substringBefore(" (")}") }
-                    TextButton(onClick = { showChat = !showChat }) { Text(if (showChat) "Скрыть чат" else "Показать чат") }
+                    TextButton(onClick = { showChat = true }) { Text("Открыть чат") }
                 }
             }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 8.dp))
@@ -252,6 +269,10 @@ class AiArrangeActivity : ComponentActivity() {
                         status = "Думаю…"
                         scope.launch {
                             try {
+                                if (source.url != null) {
+                                    showChat = true
+                                    awaitVisibleChat(source.url)
+                                }
                                 val result = when (source.id) {
                                     "local" -> AiComposer.compose(prompt, apps, cfg.layoutFor(themeId), cfg, spec, null, spec.columns.coerceIn(4, 7), spec.columns, spec.rows)
                                     "pollinations" -> requestPollinations(prompt, apps, spec.columns, spec.rows, cfg.layoutFor(themeId), cfg, spec)
@@ -263,6 +284,7 @@ class AiArrangeActivity : ComponentActivity() {
                                 runLocal("Не удалось получить ответ (${e.message ?: e.javaClass.simpleName}). Показала местный разбор.")
                             } finally {
                                 busy = false
+                                if (source.url != null) showChat = false
                             }
                         }
                     },
@@ -281,14 +303,6 @@ class AiArrangeActivity : ComponentActivity() {
                 Text("Показать все приложения на главном")
             }
             Spacer(Modifier.weight(1f))
-            if (showChat && source.url != null) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(240.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                ) { ChatView(source.url) }
-            }
         }
     }
 
@@ -378,6 +392,7 @@ class AiArrangeActivity : ComponentActivity() {
             factory = { ctx ->
                 web ?: WebView(ctx).also { w ->
                     web = w
+                    webReady = false
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(w, true)
                     w.settings.apply {
@@ -389,15 +404,18 @@ class AiArrangeActivity : ComponentActivity() {
                     w.webChromeClient = WebChromeClient()
                     w.webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, u: String?) {
-                            webReady = true
-                            CookieManager.getInstance().flush()
+                            if (view === web) {
+                                webReady = true
+                                CookieManager.getInstance().flush()
+                            }
                         }
                     }
                     w.loadUrl(url)
                 }
             },
             update = { view ->
-                if (view.url == null || (view.url != url && view.url?.startsWith(url) != true && !webReady)) {
+                if (view.url == null || (view.url != url && view.url?.startsWith(url) != true)) {
+                    webReady = false
                     view.loadUrl(url)
                 }
             },
@@ -463,17 +481,18 @@ class AiArrangeActivity : ComponentActivity() {
         }
         if (last == "login") throw IllegalStateException("Нужно войти в чат (кнопка «Войти»)")
         val injected = eval(ChatEngine.inject(prompt))
-        if (injected == "noinput") throw IllegalStateException("Не нашла поле ввода. Откройте «Показать чат» и войдите.")
+        if (injected == "noinput") throw IllegalStateException("Не нашла поле ввода. Откройте чат и войдите в выбранный сервис.")
         var sent = false
-        repeat(8) {
+        for (attempt in 0 until 8) {
             delay(700)
             val r = eval(ChatEngine.SUBMIT)
-            if (r == "sent" || r == "clicked" || r == "clicked-near" || r == "form") sent = true
-            if (r == "sent" || r == "failed") return@repeat
+            if (r == "sent" || r == "clicked" || r == "clicked-near" || r == "form" || r == "enter") {
+                sent = true
+                break
+            }
+            if (r == "failed") break
         }
-        if (!sent) {
-            // Still wait — Enter may have worked without a recognised return value.
-        }
+        if (!sent) throw IllegalStateException("Не удалось отправить сообщение в чат. Проверьте поле ввода и попробуйте ещё раз.")
         var text = ""
         repeat(40) {
             delay(800)
@@ -484,7 +503,7 @@ class AiArrangeActivity : ComponentActivity() {
             if (stable && org.ivanivorontsov.launcher.core.AiLayout.extractJson(text) != null) return text
             if (stable && text.length > 20) return text
         }
-        return text.ifBlank { null }
+        return text.takeIf { it.isNotBlank() } ?: throw IllegalStateException("Чат не прислал ответ за отведённое время.")
     }
 
     private fun extractText(raw: String): String {
@@ -505,42 +524,38 @@ class AiArrangeActivity : ComponentActivity() {
         return sb.toString().replace("\\n", "\n").replace("\\\"", "\"")
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun ensureWeb(url: String) {
-        if (web == null) {
-            val w = WebView(this)
-            web = w
-            CookieManager.getInstance().setAcceptCookie(true)
-            CookieManager.getInstance().setAcceptThirdPartyCookies(w, true)
-            w.settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                userAgentString = userAgentString.replace("; wv", "").replace(Regex("Version/\\S+ "), "")
+    private suspend fun awaitVisibleChat(url: String) {
+        val deadline = System.currentTimeMillis() + 30_000L
+        while (System.currentTimeMillis() < deadline) {
+            val w = web
+            if (w != null && w.isAttachedToWindow && w.width > 100 && w.height > 100) {
+                val current = w.url
+                if (current == null || (current != url && !current.startsWith(url))) {
+                    webReady = false
+                    w.loadUrl(url)
+                }
+                if (webReady) return
             }
-            w.webChromeClient = WebChromeClient()
-            w.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, u: String?) { webReady = true; CookieManager.getInstance().flush() }
-            }
-            w.layoutParams = ViewGroup.LayoutParams(1, 1)
+            delay(100)
         }
-        val w = web!!
-        val cur = w.url
-        if (cur == null || (cur != url && !cur.startsWith(url))) {
-            webReady = false
-            w.loadUrl(url)
-        }
+        throw IllegalStateException("Не удалось открыть полноэкранный чат. Проверьте интернет и вход в выбранный сервис.")
+    }
+
+    private suspend fun ensureWeb(url: String) {
+        awaitVisibleChat(url)
     }
 
     private suspend fun eval(js: String): String? {
         val w = web ?: return null
         var waits = 0
-        while (!webReady && waits < 25) { delay(200); waits++ }
+        while ((!webReady || !w.isAttachedToWindow || w.width <= 0 || w.height <= 0) && waits < 50) { delay(200); waits++ }
+        if (!webReady || !w.isAttachedToWindow) throw IllegalStateException("Окно чата ещё не готово.")
         var result: String? = null
         var done = false
         w.evaluateJavascript(js) { value -> result = value; done = true }
         var spin = 0
-        while (!done && spin < 50) { delay(50); spin++ }
+        while (!done && spin < 100) { delay(50); spin++ }
+        if (!done) throw IllegalStateException("Страница чата не ответила.")
         return result?.trim()?.trim('"')?.takeIf { it != "null" && it.isNotEmpty() }
     }
 

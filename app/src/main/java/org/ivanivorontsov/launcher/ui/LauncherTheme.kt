@@ -1,6 +1,10 @@
 package org.ivanivorontsov.launcher.ui
 
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
@@ -17,6 +21,10 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
@@ -103,7 +111,23 @@ fun Long.c() = Color(this.toInt())
 @Composable
 fun LauncherTheme(spec: ThemeSpec, animations: Boolean = true, content: @Composable () -> Unit) {
     val ctx = LocalContext.current
-    val colors = remember(spec) {
+    // Re-read Material You colors when Realme/Android changes the system wallpaper or theme.
+    var wallpaperEpoch by remember(ctx) { mutableIntStateOf(0) }
+    DisposableEffect(ctx.applicationContext) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context?, intent: Intent?) {
+                wallpaperEpoch++
+            }
+        }
+        ContextCompat.registerReceiver(
+            ctx.applicationContext,
+            receiver,
+            IntentFilter(Intent.ACTION_WALLPAPER_CHANGED),
+            ContextCompat.RECEIVER_EXPORTED,
+        )
+        onDispose { runCatching { ctx.applicationContext.unregisterReceiver(receiver) } }
+    }
+    val colors = remember(spec, wallpaperEpoch) {
         var accent = spec.accent.c(); var surface = spec.surface.c(); var onSurface = spec.onSurface.c(); var bg = spec.background.c()
         if (spec.dynamicColor && Build.VERSION.SDK_INT >= 31) {
             val d = if (spec.dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)

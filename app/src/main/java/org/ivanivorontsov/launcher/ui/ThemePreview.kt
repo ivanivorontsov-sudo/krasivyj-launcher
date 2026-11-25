@@ -1,5 +1,6 @@
 package org.ivanivorontsov.launcher.ui
 
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,6 +42,7 @@ import org.ivanivorontsov.launcher.core.HomeLayout
 import org.ivanivorontsov.launcher.core.IconShape
 import org.ivanivorontsov.launcher.core.ThemeSpec
 import org.ivanivorontsov.launcher.core.WallpaperStyle
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 private val thumbCache = ConcurrentHashMap<String, ImageBitmap>()
@@ -47,9 +50,16 @@ private val thumbCache = ConcurrentHashMap<String, ImageBitmap>()
 /** Live miniature of a theme: its own wallpaper, fonts, icon shape, layout and colours. */
 @Composable
 fun ThemePreview(spec: ThemeSpec, selected: Boolean, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
-    val key = spec.wallpaper.name + spec.wallpaperColors.hashCode() + spec.background + spec.id + spec.wallpaperDim
+    val context = LocalContext.current
+    val key = spec.wallpaper.name + spec.wallpaperColors.hashCode() + spec.background + spec.id + spec.wallpaperDim + spec.customWallpaperPath
     val thumb by produceState(thumbCache[key], key) {
-        if (value == null && spec.wallpaper != WallpaperStyle.SYSTEM) value = withContext(Dispatchers.Default) { Wallpapers.render(spec, 270, 540).asImageBitmap().also { thumbCache[key] = it } }
+        if (value == null) {
+            val bmp = withContext(Dispatchers.IO) {
+                spec.customWallpaperPath?.let { Wallpapers.loadPhoto(context, Uri.fromFile(File(it)), 270, 540) }
+                    ?: if (spec.wallpaper != WallpaperStyle.SYSTEM) Wallpapers.render(spec, 270, 540) else null
+            }
+            if (bmp != null) value = bmp.asImageBitmap().also { thumbCache[key] = it }
+        }
     }
     val heading = FontRegistry.family(spec.headingFont); val clock = FontRegistry.family(spec.clockFont); val body = FontRegistry.family(spec.bodyFont)
     val accent = spec.accent.c(); val onWall = spec.onWallpaper.c()
