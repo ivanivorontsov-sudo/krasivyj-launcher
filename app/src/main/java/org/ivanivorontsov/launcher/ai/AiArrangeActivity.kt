@@ -481,7 +481,7 @@ class AiArrangeActivity : ComponentActivity() {
         }
         if (last == "login") throw IllegalStateException("Нужно войти в чат (кнопка «Войти»)")
         val injected = eval(ChatEngine.inject(prompt))
-        if (injected == "noinput") throw IllegalStateException("Не нашла поле ввода. Откройте «Показать чат» и войдите.")
+        if (injected == "noinput") throw IllegalStateException("Не нашла поле ввода. Откройте чат и войдите в выбранный сервис.")
         var sent = false
         for (attempt in 0 until 8) {
             delay(700)
