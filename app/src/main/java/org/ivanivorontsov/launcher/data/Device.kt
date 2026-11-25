@@ -187,7 +187,7 @@ object Device {
     }
     fun marketSearch(ctx: Context, q: String) { tryStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=" + Uri.encode(q)))) }
     fun openWallpaperPicker(ctx: Context) {
-        if (!tryStart(ctx, Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Обои"))) tryStart(ctx, Intent(Settings.ACTION_DISPLAY_SETTINGS))
+        if (!tryStart(ctx, Intent(Intent.ACTION_SET_WALLPAPER))) tryStart(ctx, Intent(Settings.ACTION_DISPLAY_SETTINGS))
     }
     fun uninstall(ctx: Context, pkg: String) { tryStart(ctx, Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg"))) }
 
