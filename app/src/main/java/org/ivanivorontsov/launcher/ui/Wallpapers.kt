@@ -1,6 +1,8 @@
 package org.ivanivorontsov.launcher.ui
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
@@ -9,6 +11,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import android.net.Uri
 import org.ivanivorontsov.launcher.core.ThemeSpec
 import org.ivanivorontsov.launcher.core.WallpaperStyle
 import kotlin.math.PI
@@ -23,7 +26,36 @@ import kotlin.random.Random
  * on a background thread; a heavily downscaled copy doubles as the “frosted glass” source.
  */
 object Wallpapers {
-    fun hasGenerated(spec: ThemeSpec) = spec.wallpaper != WallpaperStyle.SYSTEM
+    fun hasGenerated(spec: ThemeSpec) =
+        (spec.customWallpaperPath?.let { java.io.File(it).isFile } == true) || spec.wallpaper != WallpaperStyle.SYSTEM
+
+    /** Decode and centre-crop a user photo to the requested wallpaper dimensions. */
+    fun loadPhoto(context: Context, uri: Uri, width: Int, height: Int): Bitmap? {
+        return try {
+            val targetW = max(width, 1)
+            val targetH = max(height, 1)
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) null else {
+                var sample = 1
+                while (max(bounds.outWidth / (sample * 2), bounds.outHeight / (sample * 2)) >= max(targetW, targetH)) sample *= 2
+                val source = context.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+                }
+                if (source == null) null else {
+                    val scale = max(targetW / source.width.toFloat(), targetH / source.height.toFloat())
+                    val cropW = (targetW / scale).toInt().coerceIn(1, source.width)
+                    val cropH = (targetH / scale).toInt().coerceIn(1, source.height)
+                    val cropped = Bitmap.createBitmap(source, (source.width - cropW) / 2, (source.height - cropH) / 2, cropW, cropH)
+                    val result = if (cropped.width == targetW && cropped.height == targetH) cropped
+                                 else Bitmap.createScaledBitmap(cropped, targetW, targetH, true)
+                    if (cropped !== source && cropped !== result) cropped.recycle()
+                    if (source !== result) source.recycle()
+                    result
+                }
+            }
+        } catch (_: Exception) { null }
+    }
 
     fun render(spec: ThemeSpec, w: Int, h: Int, seed: Int = spec.id.hashCode()): Bitmap {
         val bmp = Bitmap.createBitmap(max(w, 1), max(h, 1), Bitmap.Config.ARGB_8888)
