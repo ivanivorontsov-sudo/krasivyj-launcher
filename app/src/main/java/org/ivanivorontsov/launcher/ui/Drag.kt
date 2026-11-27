@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.round
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.ivanivorontsov.launcher.LauncherApp
 import org.ivanivorontsov.launcher.core.AppCategory
 import org.ivanivorontsov.launcher.core.DropSpot
@@ -175,7 +177,9 @@ fun UiState.startDrag(item: DragItem, windowPos: Offset) {
     }
     scope.launch { drag.lift.snapTo(0f); drag.lift.animateTo(1f, if (animations) spring(0.6f, 500f) else tween(0)) }
     scope.launch {
-        while (drag.active) withFrameNanos { t -> dragFrame(t) }
+        while (drag.active) withFrameNanos { t ->
+            try { dragFrame(t) } catch (_: Exception) { }
+        }
     }
 }
 
@@ -250,18 +254,27 @@ fun UiState.endDrag(haptic: (() -> Unit)? = null) {
     }
     if (item.source == DragSource.TILE || item.asLabel) { cancelDrag(); return }
     // Fly the floating icon into its slot (or back where it came from), then reveal the real icon.
+    // Always clear the overlay: a stalled frame (concave icon shadow) used to leave it floating.
     d.dropping = true
     d.spot = null; d.into = null
     d.flyFrom = d.floatingRect()
+    val token = item
     scope.launch {
-        withFrameNanos { }; withFrameNanos { }
-        val target = (landing ?: item.id.takeIf { item.source != DragSource.DRAWER })?.let { iconBounds[it]?.bounds() }
-            ?: item.startBounds?.takeIf { item.source != DragSource.DRAWER && landing == null }
-        d.flyTo = target
-        d.fly.snapTo(0f)
-        if (animations) d.fly.animateTo(1f, tween(if (target != null) 230 else 160, easing = FastOutSlowInEasing))
-        cancelDrag()
-        d.flyTo = null
+        try {
+            withTimeoutOrNull(700) {
+                withFrameNanos { }
+                val target = (landing ?: item.id.takeIf { item.source != DragSource.DRAWER })?.let { iconBounds[it]?.bounds() }
+                    ?: item.startBounds?.takeIf { item.source != DragSource.DRAWER && landing == null }
+                d.flyTo = target
+                d.fly.snapTo(0f)
+                if (animations) d.fly.animateTo(1f, tween(if (target != null) 230 else 160, easing = FastOutSlowInEasing))
+            }
+        } finally {
+            if (d.item === token) {
+                cancelDrag()
+                d.flyTo = null
+            }
+        }
     }
 }
 
@@ -429,7 +442,10 @@ fun DragLayer(ui: UiState) {
                 scaleX = s; scaleY = s
                 alpha = if (d.dropping && to == null) 1f - f else 1f
                 shadowElevation = (if (d.dropping) 1f - f else 1f) * 14.dp.toPx()
-                shape = if (item.asLabel) RoundedCornerShape(12.dp) else PathShape(spec.iconShape.takeIf { it != org.ivanivorontsov.launcher.core.IconShape.ORIGINAL } ?: org.ivanivorontsov.launcher.core.IconShape.CIRCLE)
+                // A concave outline (cookie, pebble) makes the elevation renderer stall on
+                // every frame, so the drop animation never finishes and the icon stays floating.
+                // The bitmap is already masked; the shadow only needs a convex shape.
+                shape = if (item.asLabel) RoundedCornerShape(12.dp) else CircleShape
                 clip = false
             }
     ) {

@@ -39,14 +39,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,7 +71,10 @@ import kotlinx.coroutines.withContext
 import org.ivanivorontsov.launcher.BuildConfig
 import org.ivanivorontsov.launcher.LauncherApp
 import org.ivanivorontsov.launcher.core.AccentPalette
+import org.ivanivorontsov.launcher.core.HomeCategories
 import org.ivanivorontsov.launcher.core.ClockStyle
+import org.ivanivorontsov.launcher.core.DigitAnchor
+import org.ivanivorontsov.launcher.core.DigitMode
 import org.ivanivorontsov.launcher.core.DockStyle
 import org.ivanivorontsov.launcher.core.DrawerStyle
 import org.ivanivorontsov.launcher.core.FontCategory
@@ -86,6 +92,7 @@ import org.ivanivorontsov.launcher.core.TileKind
 import org.ivanivorontsov.launcher.core.TileSize
 import org.ivanivorontsov.launcher.core.TileFill
 import org.ivanivorontsov.launcher.core.WallpaperStyle
+import org.ivanivorontsov.launcher.data.AppInfo
 import org.ivanivorontsov.launcher.data.Device
 import org.ivanivorontsov.launcher.service.LockService
 import org.ivanivorontsov.launcher.service.NotificationCounter
@@ -105,13 +112,33 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() { super.onResume(); resumeTick++ }
+    private var displayRefresh: android.hardware.display.DisplayManager.DisplayListener? = null
+
+    override fun onStart() {
+        super.onStart()
+        if (displayRefresh == null) {
+            displayRefresh = Device.registerDisplayRefresh(this) { LauncherApp.instance.store.config.value.highRefreshRate }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumeTick++
+        Device.applyRefreshRate(window, LauncherApp.instance.store.config.value.highRefreshRate)
+    }
+
+    override fun onStop() {
+        Device.unregisterDisplayRefresh(this, displayRefresh)
+        displayRefresh = null
+        super.onStop()
+    }
+
     companion object { var resumeTick by mutableIntStateOf(0) }
 }
 
 private enum class Screen(val title: String) {
     MAIN("Уют"), HOME("Главный экран"), THEMES("Темы"), EDITOR("Свой стиль"), FONTS("Шрифты"), GESTURES("Жесты"), HIDDEN("Скрытые приложения"),
-    ICONS("Набор иконок"), LIVE("Живые плитки и разрешения"), SYSTEM("Системный шрифт и обои"), SMOOTH("Плавность и батарея"), ABOUT("О приложении")
+    ICONS("Набор иконок"), LIVE("Живые плитки и разрешения"), DIGITS("Цифры поверх приложений"), SYSTEM("Системный шрифт и обои"), SMOOTH("Плавность и батарея"), ABOUT("О приложении")
 }
 
 @Composable
@@ -135,6 +162,7 @@ private fun SettingsRoot(start: String?, close: () -> Unit) {
                 Screen.HIDDEN -> HiddenScreen()
                 Screen.ICONS -> IconPacksScreen()
                 Screen.LIVE -> LiveScreen()
+                Screen.DIGITS -> DigitsScreen()
                 Screen.SYSTEM -> SystemScreen()
                 Screen.SMOOTH -> SmoothScreen()
                 Screen.ABOUT -> AboutScreen()
@@ -189,6 +217,7 @@ private fun MainScreen(go: (Screen) -> Unit) {
         item { NavRow("Системный шрифт и обои", "Что можно поменять во всём телефоне") { go(Screen.SYSTEM) } }
         item { NavRow("Жесты", "Свайпы, двойное касание для блокировки") { go(Screen.GESTURES) } }
         item { NavRow("Живые плитки и разрешения", "Фото, календарь, счётчики уведомлений") { go(Screen.LIVE) } }
+        item { NavRow("Цифры поверх приложений", "Крупный чёрный счётчик времени. Выключен, пока сами не включите") { go(Screen.DIGITS) } }
         item { NavRow("Скрытые приложения") { go(Screen.HIDDEN) } }
         item { NavRow("Набор иконок") { go(Screen.ICONS) } }
         item { NavRow("Плавность и батарея", "Частота экрана, фоновая работа (${Device.oemName()})") { go(Screen.SMOOTH) } }
@@ -442,6 +471,79 @@ private fun copyDownscaled(ctx: android.content.Context, uri: Uri): File? = try 
     b?.let { File(ctx.filesDir, "tile_bg.jpg").also { f -> f.outputStream().use { os -> it.compress(Bitmap.CompressFormat.JPEG, 90, os) } } }
 } catch (_: Exception) { null }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DigitsScreen() {
+    val ctx = LocalContext.current as ComponentActivity
+    val store = LauncherApp.instance.store
+    val cfg by store.config.collectAsStateCompat()
+    val tick = SettingsActivity.resumeTick
+    var explain by remember { mutableStateOf(false) }
+    var waitingForPermission by remember { mutableStateOf(false) }
+    LaunchedEffect(tick) {
+        if (!waitingForPermission) return@LaunchedEffect
+        waitingForPermission = false
+        if (android.provider.Settings.canDrawOverlays(ctx)) store.update { it.copy(digitOverlay = true) }
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { Section("Показ") {
+            SwitchRow("Показывать цифры", cfg.digitOverlay) { on ->
+                if (!on) {
+                    store.update { it.copy(digitOverlay = false) }
+                    return@SwitchRow
+                }
+                if (android.provider.Settings.canDrawOverlays(ctx)) store.update { it.copy(digitOverlay = true) }
+                else explain = true
+            }
+            Info("Выключено, пока сами не включите. Крупные чёрные цифры рисуются поверх других приложений и обновляются каждую секунду. Касания проходят сквозь них: кнопки под цифрами нажимаются как обычно.")
+            if (cfg.digitOverlay && !android.provider.Settings.canDrawOverlays(ctx)) {
+                Info("Разрешение «Поверх других приложений» не выдано, поэтому цифры сейчас не видны.")
+                Button(onClick = { explain = true }) { Text("Выдать разрешение") }
+            }
+        } }
+        item { Section("Что показывать") {
+            Chips(DigitMode.entries, cfg.digitMode, { it.title }) { v -> store.update { it.copy(digitMode = v) } }
+            Info(when (cfg.digitMode) {
+                DigitMode.APP -> "Сколько это приложение на экране в текущий заход: мм:сс, после часа — ч:мм:сс. Считается, пока включена служба специальных возможностей Уюта (та же, что для «Стоп-экрана»)."
+                DigitMode.CLOCK -> "Текущее время, с секундами."
+                DigitMode.TODAY -> "Сколько сегодня экран был включён, пока цифры включены. В полночь счётчик обнуляется."
+            })
+        } }
+        item { Section("Вид") {
+            Text("Положение", style = MaterialTheme.typography.labelLarge)
+            Chips(DigitAnchor.entries, cfg.digitAnchor, { it.title }) { v -> store.update { it.copy(digitAnchor = v) } }
+            Labeled("Размер: ${cfg.digitSizeSp} sp") {
+                Slider(cfg.digitSizeSp.toFloat(), { v -> store.update { it.copy(digitSizeSp = v.toInt()) } }, valueRange = 36f..140f)
+            }
+            Labeled("Непрозрачность: ${(cfg.digitAlpha * 100).toInt()}%") {
+                Slider(cfg.digitAlpha, { v -> store.update { it.copy(digitAlpha = v) } }, valueRange = 0.25f..1f)
+            }
+            SwitchRow("Тонкая белая обводка", cfg.digitOutline) { v -> store.update { it.copy(digitOutline = v) } }
+            Info("Цифры чёрные. Обводка помогает читать их на тёмном фоне.")
+        } }
+    }
+    if (explain) AlertDialog(
+        onDismissRequest = { explain = false },
+        title = { Text("Цифры поверх приложений") },
+        text = { Text("Чтобы показать цифры поверх других приложений, Android просит разрешение «Поверх других приложений». Без него переключатель останется выключенным. Цифры не перехватывают касания.") },
+        confirmButton = {
+            TextButton(onClick = {
+                explain = false
+                waitingForPermission = true
+                val intent = android.content.Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:${ctx.packageName}"),
+                )
+                runCatching { ctx.startActivity(intent) }.onFailure {
+                    waitingForPermission = false
+                    Toast.makeText(ctx, "Не удалось открыть разрешение", Toast.LENGTH_LONG).show()
+                }
+            }) { Text("Открыть разрешение") }
+        },
+        dismissButton = { TextButton(onClick = { explain = false }) { Text("Не сейчас") } },
+    )
+}
+
 @Composable
 private fun SystemScreen() {
     val ctx = LocalContext.current
@@ -495,6 +597,7 @@ private fun HomeScreenSettings() {
                 }
             }
             Info("Включите, чтобы убрать отдельное меню приложений и разместить установленные приложения на страницах главного экрана. В теме «Плитки» они появятся плитками; в минималистичной теме — текстовым списком. Новые приложения тоже будут добавляться автоматически.")
+            SortIntoFoldersButton(spec.id, installedApps)
         } }
         item { Section("Новые приложения") {
             SwitchRow("Добавлять новые приложения на главный экран", cfg.autoAddNew) { v -> store.update { it.copy(autoAddNew = v) } }
@@ -521,6 +624,43 @@ private fun HomeScreenSettings() {
 }
 
 @Composable
+private fun SortIntoFoldersButton(themeId: String, installedApps: List<AppInfo>) {
+    val store = LauncherApp.instance.store
+    val ctx = LocalContext.current
+    var confirm by remember { mutableStateOf(false) }
+    val finance = remember { HomeCategories.platformFinanceCategory() }
+    Button(onClick = { confirm = true }, modifier = Modifier.padding(top = 8.dp)) { Text("Разложить по папкам") }
+    Info("Автоматически по категориям. Док не меняется. Уже созданные папки остаются; если папка с таким названием уже есть на главном экране, приложения добавятся в неё.")
+    if (!confirm) return
+    AlertDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text("Разложить по папкам?") },
+        text = {
+            Text("Свободные иконки главного экрана будут собраны в папки: Игры, Музыка, Видео, Фото, Общение, Новости, Карты, Продуктивность, Специальные возможности, Финансы и «Прочее». Док, плитки и ваши папки не разбираются. Одно приложение в категории останется иконкой.")
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                confirm = false
+                val byKey = installedApps.associateBy { it.key }
+                var changed = false
+                store.update { current ->
+                    val cur = current.layoutFor(themeId)
+                    val next = cur.groupHomeIntoFolders { key ->
+                        val app = byKey[key]
+                        if (app == null) HomeCategories.OTHER
+                        else HomeCategories.folderName(app.pkg, app.originalLabel.ifEmpty { app.label }, app.androidCategory, finance)
+                    }
+                    changed = next != cur
+                    if (!changed) current else current.copy(layouts = current.layouts + (themeId to next), lastEdited = themeId)
+                }
+                Toast.makeText(ctx, if (changed) "Готово: приложения разложены по папкам" else "На главном экране нечего собирать в папки", Toast.LENGTH_SHORT).show()
+            }) { Text("Разложить") }
+        },
+        dismissButton = { TextButton(onClick = { confirm = false }) { Text("Отмена") } },
+    )
+}
+
+@Composable
 private fun SmoothScreen() {
     val ctx = LocalContext.current as ComponentActivity
     val store = LauncherApp.instance.store
@@ -531,8 +671,25 @@ private fun SmoothScreen() {
     val anim = remember(tick) { Device.animationsEnabled() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { Section("Частота экрана") {
+            val activeHz = remember(tick) { Device.activeRefreshRate(ctx.window) }
+            var taps by remember { mutableIntStateOf(0) }
+            Text(
+                "Сейчас ${if (activeHz > 1f) "%.0f".format(activeHz) else "—"} Гц",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.clickable {
+                    taps++
+                    val now = Device.activeRefreshRate(ctx.window)
+                    val line = "UyutHz: active ${"%.1f".format(now)}Hz"
+                    android.util.Log.i("UyutHz", line)
+                    if (taps >= 5) {
+                        taps = 0
+                        Toast.makeText(ctx, "Частота окна: ${"%.1f".format(now)} Гц (лог UyutHz)", Toast.LENGTH_LONG).show()
+                    }
+                },
+            )
             SwitchRow("Максимальная частота (до $maxHz Гц)", cfg.highRefreshRate) { v -> store.update { it.copy(highRefreshRate = v) } }
-            Info("Все анимации считаются по времени, а не по кадрам: на 60, 90, 120 и 144 Гц они одинаковые по длительности, просто плавнее.")
+            Info("Все анимации считаются по времени, а не по кадрам: на 60, 90, 120 и 144 Гц они одинаковые по длительности, просто плавнее. Уют просит самый высокий режим для текущего разрешения и не меняет разрешение.")
+            Info("realme и ColorOS часто держат сторонние приложения на 60 Гц, даже если экран умеет 144. Если жест «Домой» всё равно дёргается: Настройки телефона → Экран → Частота обновления → высокая частота для приложений — добавьте Уют. Фактический режим пишется в logcat, тег UyutHz. Пять нажатий на строку «Сейчас» показывают его тостом.")
         } }
         item { Section("Анимации") { Info(if (anim) "Системные анимации включены ✓" else "В настройках телефона отключены анимации — Уют работает без анимаций и не тратит на них энергию.") } }
         item { Section("Фоновая работа") {
@@ -540,7 +697,7 @@ private fun SmoothScreen() {
             if (!ignoring) Button(onClick = { Device.requestIgnoreBatteryOptimizations(ctx) }) { Text("Не выгружать Уют") }
             if (Device.oem == Device.Oem.REALME_OPPO_ONEPLUS) {
                 Info("realme / ColorOS: дополнительно откройте «Настройки → Приложения → Уют → Использование батареи» и разрешите фоновую активность; в «Недавних» потяните карточку Уюта вниз, чтобы закрепить её замком.")
-                Info("На realme UI системная анимация сторонних лаунчеров может начинаться с задержкой или пропускать полёт в иконку. Это поведение системного перехода; Уют дополнительно рисует собственную анимацию после возврата, но полностью заменить системный переход без привилегий системного лаунчера не может.")
+                Info("На realme UI системная анимация сторонних лаунчеров может начинаться с задержкой или идти на 60 Гц. Добавьте Уют в список приложений с высокой частотой обновления (Экран → Частота обновления). Уют дополнительно рисует собственную анимацию после системного перехода.")
             }
             if (Device.oem == Device.Oem.XIAOMI) Info("Xiaomi: «Безопасность → Приложения → Уют → Автозапуск» и «Контроль активности → Нет ограничений».")
             if (Device.oem == Device.Oem.SAMSUNG) Info("Samsung: «Батарея → Ограничения фонового использования → Никогда не переводить в спящий режим» → добавьте Уют.")

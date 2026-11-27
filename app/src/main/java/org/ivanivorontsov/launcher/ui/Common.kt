@@ -63,7 +63,7 @@ import org.ivanivorontsov.launcher.service.NotificationCounter
 
 /** Everything UI needs to ask the activity to do. */
 interface LauncherActions {
-    fun launch(app: AppInfo, bounds: Rect?)
+    fun launch(app: AppInfo, bounds: Rect?, folderId: String? = null)
     fun launchShortcut(app: AppInfo, info: ShortcutInfo, bounds: Rect?)
     fun appInfo(app: AppInfo, bounds: Rect?)
     fun uninstall(app: AppInfo)
@@ -89,6 +89,16 @@ fun RegisterIcon(ui: UiState?, id: String, ref: BoundsRef, enabled: Boolean = tr
     androidx.compose.runtime.DisposableEffect(id, ref) {
         ui.iconBounds[id] = ref
         onDispose { if (ui.iconBounds[id] === ref) ui.iconBounds.remove(id) }
+    }
+}
+
+/** Bounds of an icon drawn inside an open folder, used when that app is closed back into the folder. */
+@Composable
+fun RegisterFolderIcon(ui: UiState?, id: String, ref: BoundsRef) {
+    if (ui == null) return
+    androidx.compose.runtime.DisposableEffect(id, ref) {
+        ui.folderIconBounds[id] = ref
+        onDispose { if (ui.folderIconBounds[id] === ref) ui.folderIconBounds.remove(id) }
     }
 }
 
@@ -157,6 +167,7 @@ fun labelStyle(color: Color, size: TextUnit = LocalSpec.current.labelSizeSp.sp):
 fun AppCell(
     app: AppInfo, iconSize: Dp, showLabel: Boolean, modifier: Modifier = Modifier, labelColor: Color = LocalColors.current.onWallpaper,
     source: DragSource = DragSource.DRAWER,
+    folderId: String? = null,
 ) {
     val spec = LocalSpec.current
     val actions = LocalActions.current
@@ -166,12 +177,13 @@ fun AppCell(
     val badge = badgeCount(app.pkg)
     val iconPx = with(LocalDensity.current) { iconSize.toPx() }
     RegisterIcon(ui, app.key, iconRef, enabled = source == DragSource.HOME || source == DragSource.DOCK)
+    if (source == DragSource.FOLDER) RegisterFolderIcon(ui, app.key, iconRef)
     Column(
         modifier
             .trackBounds(ref)
             .launcherItem(
                 ui, ref,
-                onClick = { actions.launch(app, iconRef.bounds() ?: ref.bounds()) },
+                onClick = { actions.launch(app, iconRef.bounds() ?: ref.bounds(), folderId) },
                 onLongPress = { actions.showMenu(app, null, ref.bounds() ?: Rect.Zero) },
                 dragItem = { local ->
                     DragItem(app.key, app, source, size = androidx.compose.ui.geometry.Size(iconPx, iconPx),

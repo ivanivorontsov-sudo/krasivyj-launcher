@@ -9,12 +9,18 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.AlarmClock
 import android.provider.CalendarContract
 import android.provider.Settings
+import android.util.Log
+import android.view.Display
+import android.view.Surface
 import android.view.Window
 import android.animation.ValueAnimator
 import org.ivanivorontsov.launcher.service.LockService
@@ -150,28 +156,115 @@ object Device {
 
     /**
      * Ask for the highest refresh rate at the current resolution (60/90/120/144 Hz all work).
-     * All animations are time-based, so this only makes them smoother, never faster.
+     * Does not switch resolution. The mode id is cached so a swipe-home can re-apply it
+     * without listing modes again. Logs the live mode as `UyutHz`.
      */
     @Suppress("DEPRECATION")
     fun applyRefreshRate(window: Window, high: Boolean) {
-        val display = window.decorView.display ?: (window.context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay ?: return
+        val display = window.decorView.display ?: windowManagerDisplay(window) ?: return
         val lp = window.attributes
         if (!high) {
-            if (lp.preferredDisplayModeId != 0) { lp.preferredDisplayModeId = 0; lp.preferredRefreshRate = 0f; window.attributes = lp }
+            if (lp.preferredDisplayModeId != 0 || lp.preferredRefreshRate != 0f) {
+                lp.preferredDisplayModeId = 0
+                lp.preferredRefreshRate = 0f
+                window.attributes = lp
+            }
+            hintFrameRate(window, 0f)
+            logRefresh("default", display)
             return
         }
-        val cur = display.mode
-        val best = display.supportedModes.filter { it.physicalWidth == cur.physicalWidth && it.physicalHeight == cur.physicalHeight }
-            .maxByOrNull { it.refreshRate } ?: return
-        if (lp.preferredDisplayModeId != best.modeId) {
-            lp.preferredDisplayModeId = best.modeId
-            lp.preferredRefreshRate = best.refreshRate
+        val best = bestMode(display) ?: return
+        if (lp.preferredDisplayModeId != best.id || lp.preferredRefreshRate != best.rate) {
+            lp.preferredDisplayModeId = best.id
+            lp.preferredRefreshRate = best.rate
             window.attributes = lp
         }
+        hintFrameRate(window, best.rate)
+        logRefresh("request ${fmtHz(best.rate)} mode ${best.id}", display)
     }
 
+    /** Drop the cached mode after a display change so the next apply re-reads supported modes. */
+    fun invalidateRefreshCache() { refreshPick = null }
+
+    fun registerDisplayRefresh(activity: android.app.Activity, high: () -> Boolean): DisplayManager.DisplayListener {
+        val dm = activity.getSystemService(DisplayManager::class.java)
+        val listener = object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) {}
+            override fun onDisplayRemoved(displayId: Int) {}
+            override fun onDisplayChanged(displayId: Int) {
+                val current = activity.display?.displayId ?: Display.DEFAULT_DISPLAY
+                if (displayId != current && displayId != Display.DEFAULT_DISPLAY) return
+                invalidateRefreshCache()
+                applyRefreshRate(activity.window, high())
+            }
+        }
+        dm.registerDisplayListener(listener, Handler(Looper.getMainLooper()))
+        return listener
+    }
+
+    fun unregisterDisplayRefresh(activity: android.app.Activity, listener: DisplayManager.DisplayListener?) {
+        if (listener == null) return
+        runCatching { activity.getSystemService(DisplayManager::class.java).unregisterDisplayListener(listener) }
+    }
+
+    /** Active mode after the system has applied (or ignored) our request. For the settings screen and logcat. */
+    fun activeRefreshRate(window: Window): Float = try {
+        window.decorView.display?.mode?.refreshRate ?: windowManagerDisplay(window)?.mode?.refreshRate ?: 0f
+    } catch (_: Exception) { 0f }
+
     fun maxRefreshRate(window: Window): Float = try {
-        @Suppress("DEPRECATION") val d = window.decorView.display ?: (window.context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay
+        val d = window.decorView.display ?: windowManagerDisplay(window) ?: return 60f
         d.supportedModes.maxOf { it.refreshRate }
     } catch (_: Exception) { 60f }
+
+    private data class ModePick(val id: Int, val rate: Float, val w: Int, val h: Int)
+
+    @Volatile private var refreshPick: ModePick? = null
+
+    @Suppress("DEPRECATION")
+    private fun windowManagerDisplay(window: Window): Display? =
+        (window.context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay
+
+    private fun bestMode(display: Display): ModePick? {
+        val cur = display.mode
+        val cached = refreshPick
+        if (cached != null && cached.w == cur.physicalWidth && cached.h == cur.physicalHeight) return cached
+        val best = display.supportedModes
+            .filter { it.physicalWidth == cur.physicalWidth && it.physicalHeight == cur.physicalHeight }
+            .maxByOrNull { it.refreshRate } ?: return null
+        return ModePick(best.modeId, best.refreshRate, cur.physicalWidth, cur.physicalHeight).also { refreshPick = it }
+    }
+
+    private fun hintFrameRate(window: Window, rate: Float) {
+        val view = window.decorView
+        if (Build.VERSION.SDK_INT >= 35) {
+            val requested = if (rate > 1f) rate else android.view.View.REQUESTED_FRAME_RATE_CATEGORY_NO_PREFERENCE
+            runCatching { view.setRequestedFrameRate(requested) }
+            runCatching { window.setFrameRatePowerSavingsBalanced(false) }
+        }
+        if (Build.VERSION.SDK_INT >= 30 && rate > 1f) hintSurface(view, rate)
+    }
+
+    /** Hidden ViewRootImpl surface, when the platform still lets us see it. Public mode id is the real request. */
+    private fun hintSurface(view: android.view.View, rate: Float) {
+        try {
+            val root = android.view.View::class.java.getMethod("getViewRootImpl").invoke(view) ?: return
+            val field = root.javaClass.getDeclaredField("mSurface")
+            field.isAccessible = true
+            val surface = field.get(root) as? Surface ?: return
+            if (!surface.isValid) return
+            if (Build.VERSION.SDK_INT >= 31) {
+                surface.setFrameRate(rate, Surface.FRAME_RATE_COMPATIBILITY_DEFAULT, Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS)
+            } else {
+                surface.setFrameRate(rate, Surface.FRAME_RATE_COMPATIBILITY_DEFAULT)
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun logRefresh(request: String, display: Display) {
+        val mode = display.mode
+        Log.i("UyutHz", "$request; active ${fmtHz(mode.refreshRate)} mode ${mode.modeId}")
+    }
+
+    private fun fmtHz(rate: Float): String = "${"%.1f".format(rate)}Hz"
 }
